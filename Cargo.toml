@@ -1,0 +1,14 @@
+[package]
+description = "A library to render scenes for `gausplat`"
+edition.workspace = true
+license-file = "LICENSE"
+name = "gausplat-renderer"
+publish = false
+readme = "README.md"
+version.workspace = true
+
+[dependencies]
+burn = {workspace = true}
+
+[dev-dependencies]
+burn = {workspace = true, features = ["ndarray"]}
