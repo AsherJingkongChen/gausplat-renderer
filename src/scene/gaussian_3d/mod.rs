@@ -1,10 +1,14 @@
 pub mod rasterizer;
 
-use burn::tensor::{activation, backend::Backend, Tensor};
-pub use burn::{backend, config::Config, module::Module};
+use burn::tensor::activation;
+pub use burn::{
+    backend,
+    module::Module,
+    tensor::{backend::*, Tensor},
+};
 
 #[derive(Debug, Module)]
-pub struct Gaussian3D<B: Backend> {
+pub struct Gaussian3dScene<B: Backend> {
     /// `[P, (D + 1) ^ 2, 3]`
     ///
     /// The colors represented as orthonormalized spherical harmonics.
@@ -23,7 +27,7 @@ pub struct Gaussian3D<B: Backend> {
     pub scalings: Tensor<B, 2>,
 }
 
-impl<B: Backend> Gaussian3D<B> {
+impl<B: Backend> Gaussian3dScene<B> {
     pub fn colors_sh(&self) -> Tensor<B, 3> {
         self.colors_sh.to_owned()
     }
@@ -54,10 +58,10 @@ mod tests {
     fn gaussian_3d_scalings_normalized() {
         use super::*;
 
-        type B = backend::NdArray;
-        let device = backend::ndarray::NdArrayDevice::default();
+        type Backend = backend::NdArray;
+        let device = Default::default();
 
-        let scene = Gaussian3D::<B> {
+        let scene = Gaussian3dScene::<Backend> {
             colors_sh: Tensor::empty([1, 1, 3], &device),
             opacities: Tensor::empty([1, 1], &device),
             positions: Tensor::empty([1, 3], &device),
