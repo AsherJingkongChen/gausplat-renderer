@@ -1,4 +1,5 @@
 pub mod rasterizer;
+pub mod spherical_harmonics;
 
 use burn::tensor::activation;
 pub use burn::{
