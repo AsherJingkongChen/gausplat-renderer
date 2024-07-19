@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 
 lazy_static! {
     /// The real coefficients of orthonormalized spherical harmonics from degree 0 to 4
-    /// 
+    ///
     /// ## Example
     /// ```rust
     /// use gausplat_renderer::scene::gaussian_3d::spherical_harmonics::SH_C;
@@ -11,7 +11,7 @@ lazy_static! {
     /// let order = 2;
     /// let sh_c_p3_p2 = SH_C[degree][degree + order];
     /// assert_eq!(sh_c_p3_p2, 1.4453057);
-    /// 
+    ///
     /// ```
     pub static ref SH_C: Vec<Vec<f32>> = vec![
         vec![(1.0 / 4.0 / PI).sqrt()],

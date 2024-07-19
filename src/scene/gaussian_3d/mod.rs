@@ -1,14 +1,15 @@
 pub mod rasterizer;
 pub mod spherical_harmonics;
 
-use burn::tensor::activation;
 pub use burn::{
     module::Module,
-    tensor::{self, backend::*, Tensor},
+    tensor::{self, backend, Tensor},
 };
 
+use burn::tensor::activation;
+
 #[derive(Debug, Module)]
-pub struct Gaussian3dScene<B: Backend> {
+pub struct Gaussian3dScene<B: backend::Backend> {
     /// `[P, (D + 1) ^ 2, 3]`
     ///
     /// The colors represented as orthonormalized spherical harmonics.
@@ -27,7 +28,7 @@ pub struct Gaussian3dScene<B: Backend> {
     pub scalings: Tensor<B, 2>,
 }
 
-impl<B: Backend> Gaussian3dScene<B> {
+impl<B: backend::Backend> Gaussian3dScene<B> {
     pub fn new() -> Self {
         Self {
             colors_sh: Tensor::empty([0, 0, 0], &Default::default()),
