@@ -4,7 +4,7 @@ use burn::tensor::activation;
 pub use burn::{
     backend,
     module::Module,
-    tensor::{backend::*, Tensor},
+    tensor::{self, backend::*, Tensor},
 };
 
 #[derive(Debug, Module)]
