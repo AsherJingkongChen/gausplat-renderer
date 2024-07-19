@@ -107,10 +107,10 @@ mod tests {
         let device = Default::default();
 
         let mut scene = Gaussian3dScene::<burn::backend::NdArray>::new();
-        scene.set_opacities(Tensor::from_floats([[0.15], [0.25]], &device));
+        scene.set_opacities(Tensor::from_floats([[0.0], [1.0], [0.5]], &device));
 
         let opacities = scene.opacities();
-        let opacities_expected = Tensor::from_floats([[0.15], [0.25]], &device);
+        let opacities_expected = Tensor::from_floats([[0.0], [1.0], [0.5]], &device);
         assert!(
             opacities
                 .to_owned()
@@ -173,13 +173,13 @@ mod tests {
 
         let mut scene = Gaussian3dScene::<burn::backend::NdArray>::new();
         scene.set_scalings(Tensor::from_floats(
-            [[1.0, 2.0, 3.0], [0.3, 0.0, 0.15]],
+            [[1.0, 2.0, 2.0], [0.4, 0.0, 2.7]],
             &device,
         ));
 
         let scalings = scene.scalings();
         let scalings_expected =
-            Tensor::from_floats([[1.0, 2.0, 3.0], [0.3, 0.0, 0.15]], &device);
+            Tensor::from_floats([[1.0, 2.0, 2.0], [0.4, 0.0, 2.7]], &device);
         assert!(
             scalings
                 .to_owned()
