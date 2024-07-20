@@ -6,9 +6,10 @@ pub use burn::{
     tensor::{self, backend, Tensor},
 };
 
+use std::fmt;
 use burn::tensor::activation;
 
-#[derive(Debug, Module)]
+#[derive(Module)]
 pub struct Gaussian3dScene<B: backend::Backend> {
     /// `[P, (D + 1) ^ 2, 3]`
     ///
@@ -98,6 +99,21 @@ impl<B: backend::Backend> Gaussian3dScene<B> {
     }
 }
 
+impl<B: backend::Backend> fmt::Debug for Gaussian3dScene<B> {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
+        f.debug_struct("Gaussian3dScene")
+            .field("colors_sh.dims()", &self.colors_sh.dims())
+            .field("opacities.dims()", &self.opacities.dims())
+            .field("positions.dims()", &self.positions.dims())
+            .field("rotations.dims()", &self.rotations.dims())
+            .field("scalings.dims()", &self.scalings.dims())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -107,10 +123,12 @@ mod tests {
         let device = Default::default();
 
         let mut scene = Gaussian3dScene::<burn::backend::NdArray>::new();
-        scene.set_opacities(Tensor::from_floats([[0.0], [1.0], [0.5]], &device));
+        scene
+            .set_opacities(Tensor::from_floats([[0.0], [1.0], [0.5]], &device));
 
         let opacities = scene.opacities();
-        let opacities_expected = Tensor::from_floats([[0.0], [1.0], [0.5]], &device);
+        let opacities_expected =
+            Tensor::from_floats([[0.0], [1.0], [0.5]], &device);
         assert!(
             opacities
                 .to_owned()
