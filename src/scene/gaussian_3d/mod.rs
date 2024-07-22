@@ -1,13 +1,12 @@
 pub mod rasterizer;
-pub mod spherical_harmonics;
 
 pub use burn::{
     module::Module,
     tensor::{self, backend, Tensor},
 };
 
-use std::fmt;
 use burn::tensor::activation;
+use std::fmt;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: backend::Backend> {

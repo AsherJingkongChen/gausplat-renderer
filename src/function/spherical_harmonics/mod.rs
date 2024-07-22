@@ -6,7 +6,7 @@ lazy_static! {
     ///
     /// ## Example
     /// ```rust
-    /// use gausplat_renderer::scene::gaussian_3d::spherical_harmonics::SH_C;
+    /// use gausplat_renderer::function::spherical_harmonics::SH_C;
     /// let degree = 3;
     /// let order = 2;
     /// let sh_c_p3_p2 = SH_C[degree][degree + order];
