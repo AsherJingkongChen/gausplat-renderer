@@ -1,14 +1,9 @@
 use core::f32;
 
-pub use crate::scene::gaussian_3d::Gaussian3dScene;
-use burn::tensor::chunk;
-pub use burn::{
-    module::Module,
-    tensor::{self, backend, Tensor},
-};
+pub use crate::scene::gaussian_3d::*;
 pub use gausplat_importer::scene::sparse_view;
 
-use crate::function::spherical_harmonics::SH_C;
+use crate::function::{spherical_harmonics::SH_C, tensor::TensorExtension};
 use tensor::{Data, Int};
 
 #[derive(Debug, Module)]
@@ -176,7 +171,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             let transforms = rotations * scalings;
 
             // [P, 3, 3] = [P, 3, 3] * [P, 3, 3]
-            matmul_batched_3d(transforms.to_owned(), transforms.transpose())
+            transforms.to_owned().matmul_batched(transforms.transpose())
         };
 
         println!("2: {:?}", duration.elapsed());
@@ -238,16 +233,14 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             .reshape([point_count, 2, 3]);
 
             // [P, 2, 3] = [P, 2, 3] * [1, 3, 3]
-            let transforms = matmul_batched_3d(
-                projections_jacobian,
-                view_rotation.unsqueeze::<3>(),
-            );
+            let transforms = projections_jacobian
+                .matmul_batched(view_rotation.unsqueeze::<3>());
 
             // [P, 2, 2] = [P, 2, 3] * [P, 3, 3] * [P, 3, 2]
-            let covariances = matmul_batched_3d(
-                matmul_batched_3d(transforms.to_owned(), covariances_3d),
-                transforms.transpose(),
-            );
+            let covariances = transforms
+                .to_owned()
+                .matmul_batched(covariances_3d)
+                .matmul_batched(transforms.transpose());
 
             // [1, 2, 2]
             let filter_low_pass = Tensor::from_floats(
@@ -308,7 +301,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             let middle = (covariances_2d.0 + covariances_2d.2) / 2.0;
 
             // [P, 1]
-            let middle_2_det_sqrt = (middle.to_owned() * middle.to_owned())
+            let bound = (middle.to_owned() * middle.to_owned())
                 .sub(covariances_2d_det)
                 .sqrt()
                 .clamp_min(FILTER_LOW_PASS);
@@ -316,8 +309,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             // [P, 1]
             let extents_max = middle
                 .to_owned()
-                .add(middle_2_det_sqrt.to_owned())
-                .max_pair(middle.sub(middle_2_det_sqrt));
+                .add(bound.to_owned())
+                .max_pair(middle.sub(bound));
 
             // [P, 1]
             (extents_max.sqrt() * 3.0).int() + 1
@@ -545,44 +538,4 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         let opacities = opacities;
         let tile_counts_touched = tile_counts_touched;
     }
-}
-
-fn matmul_batched_3d<B: backend::Backend>(
-    lhs: Tensor<B, 3>,
-    rhs: Tensor<B, 3>,
-) -> Tensor<B, 3> {
-    const BATCH_SIZE: usize = (1 << 16) - 1;
-
-    let [dim_l0, dim_l1, dim_l2] = lhs.dims();
-    let [dim_r0, dim_r1, dim_r2] = rhs.dims();
-    debug_assert_eq!(
-        dim_l2, dim_r1,
-        "The inner dimension of matmul should be the compatible"
-    );
-    debug_assert!(
-        dim_l0 == dim_r0 || dim_l0 == 1 || dim_r0 == 1,
-        "The outer dimension of matmul should be the same"
-    );
-
-    let count = dim_l0.max(dim_r0);
-    if count < BATCH_SIZE {
-        return lhs.matmul(rhs);
-    }
-
-    let lhs = lhs.expand([count, dim_l1, dim_l2]);
-    let rhs = rhs.expand([count, dim_r1, dim_r2]);
-
-    Tensor::cat(
-        (0..count)
-            .step_by(BATCH_SIZE)
-            .map(|index| {
-                let range = [index..(index + BATCH_SIZE).min(count)];
-                let lhs_batch = lhs.to_owned().slice(range.to_owned());
-                let rhs_batch = rhs.to_owned().slice(range);
-
-                lhs_batch.matmul(rhs_batch)
-            })
-            .collect(),
-        0,
-    )
 }
