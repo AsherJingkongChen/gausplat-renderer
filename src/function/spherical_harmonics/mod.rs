@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use std::f32::consts::PI;
+use std::f64::consts::PI;
 
 lazy_static! {
     /// The real coefficients of orthonormalized spherical harmonics from degree 0 to 4
@@ -13,7 +13,7 @@ lazy_static! {
     /// assert_eq!(sh_c_p3_p2, 1.4453057);
     ///
     /// ```
-    pub static ref SH_C: Vec<Vec<f32>> = vec![
+    pub static ref SH_C: Vec<Vec<f64>> = vec![
         vec![(1.0 / 4.0 / PI).sqrt()],
         vec![
             -(3.0 / 4.0 / PI).sqrt(),

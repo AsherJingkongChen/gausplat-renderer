@@ -8,6 +8,8 @@ readme = "README.md"
 version.workspace = true
 
 [dependencies]
+gausplat-importer = {workspace = true}
+
 burn = {workspace = true}
 lazy_static = {workspace = true}
 
