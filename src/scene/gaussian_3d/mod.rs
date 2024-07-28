@@ -3,8 +3,8 @@ pub use burn::{
     tensor::{self, backend, Tensor},
 };
 
-use tensor::activation;
 use std::fmt;
+use tensor::activation;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: backend::Backend> {
@@ -34,7 +34,7 @@ impl<B: backend::Backend> Gaussian3dScene<B> {
     }
 
     /// `(D + 1) ^ 2`
-    /// 
+    ///
     /// `self.colors_sh().dims()[1]`
     pub fn colors_sh_count(colors_sh_degree: u8) -> usize {
         let degree_1 = colors_sh_degree as usize + 1;
@@ -135,7 +135,6 @@ mod tests {
         let opacities = scene.opacities();
         let opacities_expected =
             Tensor::from_floats([[0.0], [1.0], [0.5]], &device);
-
         assert!(
             opacities
                 .to_owned()

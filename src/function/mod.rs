@@ -1,2 +1,2 @@
 pub mod spherical_harmonics;
-pub mod tensor;
+pub mod tensor_extensions;

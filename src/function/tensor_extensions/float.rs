@@ -1,13 +1,15 @@
-use burn::tensor::{backend::Backend, Shape, Tensor};
+use burn::tensor::{backend, Float, Shape, Tensor};
 
-pub trait TensorExtension {
+pub trait TensorFloatExtension {
     fn matmul_batched(
         self,
         other: Self,
     ) -> Self;
 }
 
-impl<B: Backend, const D: usize> TensorExtension for Tensor<B, D> {
+impl<B: backend::Backend, const D: usize> TensorFloatExtension
+    for Tensor<B, D, Float>
+{
     fn matmul_batched(
         self,
         rhs: Self,
@@ -31,14 +33,14 @@ impl<B: Backend, const D: usize> TensorExtension for Tensor<B, D> {
         assert_eq!(
             dim_l2, dim_r1,
             "The inner dimensions of matmul should be compatible. \
-            We expected self.dims()[D - 1] == rhs.dims()[D - 2], \
+            self.dims()[D - 1] should be rhs.dims()[D - 2], \
             but got self.dims() = {:?} and rhs.dims() = {:?}",
             dim_l, dim_r
         );
         assert!(
             dim_l0 == dim_r0 || dim_l0 == 1 || dim_r0 == 1,
             "The outer dimensions of matmul should be compatible. \
-            We expected self.dims()[0..D - 2] == rhs.dims()[0..D - 2] or some of them are all ones, \
+            self.dims()[0..D - 2] should be rhs.dims()[0..D - 2] or some of them are all ones, \
             but got self.dims() = {:?} and rhs.dims() = {:?}",
             dim_l, dim_r
         );
