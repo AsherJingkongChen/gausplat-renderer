@@ -57,6 +57,10 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         // Pixel-wise states
         let opacities_blended =
             Tensor::<B, 2>::zeros(vec![image_height, image_width], &device);
+        let last_contributors = Tensor::<B, 2, Int>::zeros(
+            vec![image_height, image_width],
+            &device,
+        );
         let tile_key_ranges = Tensor::<B, 3, Int>::zeros(
             vec![image_height, image_width, 2],
             &device,
@@ -642,5 +646,40 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         println!("11: {:?}", duration.elapsed());
 
         duration = std::time::Instant::now();
+
+        // [T, 2]
+        let tile_key_ranges = {
+            // [T, 2]
+            let mut ranges = vec![0u32..0u32; tile_count_rendered];
+
+            if tile_count_rendered > 0 {
+                let key =
+                    (tile_keys_and_indexs.first().unwrap().0 >> 32) as usize;
+                ranges[key].start = 0;
+
+                let key =
+                    (tile_keys_and_indexs.last().unwrap().0 >> 32) as usize;
+                ranges[key].end = tile_count_rendered as u32;
+            }
+
+            // [T]
+            for index in 1..tile_count_rendered {
+                let key_current =
+                    (tile_keys_and_indexs[index].0 >> 32) as usize;
+                let key_previous =
+                    (tile_keys_and_indexs[index - 1].0 >> 32) as usize;
+                if key_current == key_previous {
+                    continue;
+                }
+
+                ranges[key_current].start = index as u32;
+                ranges[key_previous].end = index as u32;
+            }
+
+            // [T, 2]
+            ranges
+        };
+
+        println!("12: {:?}", duration.elapsed());
     }
 }
