@@ -1,6 +1,5 @@
 pub use crate::scene::gaussian_3d::*;
 pub use gausplat_importer::scene::sparse_view;
-use rayon::slice::ParallelSliceMut;
 
 use crate::function::{spherical_harmonics::SH_C, tensor_extensions::*};
 use tensor::{Data, Int};
@@ -383,20 +382,6 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             )
         };
 
-        // [P, 1]
-        let tile_counts_touched = (tiles_x_max.to_owned()
-            - tiles_x_min.to_owned())
-            * (tiles_y_max.to_owned() - tiles_y_min.to_owned());
-
-        // [P] * 4
-        let tiles_x_max = tiles_x_max.into_data().convert::<u32>().value;
-        let tiles_x_min = tiles_x_min.into_data().convert::<u32>().value;
-        let tiles_y_max = tiles_y_max.into_data().convert::<u32>().value;
-        let tiles_y_min = tiles_y_min.into_data().convert::<u32>().value;
-
-        // [P, 1]
-        let is_tiles_touched = tile_counts_touched.to_owned().greater_elem(0);
-
         println!("7: {:?}", duration.elapsed());
 
         duration = std::time::Instant::now();
@@ -531,7 +516,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             vec![
                 is_in_frustum.to_owned(),
                 is_covariances_2d_invertible.to_owned(),
-                is_tiles_touched.to_owned(),
+                // is_tiles_touched.to_owned(),
             ],
             1,
         )
@@ -561,125 +546,39 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             .zeros_like()
             .mask_where(mask.to_owned(), opacities);
 
-        // [P, 1]
-        let tile_counts_touched = tile_counts_touched
-            .zeros_like()
-            .mask_where(mask.to_owned(), tile_counts_touched);
-
         println!("9: {:?}", duration.elapsed());
 
         duration = std::time::Instant::now();
 
-        // [P]
-        let tile_counts_touched =
-            tile_counts_touched.into_data().convert::<u32>().value;
+        let tile_selected_x_max =
+            Tensor::<B, 2, Int>::from_ints([[16]], &device);
+        let tile_selected_x_min =
+            Tensor::<B, 2, Int>::from_ints([[0]], &device);
+        let tile_selected_y_max =
+            Tensor::<B, 2, Int>::from_ints([[16]], &device);
+        let tile_selected_y_min =
+            Tensor::<B, 2, Int>::from_ints([[0]], &device);
 
-        let tile_count_rendered =
-            *tile_counts_touched.last().unwrap_or(&0) as usize;
-
-        // [P]
-        let tile_offsets: Vec<u32> = tile_counts_touched
-            .into_iter()
-            .scan(0, |state, x| {
-                let y = *state;
-                *state += x;
-                Some(y)
-            })
-            .collect();
-
-        let tile_count_rendered =
-            tile_count_rendered + *tile_offsets.last().unwrap_or(&0) as usize;
+        let is_tile_selected = Tensor::cat(
+            vec![
+                tile_selected_x_max
+                    .to_owned()
+                    .lower_equal(tiles_x_max.to_owned()),
+                tile_selected_x_min
+                    .to_owned()
+                    .greater_equal(tiles_x_min.to_owned()),
+                tile_selected_y_max
+                    .to_owned()
+                    .lower_equal(tiles_y_max.to_owned()),
+                tile_selected_y_min
+                    .to_owned()
+                    .greater_equal(tiles_y_min.to_owned()),
+            ],
+            1,
+        )
+        .all_dim(1);
 
         println!("10: {:?}", duration.elapsed());
-        println!("tile_count_rendered: {:?}", tile_count_rendered);
-        println!("tile_offsets: {:?}", tile_offsets[0..10].to_vec());
-
-        duration = std::time::Instant::now();
-
-        // [P]
-        let mask = Tensor::cat(vec![mask, is_visible], 1)
-            .all_dim(1)
-            .into_data()
-            .value;
-
-        // [T, 2]
-        let tile_keys_and_indexs = {
-            // [T, 2]
-            let mut keys_and_indexs = vec![(0u64, 0u32); tile_count_rendered];
-
-            // [P] (f32 -> u32)
-            let depths = bytemuck::cast_vec::<f32, u32>(
-                depths.into_data().convert().value,
-            );
-
-            // [P]
-            for index in 0..point_count {
-                if !mask[index] {
-                    continue;
-                }
-
-                let mut offset = tile_offsets[index] as usize;
-
-                // [T]
-                for tile_y in tiles_y_min[index]..tiles_y_max[index] {
-                    for tile_x in tiles_x_min[index]..tiles_x_max[index] {
-                        let key = (
-                            (tile_y * image_tile_count_x as u32 + tile_x)
-                                as u64,
-                            depths[index] as u64,
-                        );
-                        let key_and_index = &mut keys_and_indexs[offset];
-                        key_and_index.0 = key.0 << 32 | key.1;
-                        key_and_index.1 = index as u32;
-                        offset += 1;
-                    }
-                }
-            }
-
-            keys_and_indexs.par_sort_unstable_by_key(|(key, _)| *key);
-
-            drop(tile_offsets);
-
-            keys_and_indexs
-        };
-
-        println!("11: {:?}", duration.elapsed());
-
-        duration = std::time::Instant::now();
-
-        // [T, 2]
-        let tile_key_ranges = {
-            // [T, 2]
-            let mut ranges = vec![0u32..0u32; tile_count_rendered];
-
-            if tile_count_rendered > 0 {
-                let key =
-                    (tile_keys_and_indexs.first().unwrap().0 >> 32) as usize;
-                ranges[key].start = 0;
-
-                let key =
-                    (tile_keys_and_indexs.last().unwrap().0 >> 32) as usize;
-                ranges[key].end = tile_count_rendered as u32;
-            }
-
-            // [T]
-            for index in 1..tile_count_rendered {
-                let key_current =
-                    (tile_keys_and_indexs[index].0 >> 32) as usize;
-                let key_previous =
-                    (tile_keys_and_indexs[index - 1].0 >> 32) as usize;
-                if key_current == key_previous {
-                    continue;
-                }
-
-                ranges[key_current].start = index as u32;
-                ranges[key_previous].end = index as u32;
-            }
-
-            // [T, 2]
-            ranges
-        };
-
-        println!("12: {:?}", duration.elapsed());
+        println!("is_tile_selected: {:?}", is_tile_selected.to_owned().int().sum().into_scalar());
     }
 }
