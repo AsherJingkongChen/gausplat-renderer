@@ -24,8 +24,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         debug_assert_ne!(image_pixel_count_x, 0, "image_pixel_count_x != 0");
         debug_assert_ne!(image_pixel_count_y, 0, "image_pixel_count_y != 0");
 
-        let image_height = view.image_height as i64;
-        let image_width = view.image_width as i64;
+        let image_height = view.image_height as usize;
+        let image_width = view.image_width as usize;
         let image_tile_count_x =
             (image_width + image_pixel_count_x - 1) / image_pixel_count_x;
         let image_tile_count_y =
@@ -335,6 +335,11 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         // [P, 1] * 4
         let (tiles_x_max, tiles_x_min, tiles_y_max, tiles_y_min) = {
+            let image_pixel_count_x = image_pixel_count_x as u32;
+            let image_pixel_count_y = image_pixel_count_y as u32;
+            let image_tile_count_x = image_tile_count_x as u32;
+            let image_tile_count_y = image_tile_count_y as u32;
+
             // [P, 1]
             let radii = radii.to_owned().float();
 
@@ -580,9 +585,9 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         // [P]
         let tile_offsets: Vec<u32> = tile_counts_touched
             .into_iter()
-            .scan(0, |state, x| {
-                let y = *state;
-                *state += x;
+            .scan(0, |acc, x| {
+                let y = *acc;
+                *acc += x;
                 Some(y)
             })
             .collect();
@@ -604,37 +609,37 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         // [T, 2]
         let tile_keys_and_indexs = {
-            // [T, 2]
-            let mut keys_and_indexs = vec![(0u64, 0u32); tile_count_rendered];
-
             // [P] (f32 -> u32)
             let depths = bytemuck::cast_vec::<f32, u32>(
                 depths.into_data().convert().value,
             );
 
-            // [P]
-            for index in 0..point_count {
-                if !mask[index] {
-                    continue;
-                }
-
-                let mut offset = tile_offsets[index] as usize;
-
-                // [T]
-                for tile_y in tiles_y_min[index]..tiles_y_max[index] {
-                    for tile_x in tiles_x_min[index]..tiles_x_max[index] {
-                        let key = (
-                            (tile_y * image_tile_count_x as u32 + tile_x)
-                                as u64,
-                            depths[index] as u64,
-                        );
-                        let key_and_index = &mut keys_and_indexs[offset];
-                        key_and_index.0 = key.0 << 32 | key.1;
-                        key_and_index.1 = index as u32;
-                        offset += 1;
+            // [T, 2]
+            let mut keys_and_indexs = (0..point_count).fold(
+                vec![(0u64, 0u32); tile_count_rendered],
+                |mut keys_and_indexs, index| {
+                    if !mask[index] {
+                        return keys_and_indexs;
                     }
-                }
-            }
+
+                    let mut offset = tile_offsets[index] as usize;
+
+                    for tile_y in tiles_y_min[index]..tiles_y_max[index] {
+                        for tile_x in tiles_x_min[index]..tiles_x_max[index] {
+                            let tile = (tile_y * image_tile_count_x as u32
+                                + tile_x)
+                                as u64;
+                            let depth = depths[index] as u64;
+                            keys_and_indexs[offset] =
+                                (tile << 32 | depth, index as u32);
+
+                            offset += 1;
+                        }
+                    }
+
+                    keys_and_indexs
+                },
+            );
 
             keys_and_indexs.par_sort_unstable_by_key(|(key, _)| *key);
 
@@ -648,32 +653,31 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         duration = std::time::Instant::now();
 
         // [T, 2]
-        let tile_key_ranges = {
+        let tile_offset_ranges = {
             // [T, 2]
-            let mut ranges = vec![0u32..0u32; tile_count_rendered];
+            let mut ranges =
+                vec![0u32..0u32; image_tile_count_x * image_tile_count_y];
 
             if tile_count_rendered > 0 {
-                let key =
+                let tile =
                     (tile_keys_and_indexs.first().unwrap().0 >> 32) as usize;
-                ranges[key].start = 0;
+                ranges[tile].start = 0;
 
-                let key =
+                let tile =
                     (tile_keys_and_indexs.last().unwrap().0 >> 32) as usize;
-                ranges[key].end = tile_count_rendered as u32;
+                ranges[tile].end = tile_count_rendered as u32;
             }
 
             // [T]
-            for index in 1..tile_count_rendered {
-                let key_current =
-                    (tile_keys_and_indexs[index].0 >> 32) as usize;
-                let key_previous =
-                    (tile_keys_and_indexs[index - 1].0 >> 32) as usize;
-                if key_current == key_previous {
-                    continue;
+            for offset in 1..tile_count_rendered {
+                let tile_current =
+                    (tile_keys_and_indexs[offset].0 >> 32) as usize;
+                let tile_previous =
+                    (tile_keys_and_indexs[offset - 1].0 >> 32) as usize;
+                if tile_current != tile_previous {
+                    ranges[tile_current].start = offset as u32;
+                    ranges[tile_previous].end = offset as u32;
                 }
-
-                ranges[key_current].start = index as u32;
-                ranges[key_previous].end = index as u32;
             }
 
             // [T, 2]
@@ -681,5 +685,6 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         };
 
         println!("12: {:?}", duration.elapsed());
+        println!("tile_offset_ranges: {:?}", tile_offset_ranges.to_vec());
     }
 }
