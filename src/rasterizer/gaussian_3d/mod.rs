@@ -10,11 +10,20 @@ pub struct Gaussian3dRasterizer<B: backend::Backend> {
     pub scene: Gaussian3dScene<B>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Gaussian3dRasterizerResult<B: backend::Backend> {
+    // `[H, W, 3]`
+    pub image_colors_rgb: Tensor<B, 3>,
+
+    // `[P]`
+    pub radii: Tensor<B, 1, Int>,
+}
+
 impl<B: backend::Backend> Gaussian3dRasterizer<B> {
     pub fn forward(
         &self,
         view: &sparse_view::View,
-    ) {
+    ) -> Gaussian3dRasterizerResult<B> {
         const FILTER_LOW_PASS: f32 = 0.3;
 
         let mut duration = std::time::Instant::now();
@@ -440,7 +449,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 (directions / directions_norm).iter_dim(1)
             };
 
-            // [P, 1, 1] * 10
+            // [P, 1, 1] * 8
             let mut x = Tensor::empty([1, 1, 1], &device);
             let mut y = Tensor::empty([1, 1, 1], &device);
             let mut z = Tensor::empty([1, 1, 1], &device);
@@ -448,8 +457,6 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             let mut yy = Tensor::empty([1, 1, 1], &device);
             let mut zz = Tensor::empty([1, 1, 1], &device);
             let mut xy = Tensor::empty([1, 1, 1], &device);
-            let mut xz = Tensor::empty([1, 1, 1], &device);
-            let mut yz = Tensor::empty([1, 1, 1], &device);
             let mut zz_5_1 = Tensor::empty([1, 1, 1], &device);
 
             // [P, 1, 3] * ((D + 1) ^ 2)
@@ -481,9 +488,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                     colors_rgb + colors_sh * xy.to_owned() * SH_C[2][0];
             }
             if let Some(colors_sh) = colors_sh.next() {
-                yz = y.to_owned() * z.to_owned();
-                colors_rgb =
-                    colors_rgb + colors_sh * yz.to_owned() * SH_C[2][1];
+                let yz = y.to_owned() * z.to_owned();
+                colors_rgb = colors_rgb + colors_sh * yz * SH_C[2][1];
             }
             if let Some(colors_sh) = colors_sh.next() {
                 zz = z.to_owned() * z.to_owned();
@@ -491,9 +497,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 colors_rgb = colors_rgb + colors_sh * zz_3_1 * SH_C[2][2];
             }
             if let Some(colors_sh) = colors_sh.next() {
-                xz = x.to_owned() * z.to_owned();
-                colors_rgb =
-                    colors_rgb + colors_sh * xz.to_owned() * SH_C[2][3];
+                let xz = x.to_owned() * z.to_owned();
+                colors_rgb = colors_rgb + colors_sh * xz * SH_C[2][3];
             }
             if let Some(colors_sh) = colors_sh.next() {
                 xx = x.to_owned() * x.to_owned();
@@ -584,8 +589,11 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 positions_2d_in_screen,
             );
 
-        // [P, 1] (No grad, Output)
-        let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
+        // [P] (No grad, Output)
+        let radii = radii
+            .zeros_like()
+            .mask_where(mask.to_owned(), radii)
+            .squeeze::<1>(1);
 
         // [P, 1]
         let tile_touched_counts = tile_touched_counts
@@ -849,13 +857,10 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         }
 
         println!("13: {:?}", duration.elapsed());
-        println!("image_colors_rgb.dims(): {:?}", image_colors_rgb.dims());
-        println!(
-            "image_colors_rgb[0..2, 0..2, 0..3]: {:?}",
-            image_colors_rgb
-                .to_owned()
-                .slice([0..2, 0..2, 0..3])
-                .to_data()
-        );
+
+        Gaussian3dRasterizerResult {
+            image_colors_rgb,
+            radii,
+        }
     }
 }
