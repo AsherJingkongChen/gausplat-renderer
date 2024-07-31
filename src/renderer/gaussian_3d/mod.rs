@@ -6,24 +6,21 @@ use rayon::slice::ParallelSliceMut;
 use tensor::{Data, Int};
 
 #[derive(Debug, Module)]
-pub struct Gaussian3dRasterizer<B: backend::Backend> {
+pub struct Gaussian3dRenderer<B: backend::Backend> {
     pub scene: Gaussian3dScene<B>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Gaussian3dRasterizerResult<B: backend::Backend> {
+pub struct Gaussian3dRendererResult<B: backend::Backend> {
     // `[H, W, 3]`
     pub image_colors_rgb: Tensor<B, 3>,
-
-    // `[P]`
-    pub radii: Tensor<B, 1, Int>,
 }
 
-impl<B: backend::Backend> Gaussian3dRasterizer<B> {
+impl<B: backend::Backend> Gaussian3dRenderer<B> {
     pub fn forward(
         &self,
         view: &sparse_view::View,
-    ) -> Gaussian3dRasterizerResult<B> {
+    ) -> Gaussian3dRendererResult<B> {
         const FILTER_LOW_PASS: f32 = 0.3;
 
         let mut duration = std::time::Instant::now();
@@ -402,7 +399,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             )
         };
 
-        // [P, 1]
+        // [P, 1] (No grad)
         let tile_touched_counts = (tiles_touched_x_max.to_owned()
             - tiles_touched_x_min.to_owned())
             * (tiles_touched_y_max.to_owned() - tiles_touched_y_min.to_owned());
@@ -589,13 +586,10 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 positions_2d_in_screen,
             );
 
-        // [P] (No grad, Output)
-        let radii = radii
-            .zeros_like()
-            .mask_where(mask.to_owned(), radii)
-            .squeeze::<1>(1);
+        // [P, 1] (No grad)
+        let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
 
-        // [P, 1]
+        // [P, 1] (No grad)
         let tile_touched_counts = tile_touched_counts
             .zeros_like()
             .mask_where(mask.to_owned(), tile_touched_counts);
@@ -858,9 +852,6 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         println!("13: {:?}", duration.elapsed());
 
-        Gaussian3dRasterizerResult {
-            image_colors_rgb,
-            radii,
-        }
+        Gaussian3dRendererResult { image_colors_rgb }
     }
 }

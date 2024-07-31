@@ -1,3 +1,3 @@
 pub mod function;
-pub mod rasterizer;
+pub mod renderer;
 pub mod scene;
