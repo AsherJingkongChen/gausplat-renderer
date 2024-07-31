@@ -2,6 +2,7 @@ pub use crate::scene::gaussian_3d::*;
 pub use gausplat_importer::scene::sparse_view;
 
 use crate::function::{spherical_harmonics::SH_C, tensor_extensions::*};
+use rayon::slice::ParallelSliceMut;
 use tensor::{Data, Int};
 
 #[derive(Debug, Module)]
@@ -18,17 +19,26 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         let mut duration = std::time::Instant::now();
 
-        let image_pixel_count_x = 16;
-        let image_pixel_count_y = 16;
-        debug_assert_ne!(image_pixel_count_x, 0, "image_pixel_count_x != 0");
-        debug_assert_ne!(image_pixel_count_y, 0, "image_pixel_count_y != 0");
+        // T_W
+        let tile_width = 16;
 
-        let image_height = view.image_height as i64;
-        let image_width = view.image_width as i64;
-        let image_tile_count_x =
-            (image_width + image_pixel_count_x - 1) / image_pixel_count_x;
-        let image_tile_count_y =
-            (image_height + image_pixel_count_y - 1) / image_pixel_count_y;
+        // T_H
+        let tile_height = 16;
+
+        debug_assert_ne!(tile_width, 0, "tile_width != 0");
+        debug_assert_ne!(tile_height, 0, "tile_height != 0");
+
+        // H
+        let image_height = view.image_height as usize;
+
+        // W
+        let image_width = view.image_width as usize;
+
+        // W / T_W
+        let tile_count_x = (image_width + tile_width - 1) / tile_width;
+
+        // H / T_H
+        let tile_count_y = (image_height + tile_height - 1) / tile_height;
 
         // [P, (D + 1) ^ 2, 3]
         let colors_sh = self.scene.colors_sh();
@@ -46,22 +56,20 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         let scalings = self.scene.scalings();
 
         let device = positions.device();
+
+        // P
         let point_count = positions.dims()[0];
 
         // Outputs
-        let mut image_rendered =
+        let image_rendered =
             Tensor::<B, 3>::zeros(vec![image_height, image_width, 3], &device);
-        let mut radii = Tensor::<B, 1, Int>::zeros([point_count], &device);
+        let radii = Tensor::<B, 1, Int>::zeros([point_count], &device);
 
         // Pixel-wise states
         let opacities_blended =
             Tensor::<B, 2>::zeros(vec![image_height, image_width], &device);
         let last_contributors = Tensor::<B, 2, Int>::zeros(
             vec![image_height, image_width],
-            &device,
-        );
-        let tile_key_ranges = Tensor::<B, 3, Int>::zeros(
-            vec![image_height, image_width, 2],
             &device,
         );
 
@@ -271,15 +279,21 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         let is_covariances_2d_invertible =
             covariances_2d_det.to_owned().not_equal_elem(0.0);
 
-        // [P, 3]
+        // [P, 1]
+        let conics_1 =
+            -covariances_2d.1.to_owned() / covariances_2d_det.to_owned();
+
+        // [P, 2, 2]
         let conics = Tensor::cat(
             vec![
                 covariances_2d.2.to_owned() / covariances_2d_det.to_owned(),
-                -covariances_2d.1 / covariances_2d_det.to_owned(),
+                conics_1.to_owned(),
+                conics_1,
                 covariances_2d.0.to_owned() / covariances_2d_det.to_owned(),
             ],
             1,
-        );
+        )
+        .reshape([point_count, 2, 2]);
 
         println!("4: {:?}", duration.elapsed());
 
@@ -333,7 +347,17 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         duration = std::time::Instant::now();
 
         // [P, 1] * 4
-        let (tiles_x_max, tiles_x_min, tiles_y_max, tiles_y_min) = {
+        let (
+            tiles_touched_x_max,
+            tiles_touched_x_min,
+            tiles_touched_y_max,
+            tiles_touched_y_min,
+        ) = {
+            let tile_height = tile_height as u32;
+            let tile_width = tile_width as u32;
+            let tile_count_x = tile_count_x as u32;
+            let tile_count_y = tile_count_y as u32;
+
             // [P, 1]
             let radii = radii.to_owned().float();
 
@@ -355,32 +379,50 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                     .0
                     .to_owned()
                     .add(radii.to_owned())
-                    .add_scalar(image_pixel_count_x - 1)
-                    .div_scalar(image_pixel_count_x)
+                    .add_scalar(tile_width - 1)
+                    .div_scalar(tile_width)
                     .int()
-                    .clamp(0, image_tile_count_x),
+                    .clamp(0, tile_count_x),
                 positions_2d_in_screen
                     .0
                     .sub(radii.to_owned())
-                    .div_scalar(image_pixel_count_x)
+                    .div_scalar(tile_width)
                     .int()
-                    .clamp(0, image_tile_count_x),
+                    .clamp(0, tile_count_x),
                 positions_2d_in_screen
                     .1
                     .to_owned()
                     .add(radii.to_owned())
-                    .add_scalar(image_pixel_count_y - 1)
-                    .div_scalar(image_pixel_count_y)
+                    .add_scalar(tile_height - 1)
+                    .div_scalar(tile_height)
                     .int()
-                    .clamp(0, image_tile_count_y),
+                    .clamp(0, tile_count_y),
                 positions_2d_in_screen
                     .1
                     .sub(radii.to_owned())
-                    .div_scalar(image_pixel_count_y)
+                    .div_scalar(tile_height)
                     .int()
-                    .clamp(0, image_tile_count_y),
+                    .clamp(0, tile_count_y),
             )
         };
+
+        // [P, 1]
+        let tile_touched_counts = (tiles_touched_x_max.to_owned()
+            - tiles_touched_x_min.to_owned())
+            * (tiles_touched_y_max.to_owned() - tiles_touched_y_min.to_owned());
+
+        // [P] * 4
+        let tiles_touched_x_max =
+            tiles_touched_x_max.into_data().convert::<u32>().value;
+        let tiles_touched_x_min =
+            tiles_touched_x_min.into_data().convert::<u32>().value;
+        let tiles_touched_y_max =
+            tiles_touched_y_max.into_data().convert::<u32>().value;
+        let tiles_touched_y_min =
+            tiles_touched_y_min.into_data().convert::<u32>().value;
+
+        // [P, 1]
+        let is_tiles_touched = tile_touched_counts.to_owned().greater_elem(0);
 
         println!("7: {:?}", duration.elapsed());
 
@@ -426,11 +468,12 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             // [P, 1, 3] * ((D + 1) ^ 2)
             let mut colors_sh = colors_sh.iter_dim(1);
 
-            // [P, 1, 3]
+            // [P, 1, 3] (D >= 0)
             let mut colors_rgb =
                 colors_sh.next().expect("colors_sh.dims()[1] >= 1")
                     * SH_C[0][0];
 
+            // (D >= 1)
             if let Some(colors_sh) = colors_sh.next() {
                 y = directions.next().expect("directions.dims()[1] == 3");
                 colors_rgb = colors_rgb + colors_sh * y.to_owned() * SH_C[1][0];
@@ -443,6 +486,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 x = directions.next().expect("directions.dims()[1] == 3");
                 colors_rgb = colors_rgb + colors_sh * x.to_owned() * SH_C[1][2];
             }
+
+            // (D >= 2)
             if let Some(colors_sh) = colors_sh.next() {
                 xy = x.to_owned() * y.to_owned();
                 colors_rgb =
@@ -469,6 +514,8 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
                 let xx_yy = xx.to_owned() - yy.to_owned();
                 colors_rgb = colors_rgb + colors_sh * xx_yy * SH_C[2][4];
             }
+
+            // (D >= 3)
             if let Some(colors_sh) = colors_sh.next() {
                 let y_xx_3_yy =
                     y.to_owned() * (xx.to_owned() * 3.0 - yy.to_owned());
@@ -514,9 +561,9 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         // [P, 1]
         let mask = Tensor::cat(
             vec![
-                is_in_frustum.to_owned(),
-                is_covariances_2d_invertible.to_owned(),
-                // is_tiles_touched.to_owned(),
+                is_in_frustum,
+                is_covariances_2d_invertible,
+                is_tiles_touched,
             ],
             1,
         )
@@ -527,58 +574,275 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             .zeros_like()
             .mask_where(mask.to_owned(), colors_rgb);
 
+        // [P, 2, 2]
+        let conics = conics
+            .zeros_like()
+            .mask_where(mask.to_owned().unsqueeze_dim::<3>(2), conics);
+
         // [P, 1]
         let depths = depths.zeros_like().mask_where(mask.to_owned(), depths);
-
-        // [P, 1]
-        let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
-
-        // [P, 2]
-        let positions_2d_in_screen = positions_2d_in_screen
-            .zeros_like()
-            .mask_where(mask.to_owned(), positions_2d_in_screen);
-
-        // [P, 3]
-        let conics = conics.zeros_like().mask_where(mask.to_owned(), conics);
 
         // [P, 1]
         let opacities = opacities
             .zeros_like()
             .mask_where(mask.to_owned(), opacities);
 
+        // [P, 2]
+        let positions_2d_in_screen = positions_2d_in_screen
+            .zeros_like()
+            .mask_where(mask.to_owned(), positions_2d_in_screen);
+
+        // [P, 1]
+        let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
+
+        // [P, 1]
+        let tile_touched_counts = tile_touched_counts
+            .zeros_like()
+            .mask_where(mask.to_owned(), tile_touched_counts);
+
         println!("9: {:?}", duration.elapsed());
 
         duration = std::time::Instant::now();
 
-        let tile_selected_x_max =
-            Tensor::<B, 2, Int>::from_ints([[16]], &device);
-        let tile_selected_x_min =
-            Tensor::<B, 2, Int>::from_ints([[0]], &device);
-        let tile_selected_y_max =
-            Tensor::<B, 2, Int>::from_ints([[16]], &device);
-        let tile_selected_y_min =
-            Tensor::<B, 2, Int>::from_ints([[0]], &device);
+        // [P], T (No grad)
+        let (tile_touched_offsets, tile_touched_count) = {
+            // [P]
+            let counts = tile_touched_counts.into_data().convert::<u32>().value;
 
-        let is_tile_selected = Tensor::cat(
-            vec![
-                tile_selected_x_max
-                    .to_owned()
-                    .lower_equal(tiles_x_max.to_owned()),
-                tile_selected_x_min
-                    .to_owned()
-                    .greater_equal(tiles_x_min.to_owned()),
-                tile_selected_y_max
-                    .to_owned()
-                    .lower_equal(tiles_y_max.to_owned()),
-                tile_selected_y_min
-                    .to_owned()
-                    .greater_equal(tiles_y_min.to_owned()),
-            ],
-            1,
-        )
-        .all_dim(1);
+            let mut count = *counts.last().unwrap_or(&0) as usize;
+
+            // [P]
+            let offsets = counts
+                .into_iter()
+                .scan(0, |acc, x| {
+                    let y = *acc;
+                    *acc += x;
+                    Some(y)
+                })
+                .collect::<Vec<_>>();
+
+            count += *offsets.last().unwrap_or(&0) as usize;
+
+            // [P]
+            (offsets, count)
+        };
 
         println!("10: {:?}", duration.elapsed());
-        println!("is_tile_selected: {:?}", is_tile_selected.to_owned().int().sum().into_scalar());
+        println!("tile_touched_count: {:?}", tile_touched_count);
+
+        duration = std::time::Instant::now();
+
+        // [T] * 2 (No grad)
+        let (point_keys, point_indexs) = {
+            let tile_touched_offsets = tile_touched_offsets;
+
+            // [P]
+            let mask = Tensor::cat(vec![mask, is_visible], 1)
+                .all_dim(1)
+                .into_data()
+                .value;
+
+            // [P] (f32 -> u32)
+            let depths = bytemuck::cast_vec::<f32, u32>(
+                depths.into_data().convert().value,
+            );
+
+            // [T, 2]
+            let mut keys_and_indexs = (0..point_count).fold(
+                vec![(0, 0); tile_touched_count],
+                |mut keys_and_indexs, index| {
+                    if !mask[index] {
+                        return keys_and_indexs;
+                    }
+
+                    let mut offset = tile_touched_offsets[index] as usize;
+
+                    for tile_y in
+                        tiles_touched_y_min[index]..tiles_touched_y_max[index]
+                    {
+                        for tile_x in tiles_touched_x_min[index]
+                            ..tiles_touched_x_max[index]
+                        {
+                            let tile =
+                                (tile_y * tile_count_x as u32 + tile_x) as u64;
+                            let depth = depths[index] as u64;
+                            keys_and_indexs[offset] =
+                                (tile << 32 | depth, index as u32);
+
+                            offset += 1;
+                        }
+                    }
+
+                    keys_and_indexs
+                },
+            );
+
+            keys_and_indexs.par_sort_unstable_by_key(|(key, _)| *key);
+
+            // [T] * 2
+            keys_and_indexs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+        };
+
+        println!("11: {:?}", duration.elapsed());
+
+        duration = std::time::Instant::now();
+
+        // [(H / T_H) * (W / T_W), 2] (No grad)
+        let tile_point_ranges = {
+            // [(H / T_H) * (W / T_W), 2]
+            let mut ranges = vec![0..0; tile_count_x * tile_count_y];
+
+            if !point_keys.is_empty() {
+                let tile = (point_keys.first().unwrap() >> 32) as usize;
+                ranges[tile].start = 0;
+
+                let tile = (point_keys.last().unwrap() >> 32) as usize;
+                ranges[tile].end = tile_touched_count;
+            }
+
+            // [T]
+            for point_offset in 1..tile_touched_count {
+                let tile_current = (point_keys[point_offset] >> 32) as usize;
+                let tile_previous =
+                    (point_keys[point_offset - 1] >> 32) as usize;
+                if tile_current != tile_previous {
+                    ranges[tile_current].start = point_offset;
+                    ranges[tile_previous].end = point_offset;
+                }
+            }
+
+            // [(H / T_H) * (W / T_W), 2]
+            ranges
+        };
+
+        println!("12: {:?}", duration.elapsed());
+        println!("tile_point_ranges.len(): {:?}", tile_point_ranges.len());
+
+        duration = std::time::Instant::now();
+
+        // [1, P, 3]
+        let colors_rgb = colors_rgb.unsqueeze::<3>();
+
+        // [1, P, 2, 2]
+        let conics = conics.unsqueeze::<4>();
+
+        // [1, P, 1]
+        let opacities = opacities.unsqueeze::<3>();
+
+        // [T]
+        let point_indexs = Tensor::<B, 1, Int>::from_data(
+            Data::new(point_indexs, [tile_touched_count].into()).convert(),
+            &device,
+        );
+
+        // [(H / T_H) * (W / T_W)]
+        for (tile_index, tile_point_range) in
+            tile_point_ranges.into_iter().enumerate()
+        {
+            // [R]
+            let tile_point_indexs =
+                point_indexs.to_owned().slice([tile_point_range]);
+
+            // [1, R, 3]
+            let tile_colors_rgb = colors_rgb
+                .to_owned()
+                .select(1, tile_point_indexs.to_owned());
+
+            // [1, R, 2, 2]
+            let tile_conics =
+                conics.to_owned().select(1, tile_point_indexs.to_owned());
+
+            // [1, R, 1]
+            let tile_opacities =
+                opacities.to_owned().select(1, tile_point_indexs.to_owned());
+
+            // [R, 2]
+            let tile_positions_2d_in_screen = positions_2d_in_screen
+                .to_owned()
+                .select(0, tile_point_indexs.to_owned());
+
+            let tile_pixel_x = (tile_index % tile_count_x * tile_width) as i64;
+            let tile_pixel_y = (tile_index / tile_count_x * tile_height) as i64;
+            let tile_pixel_range_x = tile_pixel_x
+                ..(tile_pixel_x + tile_width as i64).min(image_width as i64);
+            let tile_pixel_range_y = tile_pixel_y
+                ..(tile_pixel_y + tile_height as i64).min(image_height as i64);
+
+            // T_W (Clamped)
+            let tile_width =
+                (tile_pixel_range_x.end - tile_pixel_range_x.start) as usize;
+
+            // T_H (Clamped)
+            let tile_height =
+                (tile_pixel_range_y.end - tile_pixel_range_y.start) as usize;
+
+            // [T_H * T_W, 1, 2]
+            let tile_positions_2d_pixel = Tensor::<B, 2>::stack::<3>(
+                vec![
+                    Tensor::arange(tile_pixel_range_x, &device)
+                        .float()
+                        .unsqueeze_dim::<2>(0)
+                        .repeat(0, tile_height),
+                    Tensor::arange(tile_pixel_range_y, &device)
+                        .float()
+                        .unsqueeze_dim::<2>(1)
+                        .repeat(1, tile_width),
+                ],
+                2,
+            )
+            .reshape([tile_height * tile_width, 1, 2]);
+
+            // [T_H * T_W, R, 1, 2] = [T_H * T_W, R, 2] = [1, R, 2] - [T_H * T_W, 1, 2]
+            let tile_directions_2d_pixel = tile_positions_2d_in_screen
+                .unsqueeze_dim::<3>(0)
+                .sub(tile_positions_2d_pixel)
+                .unsqueeze_dim::<4>(2);
+
+            // [T_H * T_W, R, 1, 1] = [.., R, 1, 2] * [.., R, 2, 2] * [.., R, 2, 1]
+            let tile_weights_pixel = tile_directions_2d_pixel
+                .to_owned()
+                .matmul_batched(tile_conics.repeat(0, tile_height * tile_width))
+                .matmul_batched(tile_directions_2d_pixel.transpose())
+                .mul_scalar(-0.5)
+                .exp();
+
+            // [T_H * T_W, R, 1] = [1, R, 1] * [T_H * T_W, R, 1]
+            let tile_opacities_pixel = tile_opacities
+                .mul(tile_weights_pixel.squeeze::<3>(3))
+                .clamp_max(0.99);
+
+            // [T_H * T_W, R, 1]
+            // let tile_transmittances_pixel = tile_opacities_pixel
+
+            // tile_colors_rgb.mul(tile_opacities_pixel).mul(tile_transmittances).sum_dim(1)
+            // C = (c * a * {1, 1 - alpha[0], ..., 1 - alpha[-2]}).sum(dim=R)
+
+            // [B, 1, 3] = [B, R, 3] = [1, R, 3] * [B, R, 1] * [B, R, 1]
+
+            // float2 xy = collected_xy[j];
+            // float2 d = { xy.x - pixf.x, xy.y - pixf.y };
+            // float4 con_o = collected_conic_opacity[j];
+            // float power = -0.5f * (con_o.x * d.x * d.x + con_o.z * d.y * d.y) - con_o.y * d.x * d.y;
+            // if (power > 0.0f)
+            //     continue;
+
+            // float alpha = min(0.99f, con_o.w * exp(power));
+            // if (alpha < 1.0f / 255.0f)
+            //     continue;
+
+            // float test_T = T * (1 - alpha);
+            // if (test_T < 0.0001f)
+            // {
+            //     done = true;
+            //     continue;
+            // }
+
+            // for (int ch = 0; ch < CHANNELS; ch++)
+            //     C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
+
+            // T = test_T;
+        }
+
+        println!("13: {:?}", duration.elapsed());
     }
 }
