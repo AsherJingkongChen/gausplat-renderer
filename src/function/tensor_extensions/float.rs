@@ -5,6 +5,11 @@ pub trait TensorFloatExtension {
         self,
         other: Self,
     ) -> Self;
+
+    fn prod_cumulative_exclusive(
+        self,
+        dim: usize,
+    ) -> Self;
 }
 
 impl<B: backend::Backend, const D: usize> TensorFloatExtension
@@ -80,5 +85,31 @@ impl<B: backend::Backend, const D: usize> TensorFloatExtension
             0,
         )
         .reshape(dims)
+    }
+
+    fn prod_cumulative_exclusive(
+        self,
+        dim: usize,
+    ) -> Self {
+        assert!(dim < D, "dim should be less than self.dims().len()");
+
+        let mut result = self.to_owned();
+
+        let dims_batch = {
+            let mut dims = self.dims();
+            dims[dim] = 1;
+            dims
+        };
+        let mut state_batch = Tensor::ones(dims_batch, &self.device());
+        let mut ranges_batch = dims_batch.map(|dim| 0..dim);
+
+        for (index, value_batch) in self.iter_dim(dim).enumerate() {
+            ranges_batch[dim] = index..(index + 1);
+            result = result
+                .slice_assign(ranges_batch.to_owned(), state_batch.to_owned());
+            state_batch = state_batch * value_batch;
+        }
+
+        result
     }
 }

@@ -55,23 +55,10 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         // [P, 3]
         let scalings = self.scene.scalings();
 
-        let device = positions.device();
-
         // P
         let point_count = positions.dims()[0];
 
-        // Outputs
-        let image_rendered =
-            Tensor::<B, 3>::zeros(vec![image_height, image_width, 3], &device);
-        let radii = Tensor::<B, 1, Int>::zeros([point_count], &device);
-
-        // Pixel-wise states
-        let opacities_blended =
-            Tensor::<B, 2>::zeros(vec![image_height, image_width], &device);
-        let last_contributors = Tensor::<B, 2, Int>::zeros(
-            vec![image_height, image_width],
-            &device,
-        );
+        let device = positions.device();
 
         println!("0: {:?}", duration.elapsed());
 
@@ -299,7 +286,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         duration = std::time::Instant::now();
 
-        // [P, 1]
+        // [P, 1] (No grad)
         let radii = {
             // [P, 1]
             let middle = (covariances_2d.0 + covariances_2d.2) / 2.0;
@@ -346,7 +333,7 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         duration = std::time::Instant::now();
 
-        // [P, 1] * 4
+        // [P, 1] * 4 (No grad)
         let (
             tiles_touched_x_max,
             tiles_touched_x_min,
@@ -572,12 +559,15 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
         // [P, 3]
         let colors_rgb = colors_rgb
             .zeros_like()
-            .mask_where(mask.to_owned(), colors_rgb);
+            .mask_where(mask.to_owned().expand([point_count, 3]), colors_rgb);
 
         // [P, 2, 2]
-        let conics = conics
-            .zeros_like()
-            .mask_where(mask.to_owned().unsqueeze_dim::<3>(2), conics);
+        let conics = conics.zeros_like().mask_where(
+            mask.to_owned()
+                .unsqueeze_dim::<3>(2)
+                .expand([point_count, 2, 2]),
+            conics,
+        );
 
         // [P, 1]
         let depths = depths.zeros_like().mask_where(mask.to_owned(), depths);
@@ -588,11 +578,13 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             .mask_where(mask.to_owned(), opacities);
 
         // [P, 2]
-        let positions_2d_in_screen = positions_2d_in_screen
-            .zeros_like()
-            .mask_where(mask.to_owned(), positions_2d_in_screen);
+        let positions_2d_in_screen =
+            positions_2d_in_screen.zeros_like().mask_where(
+                mask.to_owned().expand([point_count, 2]),
+                positions_2d_in_screen,
+            );
 
-        // [P, 1]
+        // [P, 1] (No grad, Output)
         let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
 
         // [P, 1]
@@ -614,9 +606,9 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             // [P]
             let offsets = counts
                 .into_iter()
-                .scan(0, |acc, x| {
-                    let y = *acc;
-                    *acc += x;
+                .scan(0, |state, x| {
+                    let y = *state;
+                    *state += x;
                     Some(y)
                 })
                 .collect::<Vec<_>>();
@@ -720,14 +712,14 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
 
         duration = std::time::Instant::now();
 
-        // [1, P, 3]
-        let colors_rgb = colors_rgb.unsqueeze::<3>();
+        // [1, 1, P, 3]
+        let colors_rgb = colors_rgb.unsqueeze::<4>();
 
-        // [1, P, 2, 2]
-        let conics = conics.unsqueeze::<4>();
+        // [1, 1, P, 1]
+        let opacities = opacities.unsqueeze::<4>();
 
-        // [1, P, 1]
-        let opacities = opacities.unsqueeze::<3>();
+        // [1, 1, P, 2]
+        let positions_2d_in_screen = positions_2d_in_screen.unsqueeze::<4>();
 
         // [T]
         let point_indexs = Tensor::<B, 1, Int>::from_data(
@@ -735,114 +727,135 @@ impl<B: backend::Backend> Gaussian3dRasterizer<B> {
             &device,
         );
 
+        // [H, W, 3] (Output)
+        let mut image_colors_rgb =
+            Tensor::<B, 3>::zeros(vec![image_height, image_width, 3], &device);
+
         // [(H / T_H) * (W / T_W)]
         for (tile_index, tile_point_range) in
             tile_point_ranges.into_iter().enumerate()
         {
+            // R
+            let tile_point_count =
+                tile_point_range.end - tile_point_range.start;
+
             // [R]
             let tile_point_indexs =
                 point_indexs.to_owned().slice([tile_point_range]);
 
-            // [1, R, 3]
+            // [1, 1, R, 3]
             let tile_colors_rgb = colors_rgb
                 .to_owned()
-                .select(1, tile_point_indexs.to_owned());
+                .select(2, tile_point_indexs.to_owned());
 
-            // [1, R, 2, 2]
+            // [R, 2, 2]
             let tile_conics =
-                conics.to_owned().select(1, tile_point_indexs.to_owned());
+                conics.to_owned().select(0, tile_point_indexs.to_owned());
 
-            // [1, R, 1]
+            // [1, 1, R, 1]
             let tile_opacities =
-                opacities.to_owned().select(1, tile_point_indexs.to_owned());
+                opacities.to_owned().select(2, tile_point_indexs.to_owned());
 
-            // [R, 2]
+            // [1, 1, R, 2]
             let tile_positions_2d_in_screen = positions_2d_in_screen
                 .to_owned()
-                .select(0, tile_point_indexs.to_owned());
+                .select(2, tile_point_indexs.to_owned());
 
-            let tile_pixel_x = (tile_index % tile_count_x * tile_width) as i64;
-            let tile_pixel_y = (tile_index / tile_count_x * tile_height) as i64;
-            let tile_pixel_range_x = tile_pixel_x
-                ..(tile_pixel_x + tile_width as i64).min(image_width as i64);
-            let tile_pixel_range_y = tile_pixel_y
-                ..(tile_pixel_y + tile_height as i64).min(image_height as i64);
+            let tile_pixel_x_min = tile_index % tile_count_x * tile_width;
+            let tile_pixel_y_min = tile_index / tile_count_x * tile_height;
+            let tile_pixel_x_max =
+                (tile_pixel_x_min + tile_width).min(image_width);
+            let tile_pixel_y_max =
+                (tile_pixel_y_min + tile_height).min(image_height);
 
             // T_W (Clamped)
-            let tile_width =
-                (tile_pixel_range_x.end - tile_pixel_range_x.start) as usize;
+            let tile_width = tile_pixel_x_max - tile_pixel_x_min;
 
             // T_H (Clamped)
-            let tile_height =
-                (tile_pixel_range_y.end - tile_pixel_range_y.start) as usize;
+            let tile_height = tile_pixel_y_max - tile_pixel_y_min;
 
-            // [T_H * T_W, 1, 2]
-            let tile_positions_2d_pixel = Tensor::<B, 2>::stack::<3>(
+            // [T_H, T_W, 1, 2]
+            let tile_pixel_positions_2d = Tensor::<B, 2>::stack::<3>(
                 vec![
-                    Tensor::arange(tile_pixel_range_x, &device)
-                        .float()
-                        .unsqueeze_dim::<2>(0)
-                        .repeat(0, tile_height),
-                    Tensor::arange(tile_pixel_range_y, &device)
-                        .float()
-                        .unsqueeze_dim::<2>(1)
-                        .repeat(1, tile_width),
+                    Tensor::arange(
+                        tile_pixel_x_min as i64..tile_pixel_x_max as i64,
+                        &device,
+                    )
+                    .float()
+                    .unsqueeze_dim::<2>(0)
+                    .repeat(0, tile_height),
+                    Tensor::arange(
+                        tile_pixel_y_min as i64..tile_pixel_y_max as i64,
+                        &device,
+                    )
+                    .float()
+                    .unsqueeze_dim::<2>(1)
+                    .repeat(1, tile_width),
                 ],
                 2,
             )
-            .reshape([tile_height * tile_width, 1, 2]);
+            .unsqueeze_dim::<4>(2);
 
-            // [T_H * T_W, R, 1, 2] = [T_H * T_W, R, 2] = [1, R, 2] - [T_H * T_W, 1, 2]
-            let tile_directions_2d_pixel = tile_positions_2d_in_screen
-                .unsqueeze_dim::<3>(0)
-                .sub(tile_positions_2d_pixel)
-                .unsqueeze_dim::<4>(2);
+            // [T_H, T_W, R, 1, 2] =
+            // [T_H, T_W, R, 2] = [1, 1, R, 2] - [T_H, T_W, 1, 2]
+            let tile_pixel_directions_2d = tile_positions_2d_in_screen
+                .sub(tile_pixel_positions_2d)
+                .unsqueeze_dim::<5>(3);
 
-            // [T_H * T_W, R, 1, 1] = [.., R, 1, 2] * [.., R, 2, 2] * [.., R, 2, 1]
-            let tile_weights_pixel = tile_directions_2d_pixel
+            // [T_H, T_W, R, 1] =
+            // [T_H, T_W, R, 1, 1] =
+            // [.., R, 1, 2] * [.., R, 2, 2] * [.., R, 2, 1]
+            let tile_pixel_weights = tile_pixel_directions_2d
                 .to_owned()
-                .matmul_batched(tile_conics.repeat(0, tile_height * tile_width))
-                .matmul_batched(tile_directions_2d_pixel.transpose())
+                .matmul_batched(tile_conics.expand([
+                    tile_height,
+                    tile_width,
+                    tile_point_count,
+                    2,
+                    2,
+                ]))
+                .matmul_batched(tile_pixel_directions_2d.transpose())
                 .mul_scalar(-0.5)
-                .exp();
+                .exp()
+                .squeeze::<4>(4);
 
-            // [T_H * T_W, R, 1] = [1, R, 1] * [T_H * T_W, R, 1]
-            let tile_opacities_pixel = tile_opacities
-                .mul(tile_weights_pixel.squeeze::<3>(3))
-                .clamp_max(0.99);
+            // [T_H, T_W, R, 1] = [1, 1, R, 1] * [T_H, T_W, R, 1]
+            let tile_pixel_opacities =
+                tile_opacities.mul(tile_pixel_weights).clamp_max(0.99);
 
-            // [T_H * T_W, R, 1]
-            // let tile_transmittances_pixel = tile_opacities_pixel
+            // [T_H, T_W, R, 1]
+            let tile_pixel_transmittances = tile_pixel_opacities
+                .to_owned()
+                .neg()
+                .add_scalar(1.0)
+                .prod_cumulative_exclusive(2);
 
-            // tile_colors_rgb.mul(tile_opacities_pixel).mul(tile_transmittances).sum_dim(1)
-            // C = (c * a * {1, 1 - alpha[0], ..., 1 - alpha[-2]}).sum(dim=R)
+            // [T_H, T_W, 3] =
+            // [T_H, T_W, R, 3] = [1, 1, R, 3] * [T_H, T_W, R, 1] * [T_H, T_W, R, 1]
+            let tile_pixel_colors_rgb = tile_colors_rgb
+                .mul(tile_pixel_opacities)
+                .mul(tile_pixel_transmittances)
+                .sum_dim(2)
+                .squeeze::<3>(2);
 
-            // [B, 1, 3] = [B, R, 3] = [1, R, 3] * [B, R, 1] * [B, R, 1]
-
-            // float2 xy = collected_xy[j];
-            // float2 d = { xy.x - pixf.x, xy.y - pixf.y };
-            // float4 con_o = collected_conic_opacity[j];
-            // float power = -0.5f * (con_o.x * d.x * d.x + con_o.z * d.y * d.y) - con_o.y * d.x * d.y;
-            // if (power > 0.0f)
-            //     continue;
-
-            // float alpha = min(0.99f, con_o.w * exp(power));
-            // if (alpha < 1.0f / 255.0f)
-            //     continue;
-
-            // float test_T = T * (1 - alpha);
-            // if (test_T < 0.0001f)
-            // {
-            //     done = true;
-            //     continue;
-            // }
-
-            // for (int ch = 0; ch < CHANNELS; ch++)
-            //     C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
-
-            // T = test_T;
+            image_colors_rgb = image_colors_rgb.slice_assign(
+                [
+                    tile_pixel_y_min..tile_pixel_y_max,
+                    tile_pixel_x_min..tile_pixel_x_max,
+                    0..3,
+                ],
+                tile_pixel_colors_rgb,
+            );
         }
 
         println!("13: {:?}", duration.elapsed());
+        println!("image_colors_rgb.dims(): {:?}", image_colors_rgb.dims());
+        println!(
+            "image_colors_rgb[0..2, 0..2, 0..3]: {:?}",
+            image_colors_rgb
+                .to_owned()
+                .slice([0..2, 0..2, 0..3])
+                .to_data()
+        );
     }
 }
