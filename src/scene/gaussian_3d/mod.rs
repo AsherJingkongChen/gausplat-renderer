@@ -59,7 +59,7 @@ impl<B: backend::Backend> Gaussian3dScene<B> {
         opacities: Tensor<B, 2>,
     ) {
         debug_assert_eq!(opacities.dims()[1], 1, "opacities.dims()[1] != 1");
-        self.opacities = (opacities.clone() / (-opacities + 1.0)).log();
+        self.opacities = (opacities.to_owned() / (-opacities + 1.0)).log();
     }
 
     /// `[P, 3]`

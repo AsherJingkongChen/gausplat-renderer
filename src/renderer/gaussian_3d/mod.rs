@@ -25,11 +25,11 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
 
         let mut duration = std::time::Instant::now();
 
-        // T_W
-        let tile_width = 16;
-
         // T_H
         let tile_height = 16;
+
+        // T_W
+        let tile_width = 16;
 
         debug_assert_ne!(tile_width, 0, "tile_width != 0");
         debug_assert_ne!(tile_height, 0, "tile_height != 0");
@@ -65,6 +65,9 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
         let point_count = positions.dims()[0];
 
         let device = positions.device();
+
+        let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
+        let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
 
         println!("0: {:?}", duration.elapsed());
 
@@ -107,6 +110,14 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
 
         // [P, 1]
         let depths = positions_3d_in_view.2.clamp_min(f32::EPSILON);
+
+        // [P, 1]
+        let positions_3d_in_view_x_normalized =
+            positions_3d_in_view.0.to_owned().div(depths.to_owned());
+
+        // [P, 1]
+        let positions_3d_in_view_y_normalized =
+            positions_3d_in_view.1.to_owned().div(depths.to_owned());
 
         // [P, 1]
         let is_in_frustum = depths.to_owned().greater_elem(0.2);
@@ -171,43 +182,42 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
 
         duration = std::time::Instant::now();
 
-        // [P, 1]
-        let focal_lengths_x_normalized = Tensor::from_data(
-            Data::<f64, 2>::from([[view.focal_length_x]]).convert(),
-            &device,
-        )
-        .div(depths.to_owned());
-
-        // [P, 1]
-        let focal_lengths_y_normalized = Tensor::from_data(
-            Data::<f64, 2>::from([[view.focal_length_y]]).convert(),
-            &device,
-        )
-        .div(depths.to_owned());
-
         // [P, 2, 2] (Symmetric)
         let covariances_2d = {
             let filter_low_pass = FILTER_LOW_PASS as f64 + 1.0;
-            let bound_x = image_width as f64 / view.focal_length_x / 2.0
-                * filter_low_pass;
-            let bound_y = image_height as f64 / view.focal_length_y / 2.0
-                * filter_low_pass;
+
+            let focal_length_x =
+                image_width as f64 / field_of_view_x_half_tan / 2.0;
+            let focal_length_y =
+                image_height as f64 / field_of_view_y_half_tan / 2.0;
+            let bound_x = field_of_view_x_half_tan * filter_low_pass;
+            let bound_y = field_of_view_y_half_tan * filter_low_pass;
+
+            // [P, 1]
+            let focal_lengths_x_normalized = Tensor::from_data(
+                Data::<f64, 2>::from([[focal_length_x]]).convert(),
+                &device,
+            )
+            .div(depths.to_owned());
+
+            // [P, 1]
+            let focal_lengths_y_normalized = Tensor::from_data(
+                Data::<f64, 2>::from([[focal_length_y]]).convert(),
+                &device,
+            )
+            .div(depths.to_owned());
 
             // [P, 1]
             let nulls = Tensor::zeros([point_count, 1], &device);
 
             // [P, 1]
-            let x_normalized = positions_3d_in_view
-                .0
+            let x_normalized_clamped = positions_3d_in_view_x_normalized
                 .to_owned()
-                .div(depths.to_owned())
                 .clamp(-bound_x, bound_x);
 
             // [P, 1]
-            let y_normalized = positions_3d_in_view
-                .1
+            let y_normalized_clamped = positions_3d_in_view_y_normalized
                 .to_owned()
-                .div(depths.to_owned())
                 .clamp(-bound_y, bound_y);
 
             // [P, 2, 3]
@@ -215,10 +225,16 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
                 vec![
                     focal_lengths_x_normalized.to_owned(),
                     nulls.to_owned(),
-                    -focal_lengths_x_normalized.to_owned() * x_normalized,
+                    focal_lengths_x_normalized
+                        .to_owned()
+                        .mul(x_normalized_clamped)
+                        .neg(),
                     nulls,
                     focal_lengths_y_normalized.to_owned(),
-                    -focal_lengths_y_normalized.to_owned() * y_normalized,
+                    focal_lengths_y_normalized
+                        .to_owned()
+                        .mul(y_normalized_clamped)
+                        .neg(),
                 ],
                 1,
             )
@@ -321,19 +337,24 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
         duration = std::time::Instant::now();
 
         // [P, 2] (View -> Clipped -> Screen)
-        let positions_2d_in_screen = Tensor::cat(
-            vec![
-                positions_3d_in_view
-                    .0
-                    .mul(focal_lengths_x_normalized)
-                    .add_scalar((image_width as f64 - 1.0) / 2.0),
-                positions_3d_in_view
-                    .1
-                    .mul(focal_lengths_y_normalized)
-                    .add_scalar((image_height as f64 - 1.0) / 2.0),
-            ],
-            1,
-        );
+        let positions_2d_in_screen = {
+            let image_height_half = image_height as f64 / 2.0;
+            let image_width_half = image_width as f64 / 2.0;
+
+            Tensor::cat(
+                vec![
+                    positions_3d_in_view_x_normalized
+                        .mul_scalar(image_width_half / field_of_view_x_half_tan)
+                        .add_scalar(image_width_half - 0.5),
+                    positions_3d_in_view_y_normalized
+                        .mul_scalar(
+                            image_height_half / field_of_view_y_half_tan,
+                        )
+                        .add_scalar(image_height_half - 0.5),
+                ],
+                1,
+            )
+        };
 
         println!("6: {:?}", duration.elapsed());
 
@@ -717,6 +738,9 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
         // [1, 1, P, 3]
         let colors_rgb = colors_rgb.unsqueeze::<4>();
 
+        // [1, 1, P, 2, 2]
+        let conics = conics.unsqueeze::<5>();
+
         // [1, 1, P, 1]
         let opacities = opacities.unsqueeze::<4>();
 
@@ -750,9 +774,9 @@ impl<B: backend::Backend> Gaussian3dRenderer<B> {
                 .to_owned()
                 .select(2, tile_point_indexs.to_owned());
 
-            // [R, 2, 2]
+            // [1, 1, R, 2, 2]
             let tile_conics =
-                conics.to_owned().select(0, tile_point_indexs.to_owned());
+                conics.to_owned().select(2, tile_point_indexs.to_owned());
 
             // [1, 1, R, 1]
             let tile_opacities =
