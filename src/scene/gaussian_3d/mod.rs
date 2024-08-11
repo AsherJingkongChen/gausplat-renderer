@@ -26,25 +26,18 @@ impl<B: backend::Backend> Gaussian3dScene<B> {
         }
     }
 
-    /// `[P, (D + 1) ^ 2, 3]`
+    /// `[P, 16, 3]`
     ///
     /// The colors represented as orthonormalized spherical harmonics
     pub fn colors_sh(&self) -> Tensor<B, 3> {
         self.colors_sh.to_owned()
     }
 
-    /// `(D + 1) ^ 2`
-    ///
-    /// `self.colors_sh().dims()[1]`
-    pub fn colors_sh_count(colors_sh_degree: u8) -> usize {
-        let degree_1 = colors_sh_degree as usize + 1;
-        degree_1 * degree_1
-    }
-
     pub fn set_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 3>,
     ) {
+        debug_assert_eq!(colors_sh.dims()[1], 16, "colors_sh.dims()[1] != 16");
         debug_assert_eq!(colors_sh.dims()[2], 3, "colors_sh.dims()[2] != 3");
         self.colors_sh = colors_sh;
     }
