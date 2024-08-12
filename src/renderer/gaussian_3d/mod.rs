@@ -11,6 +11,8 @@ use burn::backend::wgpu::{
     into_contiguous, kernel_wgsl, AutoGraphicsApi, JitBackend, Kernel,
     SourceKernel, WgpuRuntime, WorkGroup, WorkgroupSize,
 };
+use bytemuck::bytes_of;
+use rayon::slice::ParallelSliceMut;
 use std::iter::repeat_with;
 use tensor::{ops::FloatTensor, Data};
 
@@ -27,7 +29,7 @@ pub trait Gaussian3dRenderer: backend::Backend {
 #[derive(Clone, Debug)]
 pub struct Gaussian3dRendererResultOk<B: backend::Backend> {
     // `[H, W, 3]`
-    pub colors_2d_rgb: Tensor<B, 3>,
+    pub colors_rgb_2d: Tensor<B, 3>,
 }
 
 mod kernel {
@@ -98,6 +100,13 @@ impl Gaussian3dRenderer for Wgpu {
             )));
         }
 
+        println!(
+            "SH_C: {:#?}",
+            SH_C.iter()
+                .map(|r| r.iter().map(|c| *c as f32).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
+
         let mut duration = std::time::Instant::now();
 
         // T_X
@@ -144,37 +153,20 @@ impl Gaussian3dRenderer for Wgpu {
         let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
         let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
 
-        // [4, 4]
-        let view_transform = Tensor::<Self, 2>::from_data(
-            Data::<f64, 2>::from(view.view_transform).convert(),
-            &device,
-        );
-
-        // ([P], [P, 2, 2], [P, 2], [P], [P])
+        // ([P, 3], [P, 2, 2], [P], [P, 2], [P], [P])
         let (
-            depths,
+            colors_rgb_3d,
             conics,
+            depths,
             positions_2d_in_screen,
             radii,
             tile_touched_counts,
         ) = {
-            // [P, 3]
-            let positions =
-                into_contiguous(positions.to_owned().into_primitive());
+            // [P, 16, 3]
+            let colors_sh =
+                into_contiguous(colors_sh.to_owned().into_primitive());
 
-            // [P, 4]
-            let rotations =
-                into_contiguous(rotations.to_owned().into_primitive());
-
-            // [P, 3]
-            let scalings =
-                into_contiguous(scalings.to_owned().into_primitive());
-
-            // [4, 4]
-            let view_transform =
-                into_contiguous(view_transform.to_owned().into_primitive());
-
-            let client = positions.client;
+            let client = colors_sh.client;
 
             let arguments = RenderGaussian3dForward1Arguments {
                 colors_sh_degree_max: colors_sh_degree_max as u32,
@@ -220,17 +212,37 @@ impl Gaussian3dRenderer for Wgpu {
                     * (FILTER_LOW_PASS + 1.0))
                     as f32,
             };
-            let arguments_handle =
-                client.create(bytemuck::bytes_of(&arguments));
+            let arguments_handle = client.create(bytes_of(&arguments));
 
             println!("arguments: {:#?}", arguments);
 
-            // [P]
-            let depths = into_contiguous(FloatTensor::<Self, 1>::new(
+            // [P, 3]
+            let positions =
+                into_contiguous(positions.to_owned().into_primitive());
+
+            // [P, 4]
+            let rotations =
+                into_contiguous(rotations.to_owned().into_primitive());
+
+            // [P, 3]
+            let scalings =
+                into_contiguous(scalings.to_owned().into_primitive());
+
+            // [3]
+            let view_position_handle =
+                client.create(bytes_of(&view.view_position.map(|c| c as f32)));
+
+            // [4, 4]
+            let view_transform_handle = client.create(bytes_of(
+                &view.view_transform.map(|r| r.map(|c| c as f32)),
+            ));
+
+            // [P, 3]
+            let colors_rgb_3d = into_contiguous(FloatTensor::<Self, 2>::new(
                 client.to_owned(),
                 device.to_owned(),
-                [point_count].into(),
-                client.empty(point_count * std::mem::size_of::<f32>()),
+                [point_count, 3].into(),
+                client.empty(point_count * 3 * std::mem::size_of::<f32>()),
             ));
 
             // [P, 2, 2]
@@ -239,6 +251,14 @@ impl Gaussian3dRenderer for Wgpu {
                 device.to_owned(),
                 [point_count, 2, 2].into(),
                 client.empty(point_count * 2 * 2 * std::mem::size_of::<f32>()),
+            ));
+
+            // [P]
+            let depths = into_contiguous(FloatTensor::<Self, 1>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count].into(),
+                client.empty(point_count * std::mem::size_of::<f32>()),
             ));
 
             // [P, 2]
@@ -279,22 +299,26 @@ impl Gaussian3dRenderer for Wgpu {
                 ))),
                 &[
                     &arguments_handle,
+                    &colors_sh.handle,
                     &positions.handle,
                     &rotations.handle,
                     &scalings.handle,
-                    &view_transform.handle,
-                    &depths.handle,
+                    &view_position_handle,
+                    &view_transform_handle,
+                    &colors_rgb_3d.handle,
                     &conics.handle,
+                    &depths.handle,
                     &positions_2d_in_screen.handle,
                     &radii.handle,
                     &tile_touched_counts.handle,
                 ],
             );
 
-            // ([P], [P, 2, 2], [P, 2], [P])
+            // ([P, 3], [P, 2, 2], [P], [P, 2], [P], [P])
             (
-                Tensor::<Self, 1>::from_primitive(depths),
+                Tensor::<Self, 2>::from_primitive(colors_rgb_3d),
                 Tensor::<Self, 3>::from_primitive(conics),
+                Tensor::<Self, 1>::from_primitive(depths),
                 Tensor::<Self, 2>::from_primitive(positions_2d_in_screen),
                 Tensor::<Self, 1, Int>::from_primitive(radii),
                 Tensor::<Self, 1, Int>::from_primitive(tile_touched_counts),
@@ -306,7 +330,14 @@ impl Gaussian3dRenderer for Wgpu {
         duration = std::time::Instant::now();
 
         // [[START]]
+
         {
+            // [4, 4]
+            let view_transform = Tensor::<Self, 2>::from_data(
+                Data::<f64, 2>::from(view.view_transform).convert(),
+                &device,
+            );
+
             // [3, 3]
             let view_rotation = view_transform.to_owned().slice([0..3, 0..3]);
 
@@ -523,10 +554,6 @@ impl Gaussian3dRenderer for Wgpu {
             )
             .reshape([point_count, 2, 2]);
 
-            println!("4: {:?}", duration.elapsed());
-
-            duration = std::time::Instant::now();
-
             // [P, 1] (No grad)
             let radii = {
                 // [P, 1]
@@ -549,7 +576,7 @@ impl Gaussian3dRenderer for Wgpu {
             };
 
             // // [P, 1]
-            // let is_visible = radii.to_owned().greater_elem(0);
+            let is_visible = radii.to_owned().greater_elem(0);
 
             // println!("5: {:?}", duration.elapsed());
 
@@ -646,379 +673,373 @@ impl Gaussian3dRenderer for Wgpu {
                 - tiles_touched_x_min.to_owned())
                 * (tiles_touched_y_max.to_owned()
                     - tiles_touched_y_min.to_owned());
-            }
-            // [2.1218553, 0.004185328, 0.004185328, 2.0621972]
 
-            println!("conics: {:?}", conics.to_owned().slice([111209..111210]).into_data().value);
-            println!("tile_touched_counts: {:?}", tile_touched_counts.to_owned().slice([111200..111230]).into_data().value);
-            println!("tile_touched_counts: {:?}", tile_touched_counts.to_owned().sum().into_data().value);
-        // }
-        // tensor:
-        // tile_touched_counts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]
-        // tile_touched_counts: [339405]
+            // [P] * 4
+            let tiles_touched_x_max =
+                tiles_touched_x_max.into_data().convert::<u32>().value;
+            let tiles_touched_x_min =
+                tiles_touched_x_min.into_data().convert::<u32>().value;
+            let tiles_touched_y_max =
+                tiles_touched_y_max.into_data().convert::<u32>().value;
+            let tiles_touched_y_min =
+                tiles_touched_y_min.into_data().convert::<u32>().value;
 
-        // kernel:
-        // tile_touched_counts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]
-        // tile_touched_counts: [344584]
+            // [P, 1]
+            let is_tiles_touched =
+                tile_touched_counts.to_owned().greater_elem(0);
 
-        // tensor: [344584]
-        // kernel: [339405]
+            // println!("7: {:?}", duration.elapsed());
 
-        // tensor: (conics)
-        //   [1.2231921, -0.0050062984, -0.0050062984, 1.2077852,
-        //    0.3117679, -0.0353714, -0.0353714, 0.4645885,
-        //    3.3292682, -0.00028295477, -0.00028295477, 3.3314388,
-        //    0.1442775, -0.00045436926, -0.00045436926, 0.13770448,
-        //    3.2559779, 0.001253752, 0.001253752, 3.274653,
-        //    0.14392842, -0.0295211, -0.0295211, 0.28792018]
-        //
-        // kernel:
-        //   [1.2231716, -1.3702871e-10, -1.3702871e-10, 1.2193857,
-        //    0.0, 0.0, 0.0, 0.0,
-        //    0.0, 0.0, 0.0, 0.0,
-        //    0.14427602, -1.3563238e-10, -1.3563238e-10, 0.14325424,
-        //    0.0, 0.0, 0.0, 0.0,
-        //    0.0, 0.0, 0.0, 0.0]
-        //
-        // tensor: [451.31155, 425.50238, 1110.233, 326.49533, 1107.6843, 327.662, 1154.4257, 311.9128, 1110.683, 328.47144, 1112.2345, 329.30573, 1092.9783, 341.77203, 1061.5613, 365.95407, 1159.2151, 342.11145, 1130.223, 353.15646, 1105.5613, 355.71024, 1143.6812, 350.7268, 1159.2219, 356.6757, 1123.7717, 359.90903, 1140.0118, 362.11774, 1168.1848, 364.24863, 1141.9089, 371.2625, 1137.6567, 381.8191, 1107.7988, 375.05133, 1161.7136, 372.25504, 1108.3003, 376.26602, 157716380000.0, -252457960000.0]
-        // kernel: [451.31155, 425.50238, 1110.2329, 326.49533, 1107.6843, 327.662, 1154.4255, 311.9128, 1110.683, 328.47144, 1112.2345, 329.30573, 1092.9783, 341.77203, 1061.5613, 365.95407, 1159.2151, 342.11145, 1130.2229, 353.15646, 1105.5613, 355.7102, 1143.6812, 350.7268, 1159.2219, 356.6757, 1123.7717, 359.90903, 1140.0118, 362.11774, 1168.1848, 364.24863, 1141.9089, 371.2625, 1137.6567, 381.8191, 1107.7988, 375.05133, 1161.7135, 372.25504, 1108.3003, 376.26602, 238.25185, 674.17505]
-        // tensor: [6, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 4, 7, 3, 3, 4, 4, 3, 3, 3, 9, 64564165]
-        // kernel: [6, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 6, 3, 3, 4, 4, 3, 3, 3, 7, 3]
-        // tensor: [868107493]
-        // kernel: [177994]
-        // tensor: [347387]
-        // kernel: [51591]
+            // duration = std::time::Instant::now();
 
-        // // [P] * 4
-        // let tiles_touched_x_max =
-        //     tiles_touched_x_max.into_data().convert::<u32>().value;
-        // let tiles_touched_x_min =
-        //     tiles_touched_x_min.into_data().convert::<u32>().value;
-        // let tiles_touched_y_max =
-        //     tiles_touched_y_max.into_data().convert::<u32>().value;
-        // let tiles_touched_y_min =
-        //     tiles_touched_y_min.into_data().convert::<u32>().value;
+            // [P, 3]
+            let colors_rgb_3d = {
+                // [1, 3]
+                let view_position = Tensor::<Self, 2>::from_data(
+                    Data::<f64, 2>::from([view.view_position]).convert(),
+                    &device,
+                );
 
-        // // [P, 1]
-        // let is_tiles_touched = tile_touched_counts.to_owned().greater_elem(0);
+                // [P, 1, 1] * 3
+                let mut directions = {
+                    // [P, 3, 1]
+                    let directions =
+                        (positions - view_position).unsqueeze_dim::<3>(2);
 
-        // println!("7: {:?}", duration.elapsed());
+                    // [P, 1, 1]
+                    let directions_norm = directions
+                        .to_owned()
+                        .mul(directions.to_owned())
+                        .sum_dim(1)
+                        .sqrt();
 
-        // duration = std::time::Instant::now();
+                    // [P, 1, 1] * 3
+                    (directions / directions_norm).iter_dim(1)
+                };
 
-        // // [P, 3]
-        // let colors_3d_rgb = {
-        //     // [1, 3]
-        //     let view_position = Tensor::<Self, 2>::from_data(
-        //         Data::<f64, 2>::from([view.view_position]).convert(),
-        //         &device,
-        //     );
+                // [P, 1, 1] * 8
+                let mut x = Tensor::empty([1, 1, 1], &device);
+                let mut y = Tensor::empty([1, 1, 1], &device);
+                let mut z = Tensor::empty([1, 1, 1], &device);
+                let mut xx = Tensor::empty([1, 1, 1], &device);
+                let mut yy = Tensor::empty([1, 1, 1], &device);
+                let mut zz = Tensor::empty([1, 1, 1], &device);
+                let mut xy = Tensor::empty([1, 1, 1], &device);
+                let mut zz_5_1 = Tensor::empty([1, 1, 1], &device);
 
-        //     // [P, 1, 1] * 3
-        //     let mut directions = {
-        //         // [P, 3, 1]
-        //         let directions =
-        //             (positions - view_position).unsqueeze_dim::<3>(2);
+                // [P, 1, 3] * ((D + 1) ^ 2)
+                let mut colors_sh = colors_sh.iter_dim(1);
 
-        //         // [P, 1, 1]
-        //         let directions_norm = directions
-        //             .to_owned()
-        //             .mul(directions.to_owned())
-        //             .sum_dim(1)
-        //             .sqrt();
+                // [P, 1, 3] (D >= 0)
+                let mut colors_rgb_3d =
+                    colors_sh.next().expect("colors_sh.dims()[1] >= 1")
+                        * SH_C[0][0];
 
-        //         // [P, 1, 1] * 3
-        //         (directions / directions_norm).iter_dim(1)
-        //     };
+                // (D >= 1)
+                if let Some(colors_sh) = colors_sh.next() {
+                    y = directions.next().expect("directions.dims()[1] == 3");
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * y.to_owned() * SH_C[1][0];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    z = directions.next().expect("directions.dims()[1] == 3");
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * z.to_owned() * SH_C[1][1];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    x = directions.next().expect("directions.dims()[1] == 3");
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * x.to_owned() * SH_C[1][2];
+                }
 
-        //     // [P, 1, 1] * 8
-        //     let mut x = Tensor::empty([1, 1, 1], &device);
-        //     let mut y = Tensor::empty([1, 1, 1], &device);
-        //     let mut z = Tensor::empty([1, 1, 1], &device);
-        //     let mut xx = Tensor::empty([1, 1, 1], &device);
-        //     let mut yy = Tensor::empty([1, 1, 1], &device);
-        //     let mut zz = Tensor::empty([1, 1, 1], &device);
-        //     let mut xy = Tensor::empty([1, 1, 1], &device);
-        //     let mut zz_5_1 = Tensor::empty([1, 1, 1], &device);
+                // (D >= 2)
+                if let Some(colors_sh) = colors_sh.next() {
+                    xy = x.to_owned() * y.to_owned();
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * xy.to_owned() * SH_C[2][0];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let yz = y.to_owned() * z.to_owned();
+                    colors_rgb_3d = colors_rgb_3d + colors_sh * yz * SH_C[2][1];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    zz = z.to_owned() * z.to_owned();
+                    let zz_3_1 = zz.to_owned() * 3.0 - 1.0;
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * zz_3_1 * SH_C[2][2];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let xz = x.to_owned() * z.to_owned();
+                    colors_rgb_3d = colors_rgb_3d + colors_sh * xz * SH_C[2][3];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    xx = x.to_owned() * x.to_owned();
+                    yy = y.to_owned() * y.to_owned();
+                    let xx_yy = xx.to_owned() - yy.to_owned();
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * xx_yy * SH_C[2][4];
+                }
 
-        //     // [P, 1, 3] * ((D + 1) ^ 2)
-        //     let mut colors_sh = colors_sh.iter_dim(1);
+                // (D >= 3)
+                if let Some(colors_sh) = colors_sh.next() {
+                    let y_xx_3_yy =
+                        y.to_owned() * (xx.to_owned() * 3.0 - yy.to_owned());
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * y_xx_3_yy * SH_C[3][0];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let z_xy = z.to_owned() * xy;
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * z_xy * SH_C[3][1];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    zz_5_1 = zz * 5.0 - 1.0;
+                    let y_zz_5_1 = y * zz_5_1.to_owned();
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * y_zz_5_1 * SH_C[3][2];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let z_zz_5_3 = z.to_owned() * (zz_5_1.to_owned() - 2.0);
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * z_zz_5_3 * SH_C[3][3];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let x_zz_5_1 = x.to_owned() * zz_5_1;
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * x_zz_5_1 * SH_C[3][4];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let z_xx_yy = z * (xx.to_owned() - yy.to_owned());
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * z_xx_yy * SH_C[3][5];
+                }
+                if let Some(colors_sh) = colors_sh.next() {
+                    let x_xx_yy_3 = x * (xx - yy * 3.0);
+                    colors_rgb_3d =
+                        colors_rgb_3d + colors_sh * x_xx_yy_3 * SH_C[3][6];
+                }
 
-        //     // [P, 1, 3] (D >= 0)
-        //     let mut colors_3d_rgb =
-        //         colors_sh.next().expect("colors_sh.dims()[1] >= 1")
-        //             * SH_C[0][0];
+                // [P, 1, 3]
+                colors_rgb_3d = colors_rgb_3d + 0.5;
 
-        //     // (D >= 1)
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         y = directions.next().expect("directions.dims()[1] == 3");
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * y.to_owned() * SH_C[1][0];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         z = directions.next().expect("directions.dims()[1] == 3");
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * z.to_owned() * SH_C[1][1];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         x = directions.next().expect("directions.dims()[1] == 3");
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * x.to_owned() * SH_C[1][2];
-        //     }
+                // [P, 3]
+                colors_rgb_3d.clamp_min(0.0).squeeze::<2>(1)
+            };
 
-        //     // (D >= 2)
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         xy = x.to_owned() * y.to_owned();
-        //         colors_3d_rgb =
-        //             colors_3d_rgb + colors_sh * xy.to_owned() * SH_C[2][0];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let yz = y.to_owned() * z.to_owned();
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * yz * SH_C[2][1];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         zz = z.to_owned() * z.to_owned();
-        //         let zz_3_1 = zz.to_owned() * 3.0 - 1.0;
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * zz_3_1 * SH_C[2][2];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let xz = x.to_owned() * z.to_owned();
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * xz * SH_C[2][3];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         xx = x.to_owned() * x.to_owned();
-        //         yy = y.to_owned() * y.to_owned();
-        //         let xx_yy = xx.to_owned() - yy.to_owned();
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * xx_yy * SH_C[2][4];
-        //     }
+            // println!("8: {:?}", duration.elapsed());
 
-        //     // (D >= 3)
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let y_xx_3_yy =
-        //             y.to_owned() * (xx.to_owned() * 3.0 - yy.to_owned());
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * y_xx_3_yy * SH_C[3][0];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let z_xy = z.to_owned() * xy;
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * z_xy * SH_C[3][1];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         zz_5_1 = zz * 5.0 - 1.0;
-        //         let y_zz_5_1 = y * zz_5_1.to_owned();
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * y_zz_5_1 * SH_C[3][2];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let z_zz_5_3 = z.to_owned() * (zz_5_1.to_owned() - 2.0);
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * z_zz_5_3 * SH_C[3][3];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let x_zz_5_1 = x.to_owned() * zz_5_1;
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * x_zz_5_1 * SH_C[3][4];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let z_xx_yy = z * (xx.to_owned() - yy.to_owned());
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * z_xx_yy * SH_C[3][5];
-        //     }
-        //     if let Some(colors_sh) = colors_sh.next() {
-        //         let x_xx_yy_3 = x * (xx - yy * 3.0);
-        //         colors_3d_rgb = colors_3d_rgb + colors_sh * x_xx_yy_3 * SH_C[3][6];
-        //     }
+            // duration = std::time::Instant::now();
 
-        //     // [P, 1, 3]
-        //     colors_3d_rgb = colors_3d_rgb + 0.5;
+            // [P, 1]
+            let mask = Tensor::cat(
+                vec![
+                    is_in_frustum,
+                    is_covariances_2d_invertible,
+                    is_tiles_touched,
+                ],
+                1,
+            )
+            .all_dim(1);
 
-        //     // [P, 3]
-        //     colors_3d_rgb.clamp_min(0.0).squeeze::<2>(1)
-        // };
+            // [P, 3]
+            let colors_rgb_3d = colors_rgb_3d.zeros_like().mask_where(
+                mask.to_owned().expand([point_count, 3]),
+                colors_rgb_3d,
+            );
 
-        // println!("8: {:?}", duration.elapsed());
+            // [P, 2, 2]
+            let conics = conics.zeros_like().mask_where(
+                mask.to_owned().unsqueeze_dim::<3>(2).expand([
+                    point_count,
+                    2,
+                    2,
+                ]),
+                conics,
+            );
 
-        // duration = std::time::Instant::now();
+            // [P, 1]
+            let depths =
+                depths.zeros_like().mask_where(mask.to_owned(), depths);
 
-        // // [P, 1]
-        // let mask = Tensor::cat(
-        //     vec![
-        //         is_in_frustum,
-        //         is_covariances_2d_invertible,
-        //         is_tiles_touched,
-        //     ],
-        //     1,
-        // )
-        // .all_dim(1);
+            // [P, 1]
+            let opacities = opacities
+                .zeros_like()
+                .mask_where(mask.to_owned(), opacities);
 
-        // // [P, 3]
-        // let colors_3d_rgb = colors_3d_rgb
-        //     .zeros_like()
-        //     .mask_where(mask.to_owned().expand([point_count, 3]), colors_3d_rgb);
+            // [P, 2]
+            let positions_2d_in_screen =
+                positions_2d_in_screen.zeros_like().mask_where(
+                    mask.to_owned().expand([point_count, 2]),
+                    positions_2d_in_screen,
+                );
 
-        // // [P, 2, 2]
-        // let conics = conics.zeros_like().mask_where(
-        //     mask.to_owned()
-        //         .unsqueeze_dim::<3>(2)
-        //         .expand([point_count, 2, 2]),
-        //     conics,
-        // );
+            // [P, 1] (No grad)
+            let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
 
-        // // [P, 1]
-        // let depths = depths.zeros_like().mask_where(mask.to_owned(), depths);
+            // [P, 1] (No grad)
+            let tile_touched_counts = tile_touched_counts
+                .zeros_like()
+                .mask_where(mask.to_owned(), tile_touched_counts);
 
-        // // [P, 1]
-        // let opacities = opacities
-        //     .zeros_like()
-        //     .mask_where(mask.to_owned(), opacities);
+            println!("9: {:?}", duration.elapsed());
 
-        // // [P, 2]
-        // let positions_2d_in_screen =
-        //     positions_2d_in_screen.zeros_like().mask_where(
-        //         mask.to_owned().expand([point_count, 2]),
-        //         positions_2d_in_screen,
-        //     );
+            duration = std::time::Instant::now();
 
-        // // [P, 1] (No grad)
-        // let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
+            // [P], T (No grad)
+            let (tile_touched_offsets, tile_touched_count) = {
+                // [P]
+                let counts = tile_touched_counts
+                    .to_owned()
+                    .into_data()
+                    .convert::<u32>()
+                    .value;
 
-        // // [P, 1] (No grad)
-        // let tile_touched_counts = tile_touched_counts
-        //     .zeros_like()
-        //     .mask_where(mask.to_owned(), tile_touched_counts);
+                let mut count = *counts.last().unwrap_or(&0) as usize;
 
-        // println!("9: {:?}", duration.elapsed());
+                // [P]
+                let offsets = counts
+                    .into_iter()
+                    .scan(0, |state, x| {
+                        let y = *state;
+                        *state += x;
+                        Some(y)
+                    })
+                    .collect::<Vec<_>>();
 
-        // duration = std::time::Instant::now();
+                count += *offsets.last().unwrap_or(&0) as usize;
 
-        // // [P], T (No grad)
-        // let (tile_touched_offsets, tile_touched_count) = {
-        //     // [P]
-        //     let counts = tile_touched_counts.into_data().convert::<u32>().value;
+                // [P]
+                (offsets, count)
+            };
 
-        //     let mut count = *counts.last().unwrap_or(&0) as usize;
+            println!("10: {:?}", duration.elapsed());
+            println!("tile_touched_count: {:?}", tile_touched_count);
 
-        //     // [P]
-        //     let offsets = counts
-        //         .into_iter()
-        //         .scan(0, |state, x| {
-        //             let y = *state;
-        //             *state += x;
-        //             Some(y)
-        //         })
-        //         .collect::<Vec<_>>();
+            duration = std::time::Instant::now();
 
-        //     count += *offsets.last().unwrap_or(&0) as usize;
+            // [T] * 2 (No grad)
+            let (point_keys, point_indexs) = {
+                let tile_touched_offsets = tile_touched_offsets;
 
-        //     // [P]
-        //     (offsets, count)
-        // };
+                // [P]
+                let mask = Tensor::cat(vec![mask, is_visible], 1)
+                    .all_dim(1)
+                    .into_data()
+                    .value;
 
-        // println!("10: {:?}", duration.elapsed());
-        // println!("tile_touched_count: {:?}", tile_touched_count);
+                // [P] (f32 -> u32)
+                let depths = bytemuck::cast_vec::<f32, u32>(
+                    depths.into_data().convert().value,
+                );
 
-        // duration = std::time::Instant::now();
+                // [T, 2]
+                let mut keys_and_indexs = (0..point_count).fold(
+                    vec![(0, 0); tile_touched_count],
+                    |mut keys_and_indexs, index| {
+                        if !mask[index] {
+                            return keys_and_indexs;
+                        }
 
-        // // [T] * 2 (No grad)
-        // let (point_keys, point_indexs) = {
-        //     let tile_touched_offsets = tile_touched_offsets;
+                        let mut offset = tile_touched_offsets[index] as usize;
 
-        //     // [P]
-        //     let mask = Tensor::cat(vec![mask, is_visible], 1)
-        //         .all_dim(1)
-        //         .into_data()
-        //         .value;
+                        for tile_y in tiles_touched_y_min[index]
+                            ..tiles_touched_y_max[index]
+                        {
+                            for tile_x in tiles_touched_x_min[index]
+                                ..tiles_touched_x_max[index]
+                            {
+                                let tile = (tile_y * tile_count_x as u32
+                                    + tile_x)
+                                    as u64;
+                                let depth = depths[index] as u64;
+                                keys_and_indexs[offset] =
+                                    (tile << 32 | depth, index as u32);
 
-        //     // [P] (f32 -> u32)
-        //     let depths = bytemuck::cast_vec::<f32, u32>(
-        //         depths.into_data().convert().value,
-        //     );
+                                offset += 1;
+                            }
+                        }
 
-        //     // [T, 2]
-        //     let mut keys_and_indexs = (0..point_count).fold(
-        //         vec![(0, 0); tile_touched_count],
-        //         |mut keys_and_indexs, index| {
-        //             if !mask[index] {
-        //                 return keys_and_indexs;
-        //             }
+                        keys_and_indexs
+                    },
+                );
 
-        //             let mut offset = tile_touched_offsets[index] as usize;
+                keys_and_indexs.par_sort_unstable_by_key(|(key, _)| *key);
 
-        //             for tile_y in
-        //                 tiles_touched_y_min[index]..tiles_touched_y_max[index]
-        //             {
-        //                 for tile_x in tiles_touched_x_min[index]
-        //                     ..tiles_touched_x_max[index]
-        //                 {
-        //                     let tile =
-        //                         (tile_y * tile_count_x as u32 + tile_x) as u64;
-        //                     let depth = depths[index] as u64;
-        //                     keys_and_indexs[offset] =
-        //                         (tile << 32 | depth, index as u32);
+                // [T] * 2
+                keys_and_indexs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+            };
 
-        //                     offset += 1;
-        //                 }
-        //             }
+            println!("11: {:?}", duration.elapsed());
 
-        //             keys_and_indexs
-        //         },
-        //     );
+            duration = std::time::Instant::now();
 
-        //     keys_and_indexs.par_sort_unstable_by_key(|(key, _)| *key);
+            // [(H / T_H) * (W / T_W), 2] (No grad)
+            let tile_point_ranges = {
+                // [(H / T_H) * (W / T_W), 2]
+                let mut ranges = vec![0..0; tile_count_x * tile_count_y];
 
-        //     // [T] * 2
-        //     keys_and_indexs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
-        // };
+                if !point_keys.is_empty() {
+                    let tile = (point_keys.first().unwrap() >> 32) as usize;
+                    ranges[tile].start = 0;
 
-        // println!("11: {:?}", duration.elapsed());
+                    let tile = (point_keys.last().unwrap() >> 32) as usize;
+                    ranges[tile].end = tile_touched_count;
+                }
 
-        // duration = std::time::Instant::now();
+                // [T]
+                for point_offset in 1..tile_touched_count {
+                    let tile_current =
+                        (point_keys[point_offset] >> 32) as usize;
+                    let tile_previous =
+                        (point_keys[point_offset - 1] >> 32) as usize;
+                    if tile_current != tile_previous {
+                        ranges[tile_current].start = point_offset;
+                        ranges[tile_previous].end = point_offset;
+                    }
+                }
 
-        // // [(H / T_H) * (W / T_W), 2] (No grad)
-        // let tile_point_ranges = {
-        //     // [(H / T_H) * (W / T_W), 2]
-        //     let mut ranges = vec![0..0; tile_count_x * tile_count_y];
+                // [(H / T_H) * (W / T_W), 2]
+                ranges
+            };
 
-        //     if !point_keys.is_empty() {
-        //         let tile = (point_keys.first().unwrap() >> 32) as usize;
-        //         ranges[tile].start = 0;
+            println!("12: {:?}", duration.elapsed());
+            println!("tile_point_ranges.len(): {:?}", tile_point_ranges.len());
 
-        //         let tile = (point_keys.last().unwrap() >> 32) as usize;
-        //         ranges[tile].end = tile_touched_count;
-        //     }
+            duration = std::time::Instant::now();
 
-        //     // [T]
-        //     for point_offset in 1..tile_touched_count {
-        //         let tile_current = (point_keys[point_offset] >> 32) as usize;
-        //         let tile_previous =
-        //             (point_keys[point_offset - 1] >> 32) as usize;
-        //         if tile_current != tile_previous {
-        //             ranges[tile_current].start = point_offset;
-        //             ranges[tile_previous].end = point_offset;
-        //         }
-        //     }
+            // [1, 1, P, 3]
+            let colors_rgb_3d = colors_rgb_3d.unsqueeze::<4>();
 
-        //     // [(H / T_H) * (W / T_W), 2]
-        //     ranges
-        // };
+            // [1, 1, P, 2, 2]
+            let conics = conics.unsqueeze::<5>();
 
-        // println!("12: {:?}", duration.elapsed());
-        // println!("tile_point_ranges.len(): {:?}", tile_point_ranges.len());
+            // [1, 1, P, 1]
+            let opacities = opacities.unsqueeze::<4>();
 
-        // duration = std::time::Instant::now();
+            // [1, 1, P, 2]
+            let positions_2d_in_screen =
+                positions_2d_in_screen.unsqueeze::<4>();
 
-        // // [1, 1, P, 3]
-        // let colors_3d_rgb = colors_3d_rgb.unsqueeze::<4>();
+            // [T]
+            let point_indexs = Tensor::<Self, 1, Int>::from_data(
+                Data::new(point_indexs, [tile_touched_count].into()).convert(),
+                &device,
+            );
 
-        // // [1, 1, P, 2, 2]
-        // let conics = conics.unsqueeze::<5>();
+            // tile_touched_counts: [339405]
 
-        // // [1, 1, P, 1]
-        // let opacities = opacities.unsqueeze::<4>();
-
-        // // [1, 1, P, 2]
-        // let positions_2d_in_screen = positions_2d_in_screen.unsqueeze::<4>();
-
-        // // [T]
-        // let point_indexs = Tensor::<Self, 1, Int>::from_data(
-        //     Data::new(point_indexs, [tile_touched_count].into()).convert(),
-        //     &device,
-        // );
+            println!(
+                "point_indexs: {:?}",
+                point_indexs.to_owned().slice([240..260]).into_data().value
+            );
+            println!(
+                "tile_touched_counts: {:?}",
+                tile_touched_counts.to_owned().sum().into_data().value
+            );
+        }
 
         // [H, W, 3] (Output)
-        let mut colors_2d_rgb = Tensor::<Self, 3>::zeros(
+        let mut colors_rgb_2d = Tensor::<Self, 3>::zeros(
             vec![image_size_y, image_size_x, 3],
             &device,
         );
@@ -1038,7 +1059,7 @@ impl Gaussian3dRenderer for Wgpu {
         //         point_indexs.to_owned().slice([tile_point_range]);
 
         //     // [1, 1, R, 3]
-        //     let tile_colors_3d_rgb = colors_3d_rgb
+        //     let tile_colors_rgb_3d = colors_rgb_3d
         //         .to_owned()
         //         .select(2, tile_point_indexs.to_owned());
 
@@ -1130,25 +1151,25 @@ impl Gaussian3dRenderer for Wgpu {
 
         //     // [T_H, T_W, 3] =
         //     // [T_H, T_W, R, 3] = [1, 1, R, 3] * [T_H, T_W, R, 1] * [T_H, T_W, R, 1]
-        //     let tile_pixel_colors_3d_rgb = tile_colors_3d_rgb
+        //     let tile_pixel_colors_rgb_3d = tile_colors_rgb_3d
         //         .mul(tile_pixel_opacities)
         //         .mul(tile_pixel_transmittances)
         //         .sum_dim(2)
         //         .squeeze::<3>(2);
 
-        //     colors_2d_rgb = colors_2d_rgb.slice_assign(
+        //     colors_rgb_2d = colors_rgb_2d.slice_assign(
         //         [
         //             tile_pixel_y_min..tile_pixel_y_max,
         //             tile_pixel_x_min..tile_pixel_x_max,
         //             0..3,
         //         ],
-        //         tile_pixel_colors_3d_rgb,
+        //         tile_pixel_colors_rgb_3d,
         //     );
         // }
 
         // println!("13: {:?}", duration.elapsed());
         // println!("duration_mass: {:?}", duration_mass);
 
-        Ok(Gaussian3dRendererResultOk { colors_2d_rgb })
+        Ok(Gaussian3dRendererResultOk { colors_rgb_2d })
     }
 }

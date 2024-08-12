@@ -35,61 +35,90 @@ struct Arguments {
     view_bound_y: f32,
 }
 
-@group(0)
-@binding(0)
+@group(0) @binding(0)
 var<storage, read> arguments: Arguments;
 
+// [P, 16, 3]
+@group(0) @binding(1)
+var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
+
 // [P, 3]
-@group(0)
-@binding(1)
-var<storage, read> positions: array<f32>;
+@group(0) @binding(2)
+var<storage, read> positions: array<array<f32, 3>>;
 
 // [P, 4]
-@group(0)
-@binding(2)
-var<storage, read> rotations: array<f32>;
+@group(0) @binding(3)
+var<storage, read> rotations: array<array<f32, 4>>;
 
 // [P, 3]
-@group(0)
-@binding(3)
-var<storage, read> scalings: array<f32>;
+@group(0) @binding(4)
+var<storage, read> scalings: array<array<f32, 3>>;
+
+// [3]
+@group(0) @binding(5)
+var<storage, read> view_position: vec3<f32>;
 
 // [4, 4]
-@group(0)
-@binding(4)
-var<storage, read> view_transform: array<f32, 16>;
+@group(0) @binding(6)
+var<storage, read> view_transform: mat4x4<f32>;
 
-// [P]
-@group(0)
-@binding(5)
-var<storage, read_write> depths: array<f32>;
+// [P, 3]
+@group(0) @binding(7)
+var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 
 // [P, 2, 2]
-@group(0)
-@binding(6)
+@group(0) @binding(8)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 
+// [P]
+@group(0) @binding(9)
+var<storage, read_write> depths: array<f32>;
+
 // [P, 2]
-@group(0)
-@binding(7)
+@group(0) @binding(10)
 var<storage, read_write> positions_2d_in_screen: array<vec2<f32>>;
 
 // [P]
-@group(0)
-@binding(8)
+@group(0) @binding(11)
 var<storage, read_write> radii: array<u32>;
 
 // [P]
-@group(0)
-@binding(9)
+@group(0) @binding(12)
 var<storage, read_write> tile_touched_counts: array<u32>;
 
 // Constants
 
 const EPSILON: f32 = 1.1920929e-7;
 
-@compute
-@workgroup_size(256)
+const SH_C_0: array<f32, 1> = array<f32, 1>(
+    0.2820948,
+);
+
+const SH_C_1: array<f32, 3> = array<f32, 3>(
+    -0.48860252,
+    0.48860252,
+    -0.48860252,
+);
+
+const SH_C_2: array<f32, 5> = array<f32, 5>(
+    1.0925485,
+    -1.0925485,
+    0.31539157,
+    -1.0925485,
+    0.54627424,
+);
+
+const SH_C_3: array<f32, 7> = array<f32, 7>(
+    -0.5900436,
+    2.8906114,
+    -0.4570458,
+    0.37317634,
+    -0.4570458,
+    1.4453057,
+    -0.5900436,
+);
+
+@compute @workgroup_size(256)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
 ) {
@@ -105,27 +134,40 @@ fn main(
     radii[index] = 0u;
     tile_touched_counts[index] = 0u;
 
+    // Specifying the parameters
+
+    let position = vec3<f32>(
+        positions[index][0],
+        positions[index][1],
+        positions[index][2],
+    );
+    let quaternion = vec4<f32>(
+        rotations[index][1],
+        rotations[index][2],
+        rotations[index][3],
+        rotations[index][0],
+    );
+    let scaling = vec3<f32>(
+        scalings[index][0],
+        scalings[index][1],
+        scalings[index][2],
+    );
+
     // Transforming 3D positions from world space to view space
     // pv[3, P] = vr[3, 3] * pw[3, P] + vt[3, P]
 
     let view_rotation = mat3x3<f32>(
-        view_transform[0], view_transform[4], view_transform[8],
-        view_transform[1], view_transform[5], view_transform[9],
-        view_transform[2], view_transform[6], view_transform[10],
+        view_transform[0][0], view_transform[1][0], view_transform[2][0],
+        view_transform[0][1], view_transform[1][1], view_transform[2][1],
+        view_transform[0][2], view_transform[1][2], view_transform[2][2],
     );
     let view_translation = vec3<f32>(
-        view_transform[3],
-        view_transform[7],
-        view_transform[11],
+        view_transform[0][3],
+        view_transform[1][3],
+        view_transform[2][3],
     );
-    let positions = vec3<f32>(
-        positions[index * 3 + 0],
-        positions[index * 3 + 1],
-        positions[index * 3 + 2],
-    );
-
-    let position_3d_in_view = view_rotation * positions + view_translation;
-    let depth = position_3d_in_view.z;
+    let position_3d_in_view = view_rotation * position + view_translation;
+    let depth = position_3d_in_view.z + EPSILON;
     let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
     let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
 
@@ -137,13 +179,6 @@ fn main(
 
     // Converting the quaternion to rotation matrix
     // r[P, 3, 3] (Symmetric) = q[P, 4] (x, y, z, w)
-
-    let quaternion = vec4<f32>(
-        rotations[index * 4 + 1],
-        rotations[index * 4 + 2],
-        rotations[index * 4 + 3],
-        rotations[index * 4 + 0],
-    );
 
     let q_wx = quaternion.w * quaternion.x;
     let q_wy = quaternion.w * quaternion.y;
@@ -164,11 +199,6 @@ fn main(
         (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
         (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
     ) * 2.0;
-    let scaling = vec3<f32>(
-        scalings[index * 3 + 0],
-        scalings[index * 3 + 1],
-        scalings[index * 3 + 2],
-    );
     let rotation_scaling = mat3x3<f32>(
         rotation[0] * scaling[0],
         rotation[1] * scaling[1],
@@ -192,9 +222,6 @@ fn main(
         -arguments.view_bound_y,
         arguments.view_bound_y,
     );
-    if arguments.view_bound_y == 0.0 {
-        position_3d_in_view_y_normalized_clamped = -99.0;
-    }
 
     // [2, 3]
     let projection_jacobian = mat3x2<f32>(
@@ -288,13 +315,173 @@ fn main(
         return;
     }
 
+    // Computing the view direction in world space
+    // d[3, P] = pw[3, P] - vw[3, 1]
+
+    let view_direction = normalize(position - view_position);
+
+    // Transforming 3D color from SH space to RGB space
+    // c_rgb[P, 3] = c_sh[P, 16, 3]
+
+    let color_sh_0 = array<vec3<f32>, 1>(
+        vec3<f32>(
+            colors_sh[index][0][0],
+            colors_sh[index][0][1],
+            colors_sh[index][0][2],
+        ),
+    );
+    var color_rgb_3d = color_sh_0[0] * SH_C_0[0];
+
+    var vd_x = 0.0;
+    var vd_y = 0.0;
+    var vd_z = 0.0;
+    var vd_xx = 0.0;
+    var vd_xy = 0.0;
+    var vd_yy = 0.0;
+    var vd_zz = 0.0;
+    var vd_zz_5_1 = 0.0;
+
+    if arguments.colors_sh_degree_max >= 1 {
+        vd_x = view_direction.x;
+        vd_y = view_direction.y;
+        vd_z = view_direction.z;
+
+        let color_sh_1 = array<vec3<f32>, 3>(
+            vec3<f32>(
+                colors_sh[index][1][0],
+                colors_sh[index][1][1],
+                colors_sh[index][1][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][2][0],
+                colors_sh[index][2][1],
+                colors_sh[index][2][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][3][0],
+                colors_sh[index][3][1],
+                colors_sh[index][3][2],
+            ),
+        );
+
+        color_rgb_3d +=
+            color_sh_1[0] * (SH_C_1[0] * (vd_y)) +
+            color_sh_1[1] * (SH_C_1[1] * (vd_z)) +
+            color_sh_1[2] * (SH_C_1[2] * (vd_x));
+    }
+
+    if arguments.colors_sh_degree_max >= 2 {
+        vd_xx = vd_x * vd_x;
+        vd_xy = vd_x * vd_y;
+        vd_yy = vd_y * vd_y;
+        vd_zz = vd_z * vd_z;
+
+        let color_sh_2 = array<vec3<f32>, 5>(
+            vec3<f32>(
+                colors_sh[index][4][0],
+                colors_sh[index][4][1],
+                colors_sh[index][4][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][5][0],
+                colors_sh[index][5][1],
+                colors_sh[index][5][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][6][0],
+                colors_sh[index][6][1],
+                colors_sh[index][6][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][7][0],
+                colors_sh[index][7][1],
+                colors_sh[index][7][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][8][0],
+                colors_sh[index][8][1],
+                colors_sh[index][8][2],
+            ),
+        );
+
+        color_rgb_3d +=
+            color_sh_2[0] * (SH_C_2[0] * (vd_xy)) +
+            color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) +
+            color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
+            color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) +
+            color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
+    }
+
+    if arguments.colors_sh_degree_max >= 3 {
+        vd_zz_5_1 = vd_zz * 5.0 - 1.0;
+
+        let color_sh_3 = array<vec3<f32>, 7>(
+            vec3<f32>(
+                colors_sh[index][9][0],
+                colors_sh[index][9][1],
+                colors_sh[index][9][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][10][0],
+                colors_sh[index][10][1],
+                colors_sh[index][10][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][11][0],
+                colors_sh[index][11][1],
+                colors_sh[index][11][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][12][0],
+                colors_sh[index][12][1],
+                colors_sh[index][12][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][13][0],
+                colors_sh[index][13][1],
+                colors_sh[index][13][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][14][0],
+                colors_sh[index][14][1],
+                colors_sh[index][14][2],
+            ),
+            vec3<f32>(
+                colors_sh[index][15][0],
+                colors_sh[index][15][1],
+                colors_sh[index][15][2],
+            ),
+        );
+
+        color_rgb_3d +=
+            color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
+            color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) +
+            color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1))+
+            color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
+            color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
+            color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
+            color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+    }
+
+    color_rgb_3d += 0.5;
+    color_rgb_3d.r = max(color_rgb_3d.r, 0.0);
+    color_rgb_3d.g = max(color_rgb_3d.g, 0.0);
+    color_rgb_3d.b = max(color_rgb_3d.b, 0.0);
+
     // Specifying the results
 
-    // [P]
-    depths[index] = depth;
+    // [P, 3]
+    colors_rgb_3d[index] = array<f32, 3>(
+        color_rgb_3d.r,
+        color_rgb_3d.g,
+        color_rgb_3d.b,
+    );
 
     // [P, 2, 2]
     conics[index] = conic;
+
+    // [P]
+    depths[index] = depth;
 
     // [P, 2]
     positions_2d_in_screen[index] = position_2d_in_screen;
