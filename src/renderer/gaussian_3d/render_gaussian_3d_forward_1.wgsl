@@ -86,6 +86,14 @@ var<storage, read_write> radii: array<u32>;
 @group(0) @binding(12)
 var<storage, read_write> tile_touched_counts: array<u32>;
 
+// [P, 2]
+@group(0) @binding(13)
+var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
+
+// [P, 2]
+@group(0) @binding(14)
+var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
+
 // Constants
 
 const EPSILON: f32 = 1.1920929e-7;
@@ -129,11 +137,6 @@ fn main(
         return;
     }
 
-    // Initializing the results
-
-    radii[index] = 0u;
-    tile_touched_counts[index] = 0u;
-
     // Specifying the parameters
 
     let position = vec3<f32>(
@@ -153,18 +156,25 @@ fn main(
         scalings[index][2],
     );
 
+    // Initializing the results
+
+    radii[index] = 0u;
+    tile_touched_counts[index] = 0u;
+    tiles_touched_max[index] = vec2<u32>();
+    tiles_touched_min[index] = vec2<u32>();
+
     // Transforming 3D positions from world space to view space
     // pv[3, P] = vr[3, 3] * pw[3, P] + vt[3, P]
 
     let view_rotation = mat3x3<f32>(
-        view_transform[0][0], view_transform[1][0], view_transform[2][0],
-        view_transform[0][1], view_transform[1][1], view_transform[2][1],
-        view_transform[0][2], view_transform[1][2], view_transform[2][2],
+        view_transform[0][0], view_transform[0][1], view_transform[0][2],
+        view_transform[1][0], view_transform[1][1], view_transform[1][2],
+        view_transform[2][0], view_transform[2][1], view_transform[2][2],
     );
     let view_translation = vec3<f32>(
-        view_transform[0][3],
-        view_transform[1][3],
-        view_transform[2][3],
+        view_transform[3][0],
+        view_transform[3][1],
+        view_transform[3][2],
     );
     let position_3d_in_view = view_rotation * position + view_translation;
     let depth = position_3d_in_view.z + EPSILON;
@@ -477,7 +487,7 @@ fn main(
         color_rgb_3d.b,
     );
 
-    // [P, 2, 2]
+    // [P, 2, 2] (Symmetric)
     conics[index] = conic;
 
     // [P]
@@ -491,4 +501,10 @@ fn main(
 
     // [P]
     tile_touched_counts[index] = tile_touched_count;
+
+    // [P, 2]
+    tiles_touched_max[index] = tile_touched_max;
+
+    // [P, 2]
+    tiles_touched_min[index] = tile_touched_min;
 }
