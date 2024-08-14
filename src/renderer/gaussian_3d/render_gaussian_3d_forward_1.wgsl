@@ -143,10 +143,10 @@ fn main(
         positions[index][2],
     );
     let quaternion = vec4<f32>(
+        rotations[index][0],
         rotations[index][1],
         rotations[index][2],
         rotations[index][3],
-        rotations[index][0],
     );
     let scaling = vec3<f32>(
         scalings[index][0],

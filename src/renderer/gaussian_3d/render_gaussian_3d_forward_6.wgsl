@@ -40,6 +40,8 @@ var<storage, read_write> colors_rgb_2d: array<array<f32, 3>>;
 // T_X * T_Y
 const BATCH_SIZE: u32 = 16 * 16;
 
+const OPACITY_MAX: f32 = 0.99;
+
 const OPACITY_MIN: f32 = 1.0 / 255.0;
 
 const TRANSMITTANCE_MIN: f32 = 1e-4;
@@ -64,21 +66,24 @@ fn main(
     @builtin(local_invocation_index) local_index: u32,
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) group_id: vec3<u32>,
+    @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
     // Specifying the parameters
 
     let pixel = global_id.xy;
+    let pixel_f32 = vec2<f32>(f32(pixel.x), f32(pixel.y));
     let is_inside = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
-    let tile_point_range = tile_point_ranges[group_id.y * 16 + group_id.x];
+    let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
+
     var is_done = !is_inside;
     var was_done = false;
     var pixel_transmittance = 1.0;
 
+    // Point count in the tile
     // R
-    var point_count = tile_point_range.y - tile_point_range.x;
 
-    // atomicStore(&pixel_done_count, 0u);
+    var point_count = tile_point_range.y - tile_point_range.x;
 
     // Initializing the results
 
@@ -95,23 +100,23 @@ fn main(
             atomicAdd(&pixel_done_count, 1u);
 
             // Leaving if all the pixels of tile are done
+
             if atomicLoad(&pixel_done_count) == BATCH_SIZE {
                 break;
             }
         }
 
-        // Initializing the batch parameters
+        // Specifying the batch parameters
 
-        workgroupBarrier();
         let index = tile_point_range.x + batch_index * BATCH_SIZE + local_index;
         if index < tile_point_range.y {
             let point_index = point_indexes[index];
-            batch_colors_rgb_3d[index] = colors_rgb_3d[point_index];
-            batch_conics[index] = conics[point_index];
-            batch_opacities[index] = opacities[point_index];
-            batch_positions_2d_in_screen[index] = positions_2d_in_screen[point_index];
+            batch_colors_rgb_3d[local_index] = colors_rgb_3d[point_index];
+            batch_conics[local_index] = conics[point_index];
+            batch_opacities[local_index] = opacities[point_index];
+            batch_positions_2d_in_screen[local_index] = positions_2d_in_screen[point_index];
         }
-        workgroupBarrier(); // may not needed
+        workgroupBarrier();
 
         // Skipping if the pixel is done
 
@@ -123,9 +128,12 @@ fn main(
         // [T_X * T_Y]
 
         let batch_point_count = min(point_count, BATCH_SIZE);
-        let pixel_f32 = vec2<f32>(f32(pixel.x), f32(pixel.y));
 
-        for (var batch_point_index = 0u; batch_point_index < batch_point_count; batch_point_index++) {
+        for (
+            var batch_point_index = 0u;
+            batch_point_index < batch_point_count;
+            batch_point_index++
+        ) {
             // Computing the density of the point
             // a[T_X * T_Y, 1, 1] =
             // d[T_X * T_Y, 1, 2] * c'^-1[T_X * T_Y, 2, 2] * d[T_X * T_Y, 2, 1]
@@ -143,7 +151,10 @@ fn main(
 
             // Computing the opacity of the point
 
-            let opacity = batch_opacities[batch_point_index] * density;
+            let opacity = min(
+                batch_opacities[batch_point_index] * density,
+                OPACITY_MAX,
+            );
 
             // Skipping if the opacity is too low
 
