@@ -12,7 +12,7 @@ var<storage, read> point_tile_indexes: array<u32>;
 
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(2)
-var<storage, read_write> point_tile_ranges: array<u32>;
+var<storage, read_write> tile_point_ranges: array<u32>;
 
 @compute @workgroup_size(256)
 fn main(
@@ -30,7 +30,7 @@ fn main(
     let tile_index_current = point_tile_indexes[index];
     let tile_index_previous = point_tile_indexes[index - 1];
     if tile_index_current != tile_index_previous {
-        point_tile_ranges[tile_index_current * 2 + 0] = index;
-        point_tile_ranges[tile_index_previous * 2 + 1] = index;
+        tile_point_ranges[tile_index_current * 2 + 0] = index;
+        tile_point_ranges[tile_index_previous * 2 + 1] = index;
     }
 }

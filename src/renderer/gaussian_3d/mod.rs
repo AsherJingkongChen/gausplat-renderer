@@ -61,6 +61,11 @@ mod kernel {
         "./render_gaussian_3d_forward_5.wgsl"
     );
 
+    kernel_wgsl!(
+        RenderGaussian3dForward6,
+        "./render_gaussian_3d_forward_6.wgsl"
+    );
+
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Pod, Zeroable)]
     pub struct RenderGaussian3dForward1Arguments {
@@ -128,6 +133,16 @@ mod kernel {
     pub struct RenderGaussian3dForward5Arguments {
         // T
         pub tile_touched_count: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Pod, Zeroable)]
+    pub struct RenderGaussian3dForward6Arguments {
+        // I_X
+        pub image_size_x: u32,
+
+        // I_Y
+        pub image_size_y: u32,
     }
 }
 
@@ -226,8 +241,8 @@ impl Gaussian3dRenderer for Wgpu {
         let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
         let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
 
-        // ([P])
-        let (radii,) = {
+        // ([I_Y, I_X, 3], [P])
+        let (colors_rgb_2d, radii) = {
             duration = std::time::Instant::now();
 
             let colors_sh_degree_max = colors_sh_degree_max as u32;
@@ -270,10 +285,10 @@ impl Gaussian3dRenderer for Wgpu {
                 (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
 
             // [P, 16, 3]
-            let colors_sh =
-                into_contiguous(colors_sh.to_owned().into_primitive());
-
-            let client = &colors_sh.client;
+            let (client, colors_sh) = {
+                let p = into_contiguous(colors_sh.to_owned().into_primitive());
+                (p.client, p.handle)
+            };
 
             let arguments = client.create(bytes_of(
                 &kernel::RenderGaussian3dForward1Arguments {
@@ -295,17 +310,21 @@ impl Gaussian3dRenderer for Wgpu {
                 },
             ));
 
+            // [P, 1]
+            let opacities =
+                into_contiguous(opacities.to_owned().into_primitive()).handle;
+
             // [P, 3]
             let positions =
-                into_contiguous(positions.to_owned().into_primitive());
+                into_contiguous(positions.to_owned().into_primitive()).handle;
 
             // [P, 4]
             let rotations =
-                into_contiguous(rotations.to_owned().into_primitive());
+                into_contiguous(rotations.to_owned().into_primitive()).handle;
 
             // [P, 3]
             let scalings =
-                into_contiguous(scalings.to_owned().into_primitive());
+                into_contiguous(scalings.to_owned().into_primitive()).handle;
 
             // [3]
             let view_position =
@@ -358,10 +377,10 @@ impl Gaussian3dRenderer for Wgpu {
                 ))),
                 &[
                     &arguments,
-                    &colors_sh.handle,
-                    &positions.handle,
-                    &rotations.handle,
-                    &scalings.handle,
+                    &colors_sh,
+                    &positions,
+                    &rotations,
+                    &scalings,
                     &view_position,
                     &view_transform,
                     &colors_rgb_3d,
@@ -475,7 +494,7 @@ impl Gaussian3dRenderer for Wgpu {
             ));
 
             // [(I_X / T_X) * (I_Y / T_Y), 2]
-            let point_tile_ranges = {
+            let tile_point_ranges = {
                 let mut ranges =
                     vec![[0; 2]; (tile_count_x * tile_count_y) as usize];
 
@@ -506,715 +525,772 @@ impl Gaussian3dRenderer for Wgpu {
                     },
                     WorkgroupSize { x: 256, y: 1, z: 1 },
                 ))),
-                &[&arguments, &point_tile_indexes, &point_tile_ranges],
+                &[&arguments, &point_tile_indexes, &tile_point_ranges],
             );
 
             println!("wgsl 5: {:?}", duration.elapsed());
             duration = std::time::Instant::now();
 
+            let arguments = client.create(bytes_of(
+                &kernel::RenderGaussian3dForward6Arguments {
+                    image_size_x,
+                    image_size_y,
+                },
+            ));
+
+            // [T]
+            let point_indexes =
+                client.create(cast_slice::<u32, u8>(&point_indexes));
+
+            // [I_X * I_Y, 3]
+            let colors_rgb_2d =
+                client.empty((image_size_y * image_size_x) as usize * 3 * 4);
+
+            client.execute(
+                Kernel::Custom(Box::new(SourceKernel::new(
+                    kernel::RenderGaussian3dForward6::new(),
+                    WorkGroup {
+                        x: tile_count_x,
+                        y: tile_count_y,
+                        z: 1,
+                    },
+                    WorkgroupSize { x: 16, y: 16, z: 1 },
+                ))),
+                &[
+                    &arguments,
+                    &colors_rgb_3d,
+                    &conics,
+                    &opacities,
+                    &positions_2d_in_screen,
+                    &point_indexes,
+                    &tile_point_ranges,
+                    &colors_rgb_2d,
+                ],
+            );
+
+            println!(
+                "arguments 6: {:?}",
+                from_bytes::<kernel::RenderGaussian3dForward6Arguments>(
+                    &client.read(&arguments).read()
+                )
+            );
+            println!("tile_count_x: {:?}", tile_count_x);
+            println!("tile_count_y: {:?}", tile_count_y);
+
+            println!("wgsl 6: {:?}", duration.elapsed());
+            duration = std::time::Instant::now();
+
             client.sync();
 
-            // ([P])
-            (Tensor::<Self, 1, Int>::new(
-                Self::IntTensorPrimitive::<1>::new(
+            // ([I_Y, I_X, 3], [P])
+            (
+                Tensor::<Self, 3>::new(Self::FloatTensorPrimitive::<3>::new(
                     client.to_owned(),
                     device.to_owned(),
-                    [point_count].into(),
-                    radii,
+                    [image_size_y as usize, image_size_x as usize, 3].into(),
+                    colors_rgb_2d,
+                )),
+                Tensor::<Self, 1, Int>::new(
+                    Self::IntTensorPrimitive::<1>::new(
+                        client.to_owned(),
+                        device.to_owned(),
+                        [point_count].into(),
+                        radii,
+                    ),
                 ),
-            ),)
+            )
         };
 
         println!("wgsl finish: {:?}", duration.elapsed());
 
         // [[START]]
 
-        // [4, 4]
-        let view_transform = Tensor::<Self, 2>::from_data(
-            Data::<f64, 2>::from(view.view_transform).convert(),
-            &device,
-        );
+        // // [4, 4]
+        // let view_transform = Tensor::<Self, 2>::from_data(
+        //     Data::<f64, 2>::from(view.view_transform).convert(),
+        //     &device,
+        // );
 
-        // [3, 3]
-        let view_rotation = view_transform.to_owned().slice([0..3, 0..3]);
+        // // [3, 3]
+        // let view_rotation = view_transform.to_owned().slice([0..3, 0..3]);
 
-        // [P, 1] * 3
-        let positions_3d_in_view = {
-            // [3, 1]
-            let view_translation = view_transform.slice([0..3, 3..4]);
+        // // [P, 1] * 3
+        // let positions_3d_in_view = {
+        //     // [3, 1]
+        //     let view_translation = view_transform.slice([0..3, 3..4]);
 
-            // [P, 1] * 3 = [P, 3] * [3, 3] + [1, 3]
-            let mut positions_3d_in_view = positions
-                .to_owned()
-                .matmul(view_rotation.to_owned().transpose())
-                .add(view_translation.transpose())
-                .iter_dim(1);
+        //     // [P, 1] * 3 = [P, 3] * [3, 3] + [1, 3]
+        //     let mut positions_3d_in_view = positions
+        //         .to_owned()
+        //         .matmul(view_rotation.to_owned().transpose())
+        //         .add(view_translation.transpose())
+        //         .iter_dim(1);
 
-            // [P, 1] * 3
-            (
-                positions_3d_in_view
-                    .next()
-                    .expect("positions_3d_in_view.dims()[1] == 3"),
-                positions_3d_in_view
-                    .next()
-                    .expect("positions_3d_in_view.dims()[1] == 3"),
-                positions_3d_in_view
-                    .next()
-                    .expect("positions_3d_in_view.dims()[1] == 3"),
-            )
-        };
-
-        // [P, 1]
-        let depths = positions_3d_in_view.2 + f32::EPSILON;
-
-        // [P, 1]
-        let is_in_frustum = depths.to_owned().greater_elem(0.2);
-
-        // [P, 1]
-        let positions_3d_in_view_x_normalized =
-            positions_3d_in_view.0.to_owned().div(depths.to_owned());
-
-        // [P, 1]
-        let positions_3d_in_view_y_normalized =
-            positions_3d_in_view.1.to_owned().div(depths.to_owned());
-
-        // [P, 3, 3] (Symmetric)
-        let covariances_3d = {
-            // [P, 3, 3]
-            let rotations = {
-                // [P, 1] * 4
-                let mut r = rotations.iter_dim(1);
-                let r = (
-                    r.next().expect("rotations.dims() == 4"),
-                    r.next().expect("rotations.dims() == 4"),
-                    r.next().expect("rotations.dims() == 4"),
-                    r.next().expect("rotations.dims() == 4"),
-                );
-
-                // [P, 1] * 9
-                let r0_r1 = r.0.to_owned() * r.1.to_owned() * 2.0;
-                let r0_r2 = r.0.to_owned() * r.2.to_owned() * 2.0;
-                let r0_r3 = r.0 * r.3.to_owned() * 2.0;
-                let r1_r1 = r.1.to_owned() * r.1.to_owned() * 2.0;
-                let r1_r2 = r.1.to_owned() * r.2.to_owned() * 2.0;
-                let r1_r3 = r.1 * r.3.to_owned() * 2.0;
-                let r2_r2 = r.2.to_owned() * r.2.to_owned() * 2.0;
-                let r2_r3 = r.2 * r.3.to_owned() * 2.0;
-                let r3_r3 = r.3.to_owned() * r.3 * 2.0;
-
-                // [P, 3, 3]
-                Tensor::cat(
-                    vec![
-                        -r2_r2.to_owned() - r3_r3.to_owned() + 1.0,
-                        r1_r2.to_owned() - r0_r3.to_owned(),
-                        r1_r3.to_owned() + r0_r2.to_owned(),
-                        r1_r2 + r0_r3,
-                        -r1_r1.to_owned() - r3_r3 + 1.0,
-                        r2_r3.to_owned() - r0_r1.to_owned(),
-                        r1_r3 - r0_r2,
-                        r2_r3 + r0_r1,
-                        -r1_r1 - r2_r2 + 1.0,
-                    ],
-                    1,
-                )
-                .reshape([point_count, 3, 3])
-            };
-
-            // [P, 1, 3]
-            let scalings = scalings.reshape([point_count, 1, 3]);
-
-            // [P, 3, 3] = [P, 3, 3] * [P, 1, 3]
-            let transforms = rotations * scalings;
-
-            // [P, 3, 3] = [P, 3, 3] * [P, 3, 3]
-            transforms.to_owned().matmul_batched(transforms.transpose())
-        };
-
-        // [P, 2, 2] (Symmetric)
-        let covariances_2d = {
-            let filter_low_pass = FILTER_LOW_PASS + 1.0;
-
-            let focal_length_x =
-                image_size_x as f64 / field_of_view_x_half_tan / 2.0;
-            let focal_length_y =
-                image_size_y as f64 / field_of_view_y_half_tan / 2.0;
-            let bound_x = field_of_view_x_half_tan * filter_low_pass;
-            let bound_y = field_of_view_y_half_tan * filter_low_pass;
-
-            // [P, 1]
-            let focal_lengths_x_normalized = Tensor::from_data(
-                Data::<f64, 2>::from([[focal_length_x]]).convert(),
-                &device,
-            )
-            .div(depths.to_owned());
-
-            // [P, 1]
-            let focal_lengths_y_normalized = Tensor::from_data(
-                Data::<f64, 2>::from([[focal_length_y]]).convert(),
-                &device,
-            )
-            .div(depths.to_owned());
-
-            // [P, 1]
-            let nulls = Tensor::zeros([point_count, 1], &device);
-
-            // [P, 1]
-            let x_normalized_clamped = positions_3d_in_view_x_normalized
-                .to_owned()
-                .clamp(-bound_x, bound_x);
-
-            // [P, 1]
-            let y_normalized_clamped = positions_3d_in_view_y_normalized
-                .to_owned()
-                .clamp(-bound_y, bound_y);
-
-            // [P, 2, 3]
-            let projections_jacobian = Tensor::cat(
-                vec![
-                    focal_lengths_x_normalized.to_owned(),
-                    nulls.to_owned(),
-                    focal_lengths_x_normalized
-                        .to_owned()
-                        .mul(x_normalized_clamped)
-                        .neg(),
-                    nulls,
-                    focal_lengths_y_normalized.to_owned(),
-                    focal_lengths_y_normalized
-                        .to_owned()
-                        .mul(y_normalized_clamped)
-                        .neg(),
-                ],
-                1,
-            )
-            .reshape([point_count, 2, 3]);
-
-            // [P, 2, 3] = [P, 2, 3] * [1, 3, 3]
-            let transforms = projections_jacobian
-                .matmul_batched(view_rotation.unsqueeze::<3>());
-
-            // [P, 2, 2] = [P, 2, 3] * [P, 3, 3] * [P, 3, 2]
-            let covariances = transforms
-                .to_owned()
-                .matmul_batched(covariances_3d.to_owned())
-                .matmul_batched(transforms.transpose());
-
-            // [1, 2, 2]
-            let filter_low_pass = Tensor::from_floats(
-                [[
-                    [FILTER_LOW_PASS as f32, 0.0],
-                    [0.0, FILTER_LOW_PASS as f32],
-                ]],
-                &device,
-            );
-
-            // [P, 2, 2] = [P, 2, 2] + [1, 2, 2]
-            covariances.add(filter_low_pass)
-        };
-
-        // [P, 1] * 3
-        let covariances_2d = (
-            covariances_2d
-                .to_owned()
-                .slice([0..point_count, 0..1, 0..1])
-                .squeeze::<2>(2),
-            covariances_2d
-                .to_owned()
-                .slice([0..point_count, 0..1, 1..2])
-                .squeeze::<2>(2),
-            covariances_2d
-                .slice([0..point_count, 1..2, 1..2])
-                .squeeze::<2>(2),
-        );
-
-        // [P, 1]
-        let covariances_2d_det = covariances_2d.0.to_owned()
-            * covariances_2d.2.to_owned()
-            - covariances_2d.1.to_owned() * covariances_2d.1.to_owned();
-
-        // [P, 1]
-        let is_covariances_2d_invertible =
-            covariances_2d_det.to_owned().not_equal_elem(0.0);
-
-        // [P, 1]
-        let conics_1 =
-            -covariances_2d.1.to_owned() / covariances_2d_det.to_owned();
-
-        // [P, 2, 2]
-        let conics = Tensor::cat(
-            vec![
-                covariances_2d.2.to_owned() / covariances_2d_det.to_owned(),
-                conics_1.to_owned(),
-                conics_1,
-                covariances_2d.0.to_owned() / covariances_2d_det.to_owned(),
-            ],
-            1,
-        )
-        .reshape([point_count, 2, 2]);
-
-        // [P, 1] (No grad)
-        let radii = {
-            // [P, 1]
-            let middle = (covariances_2d.0 + covariances_2d.2) / 2.0;
-
-            // [P, 1]
-            let bounds = (middle.to_owned() * middle.to_owned())
-                .sub(covariances_2d_det)
-                .sqrt()
-                .clamp_min(FILTER_LOW_PASS);
-
-            // [P, 1]
-            let extents_max = middle
-                .to_owned()
-                .add(bounds.to_owned())
-                .max_pair(middle.sub(bounds));
-
-            // [P, 1]
-            (extents_max.sqrt() * 3.0).int() + 1
-        };
+        //     // [P, 1] * 3
+        //     (
+        //         positions_3d_in_view
+        //             .next()
+        //             .expect("positions_3d_in_view.dims()[1] == 3"),
+        //         positions_3d_in_view
+        //             .next()
+        //             .expect("positions_3d_in_view.dims()[1] == 3"),
+        //         positions_3d_in_view
+        //             .next()
+        //             .expect("positions_3d_in_view.dims()[1] == 3"),
+        //     )
+        // };
 
         // // [P, 1]
-        let is_visible = radii.to_owned().greater_elem(0);
+        // let depths = positions_3d_in_view.2 + f32::EPSILON;
 
-        // println!("5: {:?}", duration.elapsed());
+        // // [P, 1]
+        // let is_in_frustum = depths.to_owned().greater_elem(0.2);
 
-        // duration = std::time::Instant::now();
+        // // [P, 1]
+        // let positions_3d_in_view_x_normalized =
+        //     positions_3d_in_view.0.to_owned().div(depths.to_owned());
 
-        // // [P, 2] (View -> Clipped -> Screen)
-        let positions_2d_in_screen = {
-            let image_size_y_half = image_size_y as f64 / 2.0;
-            let image_size_x_half = image_size_x as f64 / 2.0;
+        // // [P, 1]
+        // let positions_3d_in_view_y_normalized =
+        //     positions_3d_in_view.1.to_owned().div(depths.to_owned());
 
-            Tensor::cat(
-                vec![
-                    positions_3d_in_view_x_normalized
-                        .mul_scalar(
-                            image_size_x_half / field_of_view_x_half_tan,
-                        )
-                        .add_scalar(image_size_x_half - 0.5),
-                    positions_3d_in_view_y_normalized
-                        .mul_scalar(
-                            image_size_y_half / field_of_view_y_half_tan,
-                        )
-                        .add_scalar(image_size_y_half - 0.5),
-                ],
-                1,
-            )
-        };
+        // // [P, 3, 3] (Symmetric)
+        // let covariances_3d = {
+        //     // [P, 3, 3]
+        //     let rotations = {
+        //         // [P, 1] * 4
+        //         let mut r = rotations.iter_dim(1);
+        //         let r = (
+        //             r.next().expect("rotations.dims() == 4"),
+        //             r.next().expect("rotations.dims() == 4"),
+        //             r.next().expect("rotations.dims() == 4"),
+        //             r.next().expect("rotations.dims() == 4"),
+        //         );
 
-        // println!("6: {:?}", duration.elapsed());
+        //         // [P, 1] * 9
+        //         let r0_r1 = r.0.to_owned() * r.1.to_owned() * 2.0;
+        //         let r0_r2 = r.0.to_owned() * r.2.to_owned() * 2.0;
+        //         let r0_r3 = r.0 * r.3.to_owned() * 2.0;
+        //         let r1_r1 = r.1.to_owned() * r.1.to_owned() * 2.0;
+        //         let r1_r2 = r.1.to_owned() * r.2.to_owned() * 2.0;
+        //         let r1_r3 = r.1 * r.3.to_owned() * 2.0;
+        //         let r2_r2 = r.2.to_owned() * r.2.to_owned() * 2.0;
+        //         let r2_r3 = r.2 * r.3.to_owned() * 2.0;
+        //         let r3_r3 = r.3.to_owned() * r.3 * 2.0;
 
-        // duration = std::time::Instant::now();
+        //         // [P, 3, 3]
+        //         Tensor::cat(
+        //             vec![
+        //                 -r2_r2.to_owned() - r3_r3.to_owned() + 1.0,
+        //                 r1_r2.to_owned() - r0_r3.to_owned(),
+        //                 r1_r3.to_owned() + r0_r2.to_owned(),
+        //                 r1_r2 + r0_r3,
+        //                 -r1_r1.to_owned() - r3_r3 + 1.0,
+        //                 r2_r3.to_owned() - r0_r1.to_owned(),
+        //                 r1_r3 - r0_r2,
+        //                 r2_r3 + r0_r1,
+        //                 -r1_r1 - r2_r2 + 1.0,
+        //             ],
+        //             1,
+        //         )
+        //         .reshape([point_count, 3, 3])
+        //     };
 
-        // [P, 1] * 4 (No grad)
-        let (
-            tiles_touched_x_max,
-            tiles_touched_x_min,
-            tiles_touched_y_max,
-            tiles_touched_y_min,
-        ) = {
-            let tile_size_x = tile_size_x as u32;
-            let tile_size_y = tile_size_y as u32;
-            let tile_count_x = tile_count_x as u32;
-            let tile_count_y = tile_count_y as u32;
+        //     // [P, 1, 3]
+        //     let scalings = scalings.reshape([point_count, 1, 3]);
 
-            // [P, 1]
-            let radii = radii.to_owned().float();
+        //     // [P, 3, 3] = [P, 3, 3] * [P, 1, 3]
+        //     let transforms = rotations * scalings;
 
-            // [P, 1] * 2
-            let mut positions_2d_in_screen =
-                positions_2d_in_screen.to_owned().iter_dim(1);
-            let positions_2d_in_screen = (
-                positions_2d_in_screen
-                    .next()
-                    .expect("positions_2d_in_screen.dims()[1] == 2"),
-                positions_2d_in_screen
-                    .next()
-                    .expect("positions_2d_in_screen.dims()[1] == 2"),
-            );
+        //     // [P, 3, 3] = [P, 3, 3] * [P, 3, 3]
+        //     transforms.to_owned().matmul_batched(transforms.transpose())
+        // };
 
-            // [P, 1] * 4
-            (
-                positions_2d_in_screen
-                    .0
-                    .to_owned()
-                    .add(radii.to_owned())
-                    .add_scalar(tile_size_x - 1)
-                    .div_scalar(tile_size_x)
-                    .int()
-                    .clamp(0, tile_count_x),
-                positions_2d_in_screen
-                    .0
-                    .sub(radii.to_owned())
-                    .div_scalar(tile_size_x)
-                    .int()
-                    .clamp(0, tile_count_x),
-                positions_2d_in_screen
-                    .1
-                    .to_owned()
-                    .add(radii.to_owned())
-                    .add_scalar(tile_size_y - 1)
-                    .div_scalar(tile_size_y)
-                    .int()
-                    .clamp(0, tile_count_y),
-                positions_2d_in_screen
-                    .1
-                    .sub(radii.to_owned())
-                    .div_scalar(tile_size_y)
-                    .int()
-                    .clamp(0, tile_count_y),
-            )
-        };
+        // // [P, 2, 2] (Symmetric)
+        // let covariances_2d = {
+        //     let filter_low_pass = FILTER_LOW_PASS + 1.0;
 
-        // [P, 1] (No grad)
-        let tile_touched_counts = (tiles_touched_x_max.to_owned()
-            - tiles_touched_x_min.to_owned())
-            * (tiles_touched_y_max.to_owned() - tiles_touched_y_min.to_owned());
+        //     let focal_length_x =
+        //         image_size_x as f64 / field_of_view_x_half_tan / 2.0;
+        //     let focal_length_y =
+        //         image_size_y as f64 / field_of_view_y_half_tan / 2.0;
+        //     let bound_x = field_of_view_x_half_tan * filter_low_pass;
+        //     let bound_y = field_of_view_y_half_tan * filter_low_pass;
 
-        // [P] * 4
-        let tiles_touched_x_max =
-            tiles_touched_x_max.into_data().convert::<u32>().value;
-        let tiles_touched_x_min =
-            tiles_touched_x_min.into_data().convert::<u32>().value;
-        let tiles_touched_y_max =
-            tiles_touched_y_max.into_data().convert::<u32>().value;
-        let tiles_touched_y_min =
-            tiles_touched_y_min.into_data().convert::<u32>().value;
+        //     // [P, 1]
+        //     let focal_lengths_x_normalized = Tensor::from_data(
+        //         Data::<f64, 2>::from([[focal_length_x]]).convert(),
+        //         &device,
+        //     )
+        //     .div(depths.to_owned());
 
-        // [P, 1]
-        let is_tiles_touched = tile_touched_counts.to_owned().greater_elem(0);
+        //     // [P, 1]
+        //     let focal_lengths_y_normalized = Tensor::from_data(
+        //         Data::<f64, 2>::from([[focal_length_y]]).convert(),
+        //         &device,
+        //     )
+        //     .div(depths.to_owned());
 
-        // println!("7: {:?}", duration.elapsed());
+        //     // [P, 1]
+        //     let nulls = Tensor::zeros([point_count, 1], &device);
 
-        // duration = std::time::Instant::now();
+        //     // [P, 1]
+        //     let x_normalized_clamped = positions_3d_in_view_x_normalized
+        //         .to_owned()
+        //         .clamp(-bound_x, bound_x);
 
-        // [P, 3]
-        let colors_rgb_3d = {
-            // [1, 3]
-            let view_position = Tensor::<Self, 2>::from_data(
-                Data::<f64, 2>::from([view.view_position]).convert(),
-                &device,
-            );
+        //     // [P, 1]
+        //     let y_normalized_clamped = positions_3d_in_view_y_normalized
+        //         .to_owned()
+        //         .clamp(-bound_y, bound_y);
 
-            // [P, 1, 1] * 3
-            let mut directions = {
-                // [P, 3, 1]
-                let directions =
-                    (positions - view_position).unsqueeze_dim::<3>(2);
+        //     // [P, 2, 3]
+        //     let projections_jacobian = Tensor::cat(
+        //         vec![
+        //             focal_lengths_x_normalized.to_owned(),
+        //             nulls.to_owned(),
+        //             focal_lengths_x_normalized
+        //                 .to_owned()
+        //                 .mul(x_normalized_clamped)
+        //                 .neg(),
+        //             nulls,
+        //             focal_lengths_y_normalized.to_owned(),
+        //             focal_lengths_y_normalized
+        //                 .to_owned()
+        //                 .mul(y_normalized_clamped)
+        //                 .neg(),
+        //         ],
+        //         1,
+        //     )
+        //     .reshape([point_count, 2, 3]);
 
-                // [P, 1, 1]
-                let directions_norm = directions
-                    .to_owned()
-                    .mul(directions.to_owned())
-                    .sum_dim(1)
-                    .sqrt();
+        //     // [P, 2, 3] = [P, 2, 3] * [1, 3, 3]
+        //     let transforms = projections_jacobian
+        //         .matmul_batched(view_rotation.unsqueeze::<3>());
 
-                // [P, 1, 1] * 3
-                (directions / directions_norm).iter_dim(1)
-            };
+        //     // [P, 2, 2] = [P, 2, 3] * [P, 3, 3] * [P, 3, 2]
+        //     let covariances = transforms
+        //         .to_owned()
+        //         .matmul_batched(covariances_3d.to_owned())
+        //         .matmul_batched(transforms.transpose());
 
-            // [P, 1, 1] * 8
-            let mut x = Tensor::empty([1, 1, 1], &device);
-            let mut y = Tensor::empty([1, 1, 1], &device);
-            let mut z = Tensor::empty([1, 1, 1], &device);
-            let mut xx = Tensor::empty([1, 1, 1], &device);
-            let mut yy = Tensor::empty([1, 1, 1], &device);
-            let mut zz = Tensor::empty([1, 1, 1], &device);
-            let mut xy = Tensor::empty([1, 1, 1], &device);
-            let mut zz_5_1 = Tensor::empty([1, 1, 1], &device);
+        //     // [1, 2, 2]
+        //     let filter_low_pass = Tensor::from_floats(
+        //         [[
+        //             [FILTER_LOW_PASS as f32, 0.0],
+        //             [0.0, FILTER_LOW_PASS as f32],
+        //         ]],
+        //         &device,
+        //     );
 
-            // [P, 1, 3] * ((D + 1) ^ 2)
-            let mut colors_sh = colors_sh.iter_dim(1);
+        //     // [P, 2, 2] = [P, 2, 2] + [1, 2, 2]
+        //     covariances.add(filter_low_pass)
+        // };
 
-            // [P, 1, 3] (D >= 0)
-            let mut colors_rgb_3d =
-                colors_sh.next().expect("colors_sh.dims()[1] >= 1")
-                    * SH_C[0][0];
+        // // [P, 1] * 3
+        // let covariances_2d = (
+        //     covariances_2d
+        //         .to_owned()
+        //         .slice([0..point_count, 0..1, 0..1])
+        //         .squeeze::<2>(2),
+        //     covariances_2d
+        //         .to_owned()
+        //         .slice([0..point_count, 0..1, 1..2])
+        //         .squeeze::<2>(2),
+        //     covariances_2d
+        //         .slice([0..point_count, 1..2, 1..2])
+        //         .squeeze::<2>(2),
+        // );
 
-            // (D >= 1)
-            if let Some(colors_sh) = colors_sh.next() {
-                y = directions.next().expect("directions.dims()[1] == 3");
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * y.to_owned() * SH_C[1][0];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                z = directions.next().expect("directions.dims()[1] == 3");
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * z.to_owned() * SH_C[1][1];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                x = directions.next().expect("directions.dims()[1] == 3");
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * x.to_owned() * SH_C[1][2];
-            }
+        // // [P, 1]
+        // let covariances_2d_det = covariances_2d.0.to_owned()
+        //     * covariances_2d.2.to_owned()
+        //     - covariances_2d.1.to_owned() * covariances_2d.1.to_owned();
 
-            // (D >= 2)
-            if let Some(colors_sh) = colors_sh.next() {
-                xy = x.to_owned() * y.to_owned();
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * xy.to_owned() * SH_C[2][0];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let yz = y.to_owned() * z.to_owned();
-                colors_rgb_3d = colors_rgb_3d + colors_sh * yz * SH_C[2][1];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                zz = z.to_owned() * z.to_owned();
-                let zz_3_1 = zz.to_owned() * 3.0 - 1.0;
-                colors_rgb_3d = colors_rgb_3d + colors_sh * zz_3_1 * SH_C[2][2];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let xz = x.to_owned() * z.to_owned();
-                colors_rgb_3d = colors_rgb_3d + colors_sh * xz * SH_C[2][3];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                xx = x.to_owned() * x.to_owned();
-                yy = y.to_owned() * y.to_owned();
-                let xx_yy = xx.to_owned() - yy.to_owned();
-                colors_rgb_3d = colors_rgb_3d + colors_sh * xx_yy * SH_C[2][4];
-            }
+        // // [P, 1]
+        // let is_covariances_2d_invertible =
+        //     covariances_2d_det.to_owned().not_equal_elem(0.0);
 
-            // (D >= 3)
-            if let Some(colors_sh) = colors_sh.next() {
-                let y_xx_3_yy =
-                    y.to_owned() * (xx.to_owned() * 3.0 - yy.to_owned());
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * y_xx_3_yy * SH_C[3][0];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let z_xy = z.to_owned() * xy;
-                colors_rgb_3d = colors_rgb_3d + colors_sh * z_xy * SH_C[3][1];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                zz_5_1 = zz * 5.0 - 1.0;
-                let y_zz_5_1 = y * zz_5_1.to_owned();
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * y_zz_5_1 * SH_C[3][2];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let z_zz_5_3 = z.to_owned() * (zz_5_1.to_owned() - 2.0);
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * z_zz_5_3 * SH_C[3][3];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let x_zz_5_1 = x.to_owned() * zz_5_1;
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * x_zz_5_1 * SH_C[3][4];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let z_xx_yy = z * (xx.to_owned() - yy.to_owned());
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * z_xx_yy * SH_C[3][5];
-            }
-            if let Some(colors_sh) = colors_sh.next() {
-                let x_xx_yy_3 = x * (xx - yy * 3.0);
-                colors_rgb_3d =
-                    colors_rgb_3d + colors_sh * x_xx_yy_3 * SH_C[3][6];
-            }
+        // // [P, 1]
+        // let conics_1 =
+        //     -covariances_2d.1.to_owned() / covariances_2d_det.to_owned();
 
-            // [P, 1, 3]
-            colors_rgb_3d = colors_rgb_3d + 0.5;
+        // // [P, 2, 2]
+        // let conics = Tensor::cat(
+        //     vec![
+        //         covariances_2d.2.to_owned() / covariances_2d_det.to_owned(),
+        //         conics_1.to_owned(),
+        //         conics_1,
+        //         covariances_2d.0.to_owned() / covariances_2d_det.to_owned(),
+        //     ],
+        //     1,
+        // )
+        // .reshape([point_count, 2, 2]);
 
-            // [P, 3]
-            colors_rgb_3d.clamp_min(0.0).squeeze::<2>(1)
-        };
+        // // [P, 1] (No grad)
+        // let radii = {
+        //     // [P, 1]
+        //     let middle = (covariances_2d.0 + covariances_2d.2) / 2.0;
 
-        // [P, 1]
-        let mask = Tensor::cat(
-            vec![
-                is_in_frustum,
-                is_covariances_2d_invertible,
-                is_tiles_touched,
-            ],
-            1,
-        )
-        .all_dim(1);
+        //     // [P, 1]
+        //     let bounds = (middle.to_owned() * middle.to_owned())
+        //         .sub(covariances_2d_det)
+        //         .sqrt()
+        //         .clamp_min(FILTER_LOW_PASS);
 
-        // [P, 3]
-        let colors_rgb_3d = colors_rgb_3d.zeros_like().mask_where(
-            mask.to_owned().expand([point_count, 3]),
-            colors_rgb_3d,
-        );
+        //     // [P, 1]
+        //     let extents_max = middle
+        //         .to_owned()
+        //         .add(bounds.to_owned())
+        //         .max_pair(middle.sub(bounds));
 
-        // [P, 2, 2]
-        let conics = conics.zeros_like().mask_where(
-            mask.to_owned()
-                .unsqueeze_dim::<3>(2)
-                .expand([point_count, 2, 2]),
-            conics,
-        );
+        //     // [P, 1]
+        //     (extents_max.sqrt() * 3.0).int() + 1
+        // };
 
-        // [P, 1]
-        let depths = depths.zeros_like().mask_where(mask.to_owned(), depths);
+        // // // [P, 1]
+        // let is_visible = radii.to_owned().greater_elem(0);
 
-        // [P, 1]
-        let opacities = opacities
-            .zeros_like()
-            .mask_where(mask.to_owned(), opacities);
+        // // println!("5: {:?}", duration.elapsed());
 
-        // [P, 2]
-        let positions_2d_in_screen =
-            positions_2d_in_screen.zeros_like().mask_where(
-                mask.to_owned().expand([point_count, 2]),
-                positions_2d_in_screen,
-            );
+        // // duration = std::time::Instant::now();
 
-        // [P, 1] (No grad)
-        let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
+        // // // [P, 2] (View -> Clipped -> Screen)
+        // let positions_2d_in_screen = {
+        //     let image_size_y_half = image_size_y as f64 / 2.0;
+        //     let image_size_x_half = image_size_x as f64 / 2.0;
 
-        // [P, 1] (No grad)
-        let tile_touched_counts = tile_touched_counts
-            .zeros_like()
-            .mask_where(mask.to_owned(), tile_touched_counts);
+        //     Tensor::cat(
+        //         vec![
+        //             positions_3d_in_view_x_normalized
+        //                 .mul_scalar(
+        //                     image_size_x_half / field_of_view_x_half_tan,
+        //                 )
+        //                 .add_scalar(image_size_x_half - 0.5),
+        //             positions_3d_in_view_y_normalized
+        //                 .mul_scalar(
+        //                     image_size_y_half / field_of_view_y_half_tan,
+        //                 )
+        //                 .add_scalar(image_size_y_half - 0.5),
+        //         ],
+        //         1,
+        //     )
+        // };
 
-        // [P], T (No grad)
-        let (tile_touched_offsets, tile_touched_count) = {
-            // [P]
-            let counts = tile_touched_counts
-                .to_owned()
-                .into_data()
-                .convert::<u32>()
-                .value;
+        // // println!("6: {:?}", duration.elapsed());
 
-            let mut count = *counts.last().unwrap_or(&0) as usize;
+        // // duration = std::time::Instant::now();
 
-            // [P]
-            let offsets = counts
-                .into_iter()
-                .scan(0, |state, x| {
-                    let y = *state;
-                    *state += x;
-                    Some(y)
-                })
-                .collect::<Vec<_>>();
+        // // [P, 1] * 4 (No grad)
+        // let (
+        //     tiles_touched_x_max,
+        //     tiles_touched_x_min,
+        //     tiles_touched_y_max,
+        //     tiles_touched_y_min,
+        // ) = {
+        //     let tile_size_x = tile_size_x as u32;
+        //     let tile_size_y = tile_size_y as u32;
+        //     let tile_count_x = tile_count_x as u32;
+        //     let tile_count_y = tile_count_y as u32;
 
-            count += *offsets.last().unwrap_or(&0) as usize;
+        //     // [P, 1]
+        //     let radii = radii.to_owned().float();
 
-            // [P]
-            (offsets, count)
-        };
+        //     // [P, 1] * 2
+        //     let mut positions_2d_in_screen =
+        //         positions_2d_in_screen.to_owned().iter_dim(1);
+        //     let positions_2d_in_screen = (
+        //         positions_2d_in_screen
+        //             .next()
+        //             .expect("positions_2d_in_screen.dims()[1] == 2"),
+        //         positions_2d_in_screen
+        //             .next()
+        //             .expect("positions_2d_in_screen.dims()[1] == 2"),
+        //     );
 
-        println!("tile_touched_count (burn): {:?}", tile_touched_count);
+        //     // [P, 1] * 4
+        //     (
+        //         positions_2d_in_screen
+        //             .0
+        //             .to_owned()
+        //             .add(radii.to_owned())
+        //             .add_scalar(tile_size_x - 1)
+        //             .div_scalar(tile_size_x)
+        //             .int()
+        //             .clamp(0, tile_count_x),
+        //         positions_2d_in_screen
+        //             .0
+        //             .sub(radii.to_owned())
+        //             .div_scalar(tile_size_x)
+        //             .int()
+        //             .clamp(0, tile_count_x),
+        //         positions_2d_in_screen
+        //             .1
+        //             .to_owned()
+        //             .add(radii.to_owned())
+        //             .add_scalar(tile_size_y - 1)
+        //             .div_scalar(tile_size_y)
+        //             .int()
+        //             .clamp(0, tile_count_y),
+        //         positions_2d_in_screen
+        //             .1
+        //             .sub(radii.to_owned())
+        //             .div_scalar(tile_size_y)
+        //             .int()
+        //             .clamp(0, tile_count_y),
+        //     )
+        // };
 
-        // [T] * 2 (No grad)
-        let (point_keys, point_indexes) = {
-            // [P]
-            let mask = Tensor::cat(vec![mask, is_visible], 1)
-                .all_dim(1)
-                .into_data()
-                .value;
+        // // [P, 1] (No grad)
+        // let tile_touched_counts = (tiles_touched_x_max.to_owned()
+        //     - tiles_touched_x_min.to_owned())
+        //     * (tiles_touched_y_max.to_owned() - tiles_touched_y_min.to_owned());
 
-            // [P] (f32 -> u32)
-            let depths =
-                cast_vec::<f32, u32>(depths.into_data().convert().value);
+        // // [P] * 4
+        // let tiles_touched_x_max =
+        //     tiles_touched_x_max.into_data().convert::<u32>().value;
+        // let tiles_touched_x_min =
+        //     tiles_touched_x_min.into_data().convert::<u32>().value;
+        // let tiles_touched_y_max =
+        //     tiles_touched_y_max.into_data().convert::<u32>().value;
+        // let tiles_touched_y_min =
+        //     tiles_touched_y_min.into_data().convert::<u32>().value;
 
-            // [T, 2]
-            let mut keys_and_indexes = (0..point_count).fold(
-                vec![(0, 0); tile_touched_count],
-                |mut keys_and_indexes, index| {
-                    if !mask[index] {
-                        return keys_and_indexes;
-                    }
+        // // [P, 1]
+        // let is_tiles_touched = tile_touched_counts.to_owned().greater_elem(0);
 
-                    let mut offset = tile_touched_offsets[index] as usize;
+        // // println!("7: {:?}", duration.elapsed());
 
-                    for tile_y in
-                        tiles_touched_y_min[index]..tiles_touched_y_max[index]
-                    {
-                        for tile_x in tiles_touched_x_min[index]
-                            ..tiles_touched_x_max[index]
-                        {
-                            let tile =
-                                (tile_y * tile_count_x as u32 + tile_x) as u64;
-                            let depth = depths[index] as u64;
-                            keys_and_indexes[offset] =
-                                (tile << 32 | depth, index as u32);
+        // // duration = std::time::Instant::now();
 
-                            offset += 1;
-                        }
-                    }
+        // // [P, 3]
+        // let colors_rgb_3d = {
+        //     // [1, 3]
+        //     let view_position = Tensor::<Self, 2>::from_data(
+        //         Data::<f64, 2>::from([view.view_position]).convert(),
+        //         &device,
+        //     );
 
-                    keys_and_indexes
-                },
-            );
+        //     // [P, 1, 1] * 3
+        //     let mut directions = {
+        //         // [P, 3, 1]
+        //         let directions =
+        //             (positions - view_position).unsqueeze_dim::<3>(2);
 
-            keys_and_indexes.par_sort_unstable_by_key(|(key, _)| *key);
+        //         // [P, 1, 1]
+        //         let directions_norm = directions
+        //             .to_owned()
+        //             .mul(directions.to_owned())
+        //             .sum_dim(1)
+        //             .sqrt();
 
-            // println!(
-            //     "point_indexes (burn): {:?}",
-            //     keys_and_indexes[0..50]
-            //         .iter()
-            //         .map(|(_, index)| index)
-            //         .collect::<Vec<_>>()
-            // );
-            // println!(
-            //     "point_keys (burn): {:?}",
-            //     keys_and_indexes[0..50]
-            //         .iter()
-            //         .map(|(key, _)| (
-            //             key >> 32,
-            //             cast::<u32, f32>(*key as u32),
-            //         ))
-            //         .collect::<Vec<_>>()
-            // );
+        //         // [P, 1, 1] * 3
+        //         (directions / directions_norm).iter_dim(1)
+        //     };
 
-            // [T] * 2
-            keys_and_indexes.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
-        };
+        //     // [P, 1, 1] * 8
+        //     let mut x = Tensor::empty([1, 1, 1], &device);
+        //     let mut y = Tensor::empty([1, 1, 1], &device);
+        //     let mut z = Tensor::empty([1, 1, 1], &device);
+        //     let mut xx = Tensor::empty([1, 1, 1], &device);
+        //     let mut yy = Tensor::empty([1, 1, 1], &device);
+        //     let mut zz = Tensor::empty([1, 1, 1], &device);
+        //     let mut xy = Tensor::empty([1, 1, 1], &device);
+        //     let mut zz_5_1 = Tensor::empty([1, 1, 1], &device);
 
-        // [(H / T_H) * (W / T_W), 2] (No grad)
-        let tile_point_ranges = {
-            // [(H / T_H) * (W / T_W), 2]
-            let mut ranges = vec![0..0; tile_count_x * tile_count_y];
+        //     // [P, 1, 3] * ((D + 1) ^ 2)
+        //     let mut colors_sh = colors_sh.iter_dim(1);
 
-            if !point_keys.is_empty() {
-                let tile = (point_keys.first().unwrap() >> 32) as usize;
-                ranges[tile].start = 0;
+        //     // [P, 1, 3] (D >= 0)
+        //     let mut colors_rgb_3d =
+        //         colors_sh.next().expect("colors_sh.dims()[1] >= 1")
+        //             * SH_C[0][0];
 
-                let tile = (point_keys.last().unwrap() >> 32) as usize;
-                ranges[tile].end = tile_touched_count;
-            }
+        //     // (D >= 1)
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         y = directions.next().expect("directions.dims()[1] == 3");
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * y.to_owned() * SH_C[1][0];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         z = directions.next().expect("directions.dims()[1] == 3");
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * z.to_owned() * SH_C[1][1];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         x = directions.next().expect("directions.dims()[1] == 3");
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * x.to_owned() * SH_C[1][2];
+        //     }
 
-            // [T]
-            for point_offset in 1..tile_touched_count {
-                let tile_current = (point_keys[point_offset] >> 32) as usize;
-                let tile_previous =
-                    (point_keys[point_offset - 1] >> 32) as usize;
-                if tile_current != tile_previous {
-                    ranges[tile_current].start = point_offset;
-                    ranges[tile_previous].end = point_offset;
-                }
-            }
+        //     // (D >= 2)
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         xy = x.to_owned() * y.to_owned();
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * xy.to_owned() * SH_C[2][0];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let yz = y.to_owned() * z.to_owned();
+        //         colors_rgb_3d = colors_rgb_3d + colors_sh * yz * SH_C[2][1];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         zz = z.to_owned() * z.to_owned();
+        //         let zz_3_1 = zz.to_owned() * 3.0 - 1.0;
+        //         colors_rgb_3d = colors_rgb_3d + colors_sh * zz_3_1 * SH_C[2][2];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let xz = x.to_owned() * z.to_owned();
+        //         colors_rgb_3d = colors_rgb_3d + colors_sh * xz * SH_C[2][3];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         xx = x.to_owned() * x.to_owned();
+        //         yy = y.to_owned() * y.to_owned();
+        //         let xx_yy = xx.to_owned() - yy.to_owned();
+        //         colors_rgb_3d = colors_rgb_3d + colors_sh * xx_yy * SH_C[2][4];
+        //     }
 
-            // [(H / T_H) * (W / T_W), 2]
-            ranges
-        };
+        //     // (D >= 3)
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let y_xx_3_yy =
+        //             y.to_owned() * (xx.to_owned() * 3.0 - yy.to_owned());
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * y_xx_3_yy * SH_C[3][0];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let z_xy = z.to_owned() * xy;
+        //         colors_rgb_3d = colors_rgb_3d + colors_sh * z_xy * SH_C[3][1];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         zz_5_1 = zz * 5.0 - 1.0;
+        //         let y_zz_5_1 = y * zz_5_1.to_owned();
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * y_zz_5_1 * SH_C[3][2];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let z_zz_5_3 = z.to_owned() * (zz_5_1.to_owned() - 2.0);
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * z_zz_5_3 * SH_C[3][3];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let x_zz_5_1 = x.to_owned() * zz_5_1;
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * x_zz_5_1 * SH_C[3][4];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let z_xx_yy = z * (xx.to_owned() - yy.to_owned());
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * z_xx_yy * SH_C[3][5];
+        //     }
+        //     if let Some(colors_sh) = colors_sh.next() {
+        //         let x_xx_yy_3 = x * (xx - yy * 3.0);
+        //         colors_rgb_3d =
+        //             colors_rgb_3d + colors_sh * x_xx_yy_3 * SH_C[3][6];
+        //     }
 
-        // [1, 1, P, 3]
-        let colors_rgb_3d = colors_rgb_3d.unsqueeze::<4>();
+        //     // [P, 1, 3]
+        //     colors_rgb_3d = colors_rgb_3d + 0.5;
 
-        // [1, 1, P, 2, 2]
-        let conics = conics.unsqueeze::<5>();
+        //     // [P, 3]
+        //     colors_rgb_3d.clamp_min(0.0).squeeze::<2>(1)
+        // };
 
-        // [1, 1, P, 1]
-        let opacities = opacities.unsqueeze::<4>();
+        // // [P, 1]
+        // let mask = Tensor::cat(
+        //     vec![
+        //         is_in_frustum,
+        //         is_covariances_2d_invertible,
+        //         is_tiles_touched,
+        //     ],
+        //     1,
+        // )
+        // .all_dim(1);
 
-        // [1, 1, P, 2]
-        let positions_2d_in_screen = positions_2d_in_screen.unsqueeze::<4>();
+        // // [P, 3]
+        // let colors_rgb_3d = colors_rgb_3d.zeros_like().mask_where(
+        //     mask.to_owned().expand([point_count, 3]),
+        //     colors_rgb_3d,
+        // );
 
-        // [T]
-        let point_indexes = Tensor::<Self, 1, Int>::from_data(
-            Data::new(point_indexes, [tile_touched_count].into()).convert(),
-            &device,
-        );
+        // // [P, 2, 2]
+        // let conics = conics.zeros_like().mask_where(
+        //     mask.to_owned()
+        //         .unsqueeze_dim::<3>(2)
+        //         .expand([point_count, 2, 2]),
+        //     conics,
+        // );
 
-        // tile_touched_count (wgsl): 339405
-        // tile_touched_count (burn): 338707
+        // // [P, 1]
+        // let depths = depths.zeros_like().mask_where(mask.to_owned(), depths);
 
-        // [H, W, 3] (Output)
-        let mut colors_rgb_2d = Tensor::<Self, 3>::zeros(
-            vec![image_size_y, image_size_x, 3],
-            &device,
-        );
+        // // [P, 1]
+        // let opacities = opacities
+        //     .zeros_like()
+        //     .mask_where(mask.to_owned(), opacities);
+
+        // // [P, 2]
+        // let positions_2d_in_screen =
+        //     positions_2d_in_screen.zeros_like().mask_where(
+        //         mask.to_owned().expand([point_count, 2]),
+        //         positions_2d_in_screen,
+        //     );
+
+        // // [P, 1] (No grad)
+        // let radii = radii.zeros_like().mask_where(mask.to_owned(), radii);
+
+        // // [P, 1] (No grad)
+        // let tile_touched_counts = tile_touched_counts
+        //     .zeros_like()
+        //     .mask_where(mask.to_owned(), tile_touched_counts);
+
+        // // [P], T (No grad)
+        // let (tile_touched_offsets, tile_touched_count) = {
+        //     // [P]
+        //     let counts = tile_touched_counts
+        //         .to_owned()
+        //         .into_data()
+        //         .convert::<u32>()
+        //         .value;
+
+        //     let mut count = *counts.last().unwrap_or(&0) as usize;
+
+        //     // [P]
+        //     let offsets = counts
+        //         .into_iter()
+        //         .scan(0, |state, x| {
+        //             let y = *state;
+        //             *state += x;
+        //             Some(y)
+        //         })
+        //         .collect::<Vec<_>>();
+
+        //     count += *offsets.last().unwrap_or(&0) as usize;
+
+        //     // [P]
+        //     (offsets, count)
+        // };
+
+        // println!("tile_touched_count (burn): {:?}", tile_touched_count);
+
+        // // [T] * 2 (No grad)
+        // let (point_keys, point_indexes) = {
+        //     // [P]
+        //     let mask = Tensor::cat(vec![mask, is_visible], 1)
+        //         .all_dim(1)
+        //         .into_data()
+        //         .value;
+
+        //     // [P] (f32 -> u32)
+        //     let depths =
+        //         cast_vec::<f32, u32>(depths.into_data().convert().value);
+
+        //     // [T, 2]
+        //     let mut keys_and_indexes = (0..point_count).fold(
+        //         vec![(0, 0); tile_touched_count],
+        //         |mut keys_and_indexes, index| {
+        //             if !mask[index] {
+        //                 return keys_and_indexes;
+        //             }
+
+        //             let mut offset = tile_touched_offsets[index] as usize;
+
+        //             for tile_y in
+        //                 tiles_touched_y_min[index]..tiles_touched_y_max[index]
+        //             {
+        //                 for tile_x in tiles_touched_x_min[index]
+        //                     ..tiles_touched_x_max[index]
+        //                 {
+        //                     let tile =
+        //                         (tile_y * tile_count_x as u32 + tile_x) as u64;
+        //                     let depth = depths[index] as u64;
+        //                     keys_and_indexes[offset] =
+        //                         (tile << 32 | depth, index as u32);
+
+        //                     offset += 1;
+        //                 }
+        //             }
+
+        //             keys_and_indexes
+        //         },
+        //     );
+
+        //     keys_and_indexes.par_sort_unstable_by_key(|(key, _)| *key);
+
+        //     // println!(
+        //     //     "point_indexes (burn): {:?}",
+        //     //     keys_and_indexes[0..50]
+        //     //         .iter()
+        //     //         .map(|(_, index)| index)
+        //     //         .collect::<Vec<_>>()
+        //     // );
+        //     // println!(
+        //     //     "point_keys (burn): {:?}",
+        //     //     keys_and_indexes[0..50]
+        //     //         .iter()
+        //     //         .map(|(key, _)| (
+        //     //             key >> 32,
+        //     //             cast::<u32, f32>(*key as u32),
+        //     //         ))
+        //     //         .collect::<Vec<_>>()
+        //     // );
+
+        //     // [T] * 2
+        //     keys_and_indexes.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+        // };
+
+        // // [(H / T_H) * (W / T_W), 2] (No grad)
+        // let tile_point_ranges = {
+        //     // [(H / T_H) * (W / T_W), 2]
+        //     let mut ranges = vec![0..0; tile_count_x * tile_count_y];
+
+        //     if !point_keys.is_empty() {
+        //         let tile = (point_keys.first().unwrap() >> 32) as usize;
+        //         ranges[tile].start = 0;
+
+        //         let tile = (point_keys.last().unwrap() >> 32) as usize;
+        //         ranges[tile].end = tile_touched_count;
+        //     }
+
+        //     // [T]
+        //     for point_offset in 1..tile_touched_count {
+        //         let tile_current = (point_keys[point_offset] >> 32) as usize;
+        //         let tile_previous =
+        //             (point_keys[point_offset - 1] >> 32) as usize;
+        //         if tile_current != tile_previous {
+        //             ranges[tile_current].start = point_offset;
+        //             ranges[tile_previous].end = point_offset;
+        //         }
+        //     }
+
+        //     // [(H / T_H) * (W / T_W), 2]
+        //     ranges
+        // };
+
+        // // // [1, 1, P, 3]
+        // // let colors_rgb_3d = colors_rgb_3d.unsqueeze::<4>();
+
+        // // // [1, 1, P, 2, 2]
+        // // let conics = conics.unsqueeze::<5>();
+
+        // // // [1, 1, P, 1]
+        // // let opacities = opacities.unsqueeze::<4>();
+
+        // // // [1, 1, P, 2]
+        // // let positions_2d_in_screen = positions_2d_in_screen.unsqueeze::<4>();
+
+        // // // [T]
+        // // let point_indexes = Tensor::<Self, 1, Int>::from_data(
+        // //     Data::new(point_indexes, [tile_touched_count].into()).convert(),
+        // //     &device,
+        // // );
+
+        // // // tile_touched_count (wgsl): 339405
+        // // // tile_touched_count (burn): 338707
+
+        // // [H, W, 3] (Output)
+        // let mut colors_rgb_2d = Tensor::<Self, 3>::zeros(
+        //     vec![image_size_y, image_size_x, 3],
+        //     &device,
+        // );
 
         // let mut duration_mass = std::time::Duration::default();
 

@@ -94,8 +94,6 @@ var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 @group(0) @binding(14)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 
-// Constants
-
 const EPSILON: f32 = 1.1920929e-7;
 
 const SH_C_0: array<f32, 1> = array<f32, 1>(
