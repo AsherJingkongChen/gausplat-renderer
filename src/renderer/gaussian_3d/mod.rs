@@ -10,7 +10,6 @@ use bytemuck::{
     bytes_of, cast_slice, cast_slice_mut, from_bytes, Pod, Zeroable,
 };
 use rayon::slice::ParallelSliceMut;
-use tensor::Int;
 
 pub trait Gaussian3dRenderer: backend::Backend {
     type Error;
@@ -19,11 +18,11 @@ pub trait Gaussian3dRenderer: backend::Backend {
         scene: &Gaussian3dScene<Self>,
         view: &sparse_view::View,
         colors_sh_degree_max: u32,
-    ) -> Result<Gaussian3dRendererResultOk<Self>, Self::Error>;
+    ) -> Result<Gaussian3dRendererResponse<Self>, Self::Error>;
 }
 
 #[derive(Clone, Debug)]
-pub struct Gaussian3dRendererResultOk<B: backend::Backend> {
+pub struct Gaussian3dRendererResponse<B: backend::Backend> {
     // `[H, W, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
 }
@@ -174,7 +173,9 @@ impl Gaussian3dRenderer for Wgpu {
         scene: &Gaussian3dScene<Self>,
         view: &sparse_view::View,
         colors_sh_degree_max: u32,
-    ) -> Result<Gaussian3dRendererResultOk<Self>, Self::Error> {
+    ) -> Result<Gaussian3dRendererResponse<Self>, Self::Error> {
+        // Specifying the constants
+
         const FILTER_LOW_PASS: f64 = 0.3;
 
         // T_X
@@ -191,6 +192,8 @@ impl Gaussian3dRenderer for Wgpu {
         }
 
         let mut duration = std::time::Instant::now();
+
+        // Specifying the parameters
 
         // I_X
         let image_size_x = view.image_width;
@@ -216,7 +219,6 @@ impl Gaussian3dRenderer for Wgpu {
             (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
         let view_bound_y =
             (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
-
         let scene = scene.to_owned();
 
         // ([P, 16, 3], P)
@@ -225,7 +227,7 @@ impl Gaussian3dRenderer for Wgpu {
             (p.client, p.handle, p.device, p.shape.dims[0])
         };
 
-        println!("point_count: {:?}", point_count);
+        // Performing the forward pass #1
 
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward1Arguments {
@@ -246,27 +248,21 @@ impl Gaussian3dRenderer for Wgpu {
                 view_bound_y,
             },
         ));
-
         // [P, 3]
         let positions =
             into_contiguous(scene.positions().into_primitive()).handle;
-
         // [P, 1]
         let opacities =
             into_contiguous(scene.opacities().into_primitive()).handle;
-
         // [P, 4]
         let rotations =
             into_contiguous(scene.rotations().into_primitive()).handle;
-
         // [P, 3]
         let scalings =
             into_contiguous(scene.scalings().into_primitive()).handle;
-
         // [3]
         let view_position =
             client.create(bytes_of(&view.view_position.map(|c| c as f32)));
-
         // [4, 4]
         let view_transform = {
             let view_transform_in_column_major = [
@@ -277,28 +273,20 @@ impl Gaussian3dRenderer for Wgpu {
             ];
             client.create(bytes_of(&view_transform_in_column_major))
         };
-
         // [P, 3]
         let colors_rgb_3d = client.empty(point_count * 3 * 4);
-
         // [P, 2, 2]
         let conics = client.empty(point_count * 2 * 2 * 4);
-
         // [P]
         let depths = client.empty(point_count * 4);
-
         // [P, 2]
         let positions_2d_in_screen = client.empty(point_count * 2 * 4);
-
         // [P]
         let radii = client.empty(point_count * 4);
-
         // [P]
         let tile_touched_counts = client.empty(point_count * 4);
-
         // [P, 2]
         let tiles_touched_max = client.empty(point_count * 2 * 4);
-
         // [P, 2]
         let tiles_touched_min = client.empty(point_count * 2 * 4);
 
@@ -334,15 +322,15 @@ impl Gaussian3dRenderer for Wgpu {
         println!("wgsl 1: {:?}", duration.elapsed());
         duration = std::time::Instant::now();
 
+        // Performing the forward pass #2
+
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward2Arguments {
                 point_count: point_count as u32,
             },
         ));
-
         // T
         let tile_touched_count = client.empty(1 * 4);
-
         // [P]
         let tile_touched_offsets = client.empty(point_count * 4);
 
@@ -363,13 +351,14 @@ impl Gaussian3dRenderer for Wgpu {
         println!("wgsl 2: {:?}", duration.elapsed());
         duration = std::time::Instant::now();
 
+        // Performing the forward pass #3
+
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward3Arguments {
                 point_count: point_count as u32,
                 tile_count_x,
             },
         ));
-
         // T
         let tile_touched_count =
             *from_bytes::<u32>(&client.read(&tile_touched_count).read())
@@ -404,11 +393,12 @@ impl Gaussian3dRenderer for Wgpu {
         println!("wgsl 3: {:?}", duration.elapsed());
         duration = std::time::Instant::now();
 
+        // Performing the forward pass #4
+
         // ([T], [T])
         let (point_indexes, point_tile_indexes) = {
             let mut point_keys_and_indexes =
                 client.read(&point_keys_and_indexes).read();
-
             let point_keys_and_indexes =
                 cast_slice_mut::<u8, Point>(&mut point_keys_and_indexes);
 
@@ -416,19 +406,20 @@ impl Gaussian3dRenderer for Wgpu {
 
             point_keys_and_indexes
                 .into_iter()
-                .map(|p| (p.index, p.tile_index()))
+                .map(|point| (point.index, point.tile_index()))
                 .unzip::<_, _, Vec<_>, Vec<_>>()
         };
 
         println!("wgsl 4: {:?}", duration.elapsed());
         duration = std::time::Instant::now();
 
+        // Performing the forward pass #5
+
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward5Arguments {
                 tile_touched_count: tile_touched_count as u32,
             },
         ));
-
         // [(I_X / T_X) * (I_Y / T_Y), 2]
         let tile_point_ranges = {
             let mut ranges =
@@ -439,14 +430,12 @@ impl Gaussian3dRenderer for Wgpu {
                     *point_tile_indexes.first().unwrap() as usize;
                 let tile_index_last =
                     *point_tile_indexes.last().unwrap() as usize;
-
                 ranges[tile_index_first][0] = 0;
                 ranges[tile_index_last][1] = tile_touched_count as u32;
             }
 
             client.create(cast_slice::<[u32; 2], u8>(&ranges))
         };
-
         // [T]
         let point_tile_indexes =
             client.create(cast_slice::<u32, u8>(&point_tile_indexes));
@@ -467,6 +456,8 @@ impl Gaussian3dRenderer for Wgpu {
         println!("wgsl 5: {:?}", duration.elapsed());
         duration = std::time::Instant::now();
 
+        // Performing the forward pass #6
+
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward6Arguments {
                 image_size_x,
@@ -477,7 +468,6 @@ impl Gaussian3dRenderer for Wgpu {
         // [I_X * I_Y, 3]
         let colors_rgb_2d =
             client.empty((image_size_y * image_size_x) as usize * 3 * 4);
-
         // [T]
         let point_indexes =
             client.create(cast_slice::<u32, u8>(&point_indexes));
@@ -504,8 +494,7 @@ impl Gaussian3dRenderer for Wgpu {
             ],
         );
 
-        println!("wgsl 6: {:?}", duration.elapsed());
-        duration = std::time::Instant::now();
+        // Specifying the results
 
         // [I_Y, I_X, 3]
         let colors_rgb_2d =
@@ -525,8 +514,8 @@ impl Gaussian3dRenderer for Wgpu {
         //         radii,
         //     ));
 
-        println!("wgsl finish: {:?}", duration.elapsed());
+        println!("wgsl 6: {:?}", duration.elapsed());
 
-        Ok(Gaussian3dRendererResultOk { colors_rgb_2d })
+        Ok(Gaussian3dRendererResponse { colors_rgb_2d })
     }
 }
