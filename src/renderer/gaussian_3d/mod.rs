@@ -2,16 +2,15 @@ pub use crate::scene::gaussian_3d::*;
 pub use gausplat_importer::scene::sparse_view;
 
 use crate::error::Error;
-use crate::function::{spherical_harmonics::SH_C, tensor_extensions::*};
 use burn::backend::wgpu::{
     into_contiguous, AutoGraphicsApi, JitBackend, Kernel, SourceKernel,
     WgpuRuntime, WorkGroup, WorkgroupSize,
 };
 use bytemuck::{
-    bytes_of, cast_slice, cast_slice_mut, cast_vec, from_bytes, Pod, Zeroable,
+    bytes_of, cast_slice, cast_slice_mut, from_bytes, Pod, Zeroable,
 };
 use rayon::slice::ParallelSliceMut;
-use tensor::{Data, Int};
+use tensor::Int;
 
 pub trait Gaussian3dRenderer: backend::Backend {
     type Error;
@@ -19,7 +18,7 @@ pub trait Gaussian3dRenderer: backend::Backend {
     fn render_gaussian_3d(
         scene: &Gaussian3dScene<Self>,
         view: &sparse_view::View,
-        colors_sh_degree_max: usize,
+        colors_sh_degree_max: u32,
     ) -> Result<Gaussian3dRendererResultOk<Self>, Self::Error>;
 }
 
@@ -120,16 +119,6 @@ mod kernel {
 
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-    pub struct RenderGaussian3dForward4Arguments {
-        // B
-        pub point_key_byte_capacity: u32,
-
-        // T
-        pub tile_touched_count: u32,
-    }
-
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Pod, Zeroable)]
     pub struct RenderGaussian3dForward5Arguments {
         // T
         pub tile_touched_count: u32,
@@ -184,9 +173,15 @@ impl Gaussian3dRenderer for Wgpu {
     fn render_gaussian_3d(
         scene: &Gaussian3dScene<Self>,
         view: &sparse_view::View,
-        colors_sh_degree_max: usize,
+        colors_sh_degree_max: u32,
     ) -> Result<Gaussian3dRendererResultOk<Self>, Self::Error> {
         const FILTER_LOW_PASS: f64 = 0.3;
+
+        // T_X
+        const TILE_SIZE_X: u32 = 16;
+
+        // T_Y
+        const TILE_SIZE_Y: u32 = 16;
 
         if colors_sh_degree_max > 3 {
             return Err(Error::Gaussian3dRenderer(format!(
@@ -197,96 +192,40 @@ impl Gaussian3dRenderer for Wgpu {
 
         let mut duration = std::time::Instant::now();
 
-        // T_X
-        let tile_size_x = 16;
-
-        // T_Y
-        let tile_size_y = 16;
-
-        debug_assert_ne!(tile_size_x, 0, "tile_size_x != 0");
-        debug_assert_ne!(tile_size_y, 0, "tile_size_y != 0");
-
         // I_X
-        let image_size_x = view.image_width as usize;
-
+        let image_size_x = view.image_width;
         // I_Y
-        let image_size_y = view.image_height as usize;
-
+        let image_size_y = view.image_height;
+        // I_X / 2
+        let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
+        // I_Y / 2
+        let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
         // I_X / T_X
-        let tile_count_x = (image_size_x + tile_size_x - 1) / tile_size_x;
-
+        let tile_count_x = (image_size_x + TILE_SIZE_X - 1) / TILE_SIZE_X;
         // I_Y / T_Y
-        let tile_count_y = (image_size_y + tile_size_y - 1) / tile_size_y;
-
-        // [P, 16, 3]
-        let colors_sh = scene.colors_sh();
-
-        // [P, 1]
-        let opacities = scene.opacities();
-
-        // [P, 3]
-        let positions = scene.positions();
-
-        // [P, 4]
-        let rotations = scene.rotations();
-
-        // [P, 3]
-        let scalings = scene.scalings();
-
-        // P
-        let point_count = positions.dims()[0];
-
-        let device = positions.device();
+        let tile_count_y = (image_size_y + TILE_SIZE_Y - 1) / TILE_SIZE_Y;
 
         let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
         let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
-
-        duration = std::time::Instant::now();
-
-        let colors_sh_degree_max = colors_sh_degree_max as u32;
         let filter_low_pass = FILTER_LOW_PASS as f32;
         let focal_length_x =
             (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
         let focal_length_y =
             (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
-
-        // I_X
-        let image_size_x = image_size_x as u32;
-
-        // I_Y
-        let image_size_y = image_size_y as u32;
-
-        // I_X / 2
-        let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
-
-        // I_Y / 2
-        let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
-
-        // P
-        let point_count = point_count;
-
-        // I_X / T_X
-        let tile_count_x = tile_count_x as u32;
-
-        // I_Y / T_Y
-        let tile_count_y = tile_count_y as u32;
-
-        // T_X
-        let tile_size_x = tile_size_x as u32;
-
-        // T_Y
-        let tile_size_y = tile_size_y as u32;
-
         let view_bound_x =
             (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
         let view_bound_y =
             (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
 
-        // [P, 16, 3]
-        let (client, colors_sh) = {
-            let p = into_contiguous(colors_sh.to_owned().into_primitive());
-            (p.client, p.handle)
+        let scene = scene.to_owned();
+
+        // ([P, 16, 3], P)
+        let (client, colors_sh, device, point_count) = {
+            let p = into_contiguous(scene.colors_sh().into_primitive());
+            (p.client, p.handle, p.device, p.shape.dims[0])
         };
+
+        println!("point_count: {:?}", point_count);
 
         let arguments = client.create(bytes_of(
             &kernel::RenderGaussian3dForward1Arguments {
@@ -301,8 +240,8 @@ impl Gaussian3dRenderer for Wgpu {
                 point_count: point_count as u32,
                 tile_count_x,
                 tile_count_y,
-                tile_size_x,
-                tile_size_y,
+                tile_size_x: TILE_SIZE_X,
+                tile_size_y: TILE_SIZE_Y,
                 view_bound_x,
                 view_bound_y,
             },
@@ -310,15 +249,19 @@ impl Gaussian3dRenderer for Wgpu {
 
         // [P, 3]
         let positions =
-            into_contiguous(positions.to_owned().into_primitive()).handle;
+            into_contiguous(scene.positions().into_primitive()).handle;
+
+        // [P, 1]
+        let opacities =
+            into_contiguous(scene.opacities().into_primitive()).handle;
 
         // [P, 4]
         let rotations =
-            into_contiguous(rotations.to_owned().into_primitive()).handle;
+            into_contiguous(scene.rotations().into_primitive()).handle;
 
         // [P, 3]
         let scalings =
-            into_contiguous(scalings.to_owned().into_primitive()).handle;
+            into_contiguous(scene.scalings().into_primitive()).handle;
 
         // [3]
         let view_position =
@@ -535,10 +478,6 @@ impl Gaussian3dRenderer for Wgpu {
         let colors_rgb_2d =
             client.empty((image_size_y * image_size_x) as usize * 3 * 4);
 
-        // [P, 1]
-        let opacities =
-            into_contiguous(opacities.to_owned().into_primitive()).handle;
-
         // [T]
         let point_indexes =
             client.create(cast_slice::<u32, u8>(&point_indexes));
@@ -577,14 +516,14 @@ impl Gaussian3dRenderer for Wgpu {
                 colors_rgb_2d,
             ));
 
-        // [P]
-        let radii =
-            Tensor::<Self, 1, Int>::new(Self::IntTensorPrimitive::<1>::new(
-                client.to_owned(),
-                device.to_owned(),
-                [point_count].into(),
-                radii,
-            ));
+        // // [P]
+        // let radii =
+        //     Tensor::<Self, 1, Int>::new(Self::IntTensorPrimitive::<1>::new(
+        //         client.to_owned(),
+        //         device.to_owned(),
+        //         [point_count].into(),
+        //         radii,
+        //     ));
 
         println!("wgsl finish: {:?}", duration.elapsed());
 
