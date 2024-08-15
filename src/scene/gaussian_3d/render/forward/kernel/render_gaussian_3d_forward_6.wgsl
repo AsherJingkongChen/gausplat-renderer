@@ -33,21 +33,17 @@ var<storage, read> point_indexes: array<u32>;
 @group(0) @binding(6)
 var<storage, read> tile_point_ranges: array<vec2<u32>>;
 
-// [I_X * I_Y, 3]
+// [I_Y, I_X, 3]
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_2d: array<array<f32, 3>>;
 
-// T_X * T_Y
-const BATCH_SIZE: u32 = 16 * 16;
-
-const OPACITY_MAX: f32 = 0.99;
-
-const OPACITY_MIN: f32 = 1.0 / 255.0;
-
-const TRANSMITTANCE_MIN: f32 = 1e-4;
+// // [I_Y, I_X]
+// @group(0) @binding(8)
+// var<storage, read_write> transmittances: array<f32>;
 
 // [T_X * T_Y, 3]
 var<workgroup> batch_colors_rgb_3d: array<array<f32, 3>, BATCH_SIZE>;
+
 
 // [T_X * T_Y, 2, 2]
 var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
@@ -61,7 +57,17 @@ var<workgroup> batch_positions_2d_in_screen: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_X * T_Y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
-@compute @workgroup_size(16, 16)
+// T_X
+const TILE_SIZE_X: u32 = 16;
+// T_Y
+const TILE_SIZE_Y: u32 = 16;
+// T_X * T_Y
+const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
+const OPACITY_MAX: f32 = 0.99;
+const OPACITY_MIN: f32 = 1.0 / 255.0;
+const TRANSMITTANCE_MIN: f32 = 1e-4;
+
+@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y)
 fn main(
     @builtin(local_invocation_index) local_index: u32,
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -72,12 +78,12 @@ fn main(
 
     let pixel = global_id.xy;
     let pixel_f32 = vec2<f32>(f32(pixel.x), f32(pixel.y));
-    let is_inside = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
+    let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
 
-    var is_done = !is_inside;
-    var was_done = false;
+    var is_pixel_done = !is_pixel_valid;
+    var was_pixel_done = false;
     var pixel_transmittance = 1.0;
 
     // Point count in the tile
@@ -89,14 +95,14 @@ fn main(
 
     var pixel_color_rgb_2d = vec3<f32>();
 
-    // Processing batches of points in tile
+    // Processing batches of points in the tile
     // [R / (T_X * T_Y)]
 
     for (var batch_index = 0u; batch_index < batch_count; batch_index++) {
         // Specifying the progress state
 
-        if is_done && !was_done {
-            was_done = true;
+        if is_pixel_done && !was_pixel_done {
+            was_pixel_done = true;
             atomicAdd(&pixel_done_count, 1u);
 
             // Leaving if all the pixels of tile are done
@@ -120,11 +126,11 @@ fn main(
 
         // Skipping if the pixel is done
 
-        if is_done {
+        if is_pixel_done {
             continue;
         }
 
-        // Computing the 2D colors in RGB space
+        // Computing the 2D colors in RGB space using the batch parameters
         // [T_X * T_Y]
 
         let batch_point_count = min(point_count, BATCH_SIZE);
@@ -135,8 +141,8 @@ fn main(
             batch_point_index++
         ) {
             // Computing the density of the point
-            // a[T_X * T_Y, 1, 1] =
-            // d[T_X * T_Y, 1, 2] * c'^-1[T_X * T_Y, 2, 2] * d[T_X * T_Y, 2, 1]
+            // a[I_Y, I_X, 1, 1] =
+            // d[I_Y, I_X, 1, 2] * c'^-1[I_Y, I_X, 2, 2] * d[I_Y, I_X, 2, 1]
 
             let position_2d_in_screen = batch_positions_2d_in_screen[batch_point_index];
             let direction_2d = position_2d_in_screen - pixel_f32;
@@ -169,11 +175,11 @@ fn main(
             // Leaving before the transmittance is too low
 
             if pixel_transmittance_next < TRANSMITTANCE_MIN {
-                is_done = true;
+                is_pixel_done = true;
                 break;
             }
 
-            // Blending the 3D colors of the pixel
+            // Blending the 3D colors of the pixel into the 2D color in RGB space
 
             let batch_color_rgb_3d = vec3<f32>(
                 batch_colors_rgb_3d[batch_point_index][0],
@@ -190,7 +196,7 @@ fn main(
 
     // Specifying the results
 
-    if is_inside {
+    if is_pixel_valid {
         // Paint the pixel
 
         colors_rgb_2d[pixel.y * arguments.image_size_x + pixel.x] = array<f32, 3>(

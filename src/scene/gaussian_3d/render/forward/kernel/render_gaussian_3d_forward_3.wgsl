@@ -1,7 +1,6 @@
 struct Arguments {
     // P
     point_count: u32,
-
     // I_X / T_X
     tile_count_x: u32,
 }

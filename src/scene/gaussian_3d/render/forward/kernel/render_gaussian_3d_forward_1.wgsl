@@ -3,34 +3,24 @@ struct Arguments {
     filter_low_pass: f32,
     focal_length_x: f32,
     focal_length_y: f32,
-
     // I_X
     image_size_x: u32,
-
     // I_Y
     image_size_y: u32,
-
     // I_X / 2
     image_size_half_x: f32,
-
     // I_Y / 2
     image_size_half_y: f32,
-
     // P
     point_count: u32,
-
     // I_X / T_X
     tile_count_x: u32,
-
     // I_Y / T_Y
     tile_count_y: u32,
-
     // T_X
     tile_size_x: u32,
-
     // T_Y
     tile_size_y: u32,
-
     view_bound_x: f32,
     view_bound_y: f32,
 }
@@ -70,42 +60,43 @@ var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 @group(0) @binding(8)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 
-// [P]
+// [P, 3, 3]
 @group(0) @binding(9)
+var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
+
+// [P]
+@group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
 
 // [P, 2]
-@group(0) @binding(10)
+@group(0) @binding(11)
 var<storage, read_write> positions_2d_in_screen: array<vec2<f32>>;
 
 // [P]
-@group(0) @binding(11)
+@group(0) @binding(12)
 var<storage, read_write> radii: array<u32>;
 
 // [P]
-@group(0) @binding(12)
+@group(0) @binding(13)
 var<storage, read_write> tile_touched_counts: array<u32>;
 
 // [P, 2]
-@group(0) @binding(13)
+@group(0) @binding(14)
 var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 
 // [P, 2]
-@group(0) @binding(14)
+@group(0) @binding(15)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 
 const EPSILON: f32 = 1.1920929e-7;
-
 const SH_C_0: array<f32, 1> = array<f32, 1>(
     0.2820948,
 );
-
 const SH_C_1: array<f32, 3> = array<f32, 3>(
     -0.48860252,
     0.48860252,
     -0.48860252,
 );
-
 const SH_C_2: array<f32, 5> = array<f32, 5>(
     1.0925485,
     -1.0925485,
@@ -113,7 +104,6 @@ const SH_C_2: array<f32, 5> = array<f32, 5>(
     -1.0925485,
     0.54627424,
 );
-
 const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
     2.8906114,
@@ -487,6 +477,9 @@ fn main(
 
     // [P, 2, 2] (Symmetric)
     conics[index] = conic;
+
+    // [P, 3, 3] (Symmetric)
+    covariances_3d[index] = covariance_3d;
 
     // [P]
     depths[index] = depth;
