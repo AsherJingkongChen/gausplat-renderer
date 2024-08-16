@@ -27,65 +27,53 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-
 // [P, 16, 3]
 @group(0) @binding(1)
 var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
-
 // [P, 3]
 @group(0) @binding(2)
 var<storage, read> positions: array<array<f32, 3>>;
-
 // [P, 4]
 @group(0) @binding(3)
 var<storage, read> rotations: array<array<f32, 4>>;
-
 // [P, 3]
 @group(0) @binding(4)
 var<storage, read> scalings: array<array<f32, 3>>;
-
 // [3]
 @group(0) @binding(5)
 var<storage, read> view_position: vec3<f32>;
-
 // [4, 4]
 @group(0) @binding(6)
 var<storage, read> view_transform: mat4x4<f32>;
-
 // [P, 3]
 @group(0) @binding(7)
-var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
-
+var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2]
 @group(0) @binding(8)
 var<storage, read_write> conics: array<mat2x2<f32>>;
-
 // [P, 3, 3]
 @group(0) @binding(9)
 var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
-
 // [P]
 @group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
-
-// [P, 2]
+// [P, 3]
 @group(0) @binding(11)
-var<storage, read_write> positions_2d_in_screen: array<vec2<f32>>;
-
-// [P]
+var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
+// [P, 2]
 @group(0) @binding(12)
-var<storage, read_write> radii: array<u32>;
-
+var<storage, read_write> positions_2d_in_screen: array<vec2<f32>>;
 // [P]
 @group(0) @binding(13)
-var<storage, read_write> tile_touched_counts: array<u32>;
-
-// [P, 2]
+var<storage, read_write> radii: array<u32>;
+// [P]
 @group(0) @binding(14)
-var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
-
+var<storage, read_write> tile_touched_counts: array<u32>;
 // [P, 2]
 @group(0) @binding(15)
+var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
+// [P, 2]
+@group(0) @binding(16)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 
 const EPSILON: f32 = 1.1920929e-7;
@@ -116,6 +104,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 
 @compute @workgroup_size(256)
 fn main(
+    // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,
 ) {
     // Checking the index
@@ -362,10 +351,7 @@ fn main(
             ),
         );
 
-        color_rgb_3d +=
-            color_sh_1[0] * (SH_C_1[0] * (vd_y)) +
-            color_sh_1[1] * (SH_C_1[1] * (vd_z)) +
-            color_sh_1[2] * (SH_C_1[2] * (vd_x));
+        color_rgb_3d += color_sh_1[0] * (SH_C_1[0] * (vd_y)) + color_sh_1[1] * (SH_C_1[1] * (vd_z)) + color_sh_1[2] * (SH_C_1[2] * (vd_x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
@@ -402,12 +388,7 @@ fn main(
             ),
         );
 
-        color_rgb_3d +=
-            color_sh_2[0] * (SH_C_2[0] * (vd_xy)) +
-            color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) +
-            color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
-            color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) +
-            color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
+        color_rgb_3d += color_sh_2[0] * (SH_C_2[0] * (vd_xy)) + color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) + color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) + color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) + color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
@@ -451,29 +432,18 @@ fn main(
             ),
         );
 
-        color_rgb_3d +=
-            color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
-            color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) +
-            color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1))+
-            color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
-            color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
-            color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
-            color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+        color_rgb_3d += color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) + color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) + color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) + color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) + color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) + color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) + color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;
-    color_rgb_3d.r = max(color_rgb_3d.r, 0.0);
-    color_rgb_3d.g = max(color_rgb_3d.g, 0.0);
-    color_rgb_3d.b = max(color_rgb_3d.b, 0.0);
+
+    let is_color_rgb_3d_clamped = vec3<f32>(color_rgb_3d < vec3<f32>());
+    color_rgb_3d = max(color_rgb_3d, vec3<f32>());
 
     // Specifying the results
 
     // [P, 3]
-    colors_rgb_3d[index] = array<f32, 3>(
-        color_rgb_3d.r,
-        color_rgb_3d.g,
-        color_rgb_3d.b,
-    );
+    colors_rgb_3d[index] = color_rgb_3d;
 
     // [P, 2, 2] (Symmetric)
     conics[index] = conic;
@@ -483,6 +453,9 @@ fn main(
 
     // [P]
     depths[index] = depth;
+
+    // [P, 3] (0.0, 1.0)
+    is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
 
     // [P, 2]
     positions_2d_in_screen[index] = position_2d_in_screen;

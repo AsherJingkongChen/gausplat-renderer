@@ -8,52 +8,42 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-
 // [P, 3]
 @group(0) @binding(1)
-var<storage, read> colors_rgb_3d: array<array<f32, 3>>;
-
+var<storage, read> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2]
 @group(0) @binding(2)
 var<storage, read> conics: array<mat2x2<f32>>;
-
 // [P]
 @group(0) @binding(3)
 var<storage, read> opacities: array<f32>;
-
 // [P, 2]
 @group(0) @binding(4)
 var<storage, read> positions_2d_in_screen: array<vec2<f32>>;
-
 // [T]
 @group(0) @binding(5)
 var<storage, read> point_indexes: array<u32>;
-
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(6)
 var<storage, read> tile_point_ranges: array<vec2<u32>>;
-
 // [I_Y, I_X, 3]
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_2d: array<array<f32, 3>>;
-
-// // [I_Y, I_X]
-// @group(0) @binding(8)
-// var<storage, read_write> transmittances: array<f32>;
+// [I_Y, I_X]
+@group(0) @binding(8)
+var<storage, read_write> point_rendered_counts: array<u32>;
+// [I_Y, I_X]
+@group(0) @binding(9)
+var<storage, read_write> transmittances: array<f32>;
 
 // [T_X * T_Y, 3]
-var<workgroup> batch_colors_rgb_3d: array<array<f32, 3>, BATCH_SIZE>;
-
-
+var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
 // [T_X * T_Y, 2, 2]
 var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
-
 // [T_X * T_Y]
 var<workgroup> batch_opacities: array<f32, BATCH_SIZE>;
-
 // [T_X * T_Y, 2]
 var<workgroup> batch_positions_2d_in_screen: array<vec2<f32>, BATCH_SIZE>;
-
 // (0 ~ T_X * T_Y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
@@ -69,31 +59,31 @@ const TRANSMITTANCE_MIN: f32 = 1e-4;
 
 @compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y)
 fn main(
+    // (0 ~ T_X * T_Y)
     @builtin(local_invocation_index) local_index: u32,
+    // (0 ~ I_X, 0 ~ I_Y)
     @builtin(global_invocation_id) global_id: vec3<u32>,
+    // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     @builtin(workgroup_id) group_id: vec3<u32>,
+    // (I_X / T_X, I_Y / T_Y)
     @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
     // Specifying the parameters
 
     let pixel = global_id.xy;
-    let pixel_f32 = vec2<f32>(f32(pixel.x), f32(pixel.y));
+    let pixel_f32 = vec2<f32>(pixel);
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
 
     var is_pixel_done = !is_pixel_valid;
     var was_pixel_done = false;
-    var pixel_transmittance = 1.0;
-
-    // Point count in the tile
-    // R
-
-    var point_count = tile_point_range.y - tile_point_range.x;
-
-    // Initializing the results
-
     var pixel_color_rgb_2d = vec3<f32>();
+    var pixel_transmittance = 1.0;
+    var point_rendered_count = 0u;
+    var point_rendered_state = 0u;
+    // R
+    var point_count = tile_point_range.y - tile_point_range.x;
 
     // Processing batches of points in the tile
     // [R / (T_X * T_Y)]
@@ -140,6 +130,8 @@ fn main(
             batch_point_index < batch_point_count;
             batch_point_index++
         ) {
+            point_rendered_state++;
+
             // Computing the density of the point
             // a[I_Y, I_X, 1, 1] =
             // d[I_Y, I_X, 1, 2] * c'^-1[I_Y, I_X, 2, 2] * d[I_Y, I_X, 2, 1]
@@ -181,14 +173,13 @@ fn main(
 
             // Blending the 3D colors of the pixel into the 2D color in RGB space
 
-            let batch_color_rgb_3d = vec3<f32>(
-                batch_colors_rgb_3d[batch_point_index][0],
-                batch_colors_rgb_3d[batch_point_index][1],
-                batch_colors_rgb_3d[batch_point_index][2],
-            );
+            let batch_color_rgb_3d = batch_colors_rgb_3d[batch_point_index];
             pixel_color_rgb_2d += batch_color_rgb_3d * (opacity * pixel_transmittance);
 
+            // Updating the pixel state
+
             pixel_transmittance = pixel_transmittance_next;
+            point_rendered_count = point_rendered_state;
         }
 
         point_count -= batch_point_count;
@@ -197,12 +188,19 @@ fn main(
     // Specifying the results
 
     if is_pixel_valid {
+        let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
+
         // Paint the pixel
 
-        colors_rgb_2d[pixel.y * arguments.image_size_x + pixel.x] = array<f32, 3>(
-            pixel_color_rgb_2d.r,
-            pixel_color_rgb_2d.g,
-            pixel_color_rgb_2d.b,
+        // [I_Y, I_X, 3]
+        colors_rgb_2d[pixel_index] = array<f32, 3>(
+            pixel_color_rgb_2d[0],
+            pixel_color_rgb_2d[1],
+            pixel_color_rgb_2d[2],
         );
+        // [I_Y, I_X]
+        point_rendered_counts[pixel_index] = point_rendered_count;
+        // [I_Y, I_X]
+        transmittances[pixel_index] = pixel_transmittance;
     }
 }

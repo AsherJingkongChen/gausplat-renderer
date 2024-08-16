@@ -9,6 +9,11 @@ pub(super) struct PointKeyAndIndex {
 
 impl PointKeyAndIndex {
     #[inline]
+    pub(super) fn key(&self) -> u64 {
+        (self.key[0] as u64) << 32 | (self.key[1] as u64)
+    }
+
+    #[inline]
     pub(super) fn tile_index(&self) -> u32 {
         self.key[0]
     }
@@ -20,7 +25,7 @@ impl Ord for PointKeyAndIndex {
         &self,
         other: &Self,
     ) -> std::cmp::Ordering {
-        self.key.cmp(&other.key)
+        self.key().cmp(&other.key())
     }
 }
 
@@ -30,7 +35,7 @@ impl PartialEq for PointKeyAndIndex {
         &self,
         other: &Self,
     ) -> bool {
-        self.key.eq(&other.key)
+        self.key().eq(&other.key())
     }
 }
 
@@ -40,6 +45,6 @@ impl PartialOrd for PointKeyAndIndex {
         &self,
         other: &Self,
     ) -> Option<std::cmp::Ordering> {
-        self.key.partial_cmp(&other.key)
+        Some(self.cmp(other))
     }
 }

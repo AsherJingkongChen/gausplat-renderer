@@ -7,33 +7,28 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-
 // [P]
 @group(0) @binding(1)
 var<storage, read> depths: array<f32>;
-
 // [P]
 @group(0) @binding(2)
 var<storage, read> radii: array<u32>;
-
 // [P]
 @group(0) @binding(3)
 var<storage, read> tile_touched_offsets: array<u32>;
-
 // [P, 2]
 @group(0) @binding(4)
 var<storage, read> tiles_touched_max: array<vec2<u32>>;
-
 // [P, 2]
 @group(0) @binding(5)
 var<storage, read> tiles_touched_min: array<vec2<u32>>;
-
 // [T, 3] ([tile_index, depth, point_index])
 @group(0) @binding(6)
 var<storage, read_write> point_keys_and_indexes: array<array<u32, 3>>;
 
 @compute @workgroup_size(256)
 fn main(
+    // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,
 ) {
     // Checking the index

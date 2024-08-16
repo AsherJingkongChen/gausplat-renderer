@@ -1,9 +1,10 @@
 pub mod backward;
 pub mod forward;
 
-pub use crate::scene::gaussian_3d::*;
-use crate::{backend::Wgpu, error::Error};
 pub use gausplat_importer::scene::sparse_view;
+
+use crate::scene::gaussian_3d::{Gaussian3dScene, Tensor};
+use crate::{backend::Wgpu, error::Error};
 
 impl Gaussian3dScene<Wgpu> {
     pub fn render(
@@ -11,6 +12,9 @@ impl Gaussian3dScene<Wgpu> {
         view: &sparse_view::View,
         colors_sh_degree_max: u32,
     ) -> Result<Tensor<Wgpu, 3>, Error> {
-        Ok(self.render_forward(view, colors_sh_degree_max)?.colors_rgb_2d)
+        Ok(Tensor::new(
+            self.render_forward(view, colors_sh_degree_max)?
+                .colors_rgb_2d,
+        ))
     }
 }

@@ -3,29 +3,29 @@ use bytemuck::{Pod, Zeroable};
 use derive_new::new;
 
 kernel_wgsl!(
-    RenderGaussian3dForward1,
-    "./render_gaussian_3d_forward_1.wgsl"
+    Gaussian3dRenderForward1,
+    "./gaussian_3d_render_forward_1.wgsl"
 );
 kernel_wgsl!(
-    RenderGaussian3dForward2,
-    "./render_gaussian_3d_forward_2.wgsl"
+    Gaussian3dRenderForward2,
+    "./gaussian_3d_render_forward_2.wgsl"
 );
 kernel_wgsl!(
-    RenderGaussian3dForward3,
-    "./render_gaussian_3d_forward_3.wgsl"
+    Gaussian3dRenderForward3,
+    "./gaussian_3d_render_forward_3.wgsl"
 );
 kernel_wgsl!(
-    RenderGaussian3dForward5,
-    "./render_gaussian_3d_forward_5.wgsl"
+    Gaussian3dRenderForward5,
+    "./gaussian_3d_render_forward_5.wgsl"
 );
 kernel_wgsl!(
-    RenderGaussian3dForward6,
-    "./render_gaussian_3d_forward_6.wgsl"
+    Gaussian3dRenderForward6,
+    "./gaussian_3d_render_forward_6.wgsl"
 );
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub(super) struct RenderGaussian3dForward1Arguments {
+pub(super) struct Gaussian3dRenderForward1Arguments {
     pub colors_sh_degree_max: u32,
     pub filter_low_pass: f32,
     pub focal_length_x: f32,
@@ -54,14 +54,14 @@ pub(super) struct RenderGaussian3dForward1Arguments {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub(super) struct RenderGaussian3dForward2Arguments {
+pub(super) struct Gaussian3dRenderForward2Arguments {
     /// `P`
     pub point_count: u32,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub(super) struct RenderGaussian3dForward3Arguments {
+pub(super) struct Gaussian3dRenderForward3Arguments {
     /// `P`
     pub point_count: u32,
     /// `I_X / T_X`
@@ -70,14 +70,14 @@ pub(super) struct RenderGaussian3dForward3Arguments {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub(super) struct RenderGaussian3dForward5Arguments {
+pub(super) struct Gaussian3dRenderForward5Arguments {
     /// `T`
     pub tile_touched_count: u32,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub(super) struct RenderGaussian3dForward6Arguments {
+pub(super) struct Gaussian3dRenderForward6Arguments {
     /// `I_X`
     pub image_size_x: u32,
     /// `I_Y`
