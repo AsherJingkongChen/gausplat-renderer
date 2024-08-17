@@ -1,3 +1,4 @@
+pub mod config;
 pub mod property;
 pub mod render;
 
@@ -5,6 +6,7 @@ pub use burn::{
     module::{Module, Param},
     tensor::{backend::Backend, Data, Tensor},
 };
+pub use config::*;
 
 use std::fmt;
 
@@ -29,12 +31,17 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
     ) -> fmt::Result {
         f.debug_struct("Gaussian3dScene")
             .field("devices", &self.devices())
-            .field("parameter_count", &self.num_params())
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
             .field("positions.dims()", &self.positions.dims())
             .field("rotations.dims()", &self.rotations.dims())
             .field("scalings.dims()", &self.scalings.dims())
             .finish()
+    }
+}
+
+impl<B: Backend> Default for Gaussian3dScene<B> {
+    fn default() -> Self {
+        Gaussian3dSceneConfig::default().into()
     }
 }

@@ -14,6 +14,8 @@ burn = {workspace = true, features = ["autodiff", "template", "wgpu"]}
 bytemuck = {workspace = true, features = ["derive"]}
 derive-new = {workspace = true}
 lazy_static = {workspace = true}
+rand = {workspace = true}
+rand_distr = {workspace = true}
 rayon = {workspace = true}
 thiserror = {workspace = true}
 

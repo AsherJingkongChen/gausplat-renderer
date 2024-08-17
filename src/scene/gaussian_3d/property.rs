@@ -6,18 +6,17 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 16, 3]`
     pub fn colors_sh(&self) -> Tensor<B, 3> {
-        debug_assert_eq!(self.colors_sh.val().dims()[1], 16, "colors_sh.dims()[1] != 16");
-        debug_assert_eq!(self.colors_sh.val().dims()[2], 3, "colors_sh.dims()[2] != 3");
+        let colors_sh = self.colors_sh.val();
+        debug_assert_eq!(colors_sh.dims()[1], 16, "colors_sh.dims()[1] != 16");
+        debug_assert_eq!(colors_sh.dims()[2], 3, "colors_sh.dims()[2] != 3");
 
-        self.colors_sh.val()
+        colors_sh
     }
 
     /// The colors represented as orthonormalized spherical harmonics
     ///
     /// `[P, 16, 3]`
-    pub fn make_colors_sh(
-        colors_sh: Tensor<B, 3>,
-    ) -> Tensor<B, 3> {
+    pub fn make_colors_sh(colors_sh: Tensor<B, 3>) -> Tensor<B, 3> {
         debug_assert_eq!(colors_sh.dims()[1], 16, "colors_sh.dims()[1] != 16");
         debug_assert_eq!(colors_sh.dims()[2], 3, "colors_sh.dims()[2] != 3");
 
@@ -28,9 +27,10 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 1]`
     pub fn opacities(&self) -> Tensor<B, 2> {
-        debug_assert_eq!(self.opacities.val().dims()[1], 1, "opacities.dims()[1] != 1");
+        let opacities = self.opacities.val();
+        debug_assert_eq!(opacities.dims()[1], 1, "opacities.dims()[1] != 1");
 
-        activation::sigmoid(self.opacities.val())
+        activation::sigmoid(opacities)
     }
 
     /// The input `opacities` is applied to the inverse sigmoid function
@@ -47,9 +47,10 @@ impl<B: Backend> Gaussian3dScene<B> {
 
     /// `[P, 3]`
     pub fn positions(&self) -> Tensor<B, 2> {
-        debug_assert_eq!(self.positions.val().dims()[1], 3, "positions.dims()[1] != 3");
+        let positions = self.positions.val();
+        debug_assert_eq!(positions.dims()[1], 3, "positions.dims()[1] != 3");
 
-        self.positions.val()
+        positions
     }
 
     /// `[P, 3]`
@@ -63,11 +64,15 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 4]`
     pub fn rotations(&self) -> Tensor<B, 2> {
-        debug_assert_eq!(self.rotations.val().dims()[1], 4, "rotations.dims()[1] != 4");
-
         let rotations = self.rotations.val();
-        let norms = rotations.to_owned().mul(rotations).sum_dim(1).sqrt();
-        self.rotations.val().div(norms)
+        debug_assert_eq!(rotations.dims()[1], 4, "rotations.dims()[1] != 4");
+
+        let norms = rotations
+            .to_owned()
+            .mul(rotations.to_owned())
+            .sum_dim(1)
+            .sqrt();
+        rotations.div(norms)
     }
 
     /// `[P, 4]`
@@ -81,9 +86,10 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 3]`
     pub fn scalings(&self) -> Tensor<B, 2> {
-        debug_assert_eq!(self.scalings.val().dims()[1], 3, "scalings.dims()[1] != 3");
+        let scalings = self.scalings.val();
+        debug_assert_eq!(scalings.dims()[1], 3, "scalings.dims()[1] != 3");
 
-        self.scalings.val().exp()
+        scalings.exp()
     }
 
     /// The input `scalings` is applied to the logarithm function

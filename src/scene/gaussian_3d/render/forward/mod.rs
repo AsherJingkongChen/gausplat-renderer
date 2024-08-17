@@ -81,7 +81,7 @@ impl Gaussian3dScene<Wgpu> {
         if colors_sh_degree_max > 3 {
             return Err(Error::Validation(
                 format!("colors_sh_degree_max {colors_sh_degree_max}"),
-                "no more than 3".into()
+                "no more than 3".into(),
             ));
         }
 
