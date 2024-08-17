@@ -24,7 +24,7 @@ kernel_wgsl!(
 );
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(super) struct Gaussian3dRenderForward1Arguments {
     pub colors_sh_degree_max: u32,
     pub filter_low_pass: f32,
@@ -53,14 +53,14 @@ pub(super) struct Gaussian3dRenderForward1Arguments {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(super) struct Gaussian3dRenderForward2Arguments {
     /// `P`
     pub point_count: u32,
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(super) struct Gaussian3dRenderForward3Arguments {
     /// `P`
     pub point_count: u32,
@@ -69,14 +69,14 @@ pub(super) struct Gaussian3dRenderForward3Arguments {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(super) struct Gaussian3dRenderForward5Arguments {
     /// `T`
     pub tile_touched_count: u32,
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(super) struct Gaussian3dRenderForward6Arguments {
     /// `I_X`
     pub image_size_x: u32,

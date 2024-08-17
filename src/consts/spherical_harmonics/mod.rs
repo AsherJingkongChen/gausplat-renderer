@@ -4,9 +4,11 @@ use std::f64::consts::PI;
 lazy_static! {
     /// The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
     ///
+    /// `[[f64; 1], [f64; 3], [f64; 5], [f64; 7]]`
+    ///
     /// ## Example
     /// ```rust
-    /// use gausplat_renderer::function::spherical_harmonics::SH_C;
+    /// use gausplat_renderer::consts::spherical_harmonics::SH_C;
     /// let degree = 3;
     /// let order = 2;
     /// let sh_c_p3_p2 = SH_C[degree][degree + order];

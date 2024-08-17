@@ -1,17 +1,17 @@
 use super::*;
 use burn::tensor::activation;
 
-impl<B: backend::Backend> Gaussian3dScene<B> {
-    /// `[P, 16, 3]`
-    ///
+impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
+    ///
+    /// `[P, 16, 3]`
     pub fn colors_sh(&self) -> Tensor<B, 3> {
         self.colors_sh.to_owned()
     }
 
-    /// `[P, 16, 3]`
-    ///
     /// The colors represented as orthonormalized spherical harmonics
+    ///
+    /// `[P, 16, 3]`
     pub fn set_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 3>,

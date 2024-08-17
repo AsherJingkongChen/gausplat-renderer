@@ -1,7 +1,7 @@
 mod kernel;
 mod point;
 
-pub use crate::scene::gaussian_3d::backend;
+pub use crate::scene::gaussian_3d::Backend;
 pub use gausplat_importer::scene::sparse_view;
 
 use crate::scene::gaussian_3d::Gaussian3dScene;
@@ -20,7 +20,7 @@ use rayon::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Gaussian3dRenderForwardOutput<B: backend::Backend> {
+pub struct Gaussian3dRenderForwardOutput<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: B::FloatTensorPrimitive<3>,
     /// `[P, 3 (+ 1)]`
@@ -407,8 +407,8 @@ impl Gaussian3dScene<Wgpu> {
                 &colors_rgb_3d,
                 &conics,
                 &opacities,
-                &positions_2d_in_screen,
                 &point_indexes,
+                &positions_2d_in_screen,
                 &tile_point_ranges,
                 &colors_rgb_2d,
                 &point_rendered_counts,

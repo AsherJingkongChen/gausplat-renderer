@@ -17,12 +17,12 @@ var<storage, read> conics: array<mat2x2<f32>>;
 // [P]
 @group(0) @binding(3)
 var<storage, read> opacities: array<f32>;
-// [P, 2]
-@group(0) @binding(4)
-var<storage, read> positions_2d_in_screen: array<vec2<f32>>;
 // [T]
-@group(0) @binding(5)
+@group(0) @binding(4)
 var<storage, read> point_indexes: array<u32>;
+// [P, 2]
+@group(0) @binding(5)
+var<storage, read> positions_2d_in_screen: array<vec2<f32>>;
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(6)
 var<storage, read> tile_point_ranges: array<vec2<u32>>;
@@ -104,6 +104,7 @@ fn main(
 
         // Specifying the batch parameters
 
+        workgroupBarrier();
         let index = tile_point_range.x + batch_index * BATCH_SIZE + local_index;
         if index < tile_point_range.y {
             let point_index = point_indexes[index];

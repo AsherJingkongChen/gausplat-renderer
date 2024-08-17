@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
 #[repr(C, packed(4))]
-#[derive(Copy, Clone, Debug, Eq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Eq, Pod, Zeroable)]
 pub(super) struct PointKeyAndIndex {
     pub key: [u32; 2],
     pub index: u32,

@@ -135,8 +135,8 @@ fn main(
 
     // Initializing the results
 
-    radii[index] = 0u;
-    tile_touched_counts[index] = 0u;
+    radii[index] = u32();
+    tile_touched_counts[index] = u32();
     tiles_touched_max[index] = vec2<u32>();
     tiles_touched_min[index] = vec2<u32>();
 
@@ -319,14 +319,14 @@ fn main(
     );
     var color_rgb_3d = color_sh_0[0] * SH_C_0[0];
 
-    var vd_x = 0.0;
-    var vd_y = 0.0;
-    var vd_z = 0.0;
-    var vd_xx = 0.0;
-    var vd_xy = 0.0;
-    var vd_yy = 0.0;
-    var vd_zz = 0.0;
-    var vd_zz_5_1 = 0.0;
+    var vd_x = f32();
+    var vd_y = f32();
+    var vd_z = f32();
+    var vd_xx = f32();
+    var vd_xy = f32();
+    var vd_yy = f32();
+    var vd_zz = f32();
+    var vd_zz_5_1 = f32();
 
     if arguments.colors_sh_degree_max >= 1 {
         vd_x = view_direction.x;
@@ -351,7 +351,10 @@ fn main(
             ),
         );
 
-        color_rgb_3d += color_sh_1[0] * (SH_C_1[0] * (vd_y)) + color_sh_1[1] * (SH_C_1[1] * (vd_z)) + color_sh_1[2] * (SH_C_1[2] * (vd_x));
+        color_rgb_3d +=
+            color_sh_1[0] * (SH_C_1[0] * (vd_y)) +
+            color_sh_1[1] * (SH_C_1[1] * (vd_z)) +
+            color_sh_1[2] * (SH_C_1[2] * (vd_x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
@@ -388,7 +391,12 @@ fn main(
             ),
         );
 
-        color_rgb_3d += color_sh_2[0] * (SH_C_2[0] * (vd_xy)) + color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) + color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) + color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) + color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
+        color_rgb_3d +=
+            color_sh_2[0] * (SH_C_2[0] * (vd_xy)) +
+            color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) +
+            color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
+            color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) +
+            color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
@@ -432,7 +440,14 @@ fn main(
             ),
         );
 
-        color_rgb_3d += color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) + color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) + color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) + color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) + color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) + color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) + color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+        color_rgb_3d +=
+            color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
+            color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) +
+            color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) +
+            color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
+            color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
+            color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
+            color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;

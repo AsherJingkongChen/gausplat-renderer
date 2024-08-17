@@ -3,13 +3,13 @@ pub mod render;
 
 pub use burn::{
     module::Module,
-    tensor::{backend, Data, Tensor},
+    tensor::{backend::Backend, Data, Tensor},
 };
 
 use std::fmt;
 
 #[derive(Module)]
-pub struct Gaussian3dScene<B: backend::Backend> {
+pub struct Gaussian3dScene<B: Backend> {
     /// `[P, 16, 3]`
     pub colors_sh: Tensor<B, 3>,
     /// `[P, 1]`
@@ -22,7 +22,7 @@ pub struct Gaussian3dScene<B: backend::Backend> {
     pub scalings: Tensor<B, 2>,
 }
 
-impl<B: backend::Backend> Default for Gaussian3dScene<B> {
+impl<B: Backend> Default for Gaussian3dScene<B> {
     fn default() -> Self {
         Self {
             colors_sh: Tensor::empty([0, 0, 0], &Default::default()),
@@ -34,12 +34,13 @@ impl<B: backend::Backend> Default for Gaussian3dScene<B> {
     }
 }
 
-impl<B: backend::Backend> fmt::Debug for Gaussian3dScene<B> {
+impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
     fn fmt(
         &self,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         f.debug_struct("Gaussian3dScene")
+            .field("devices", &self.devices())
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
             .field("positions.dims()", &self.positions.dims())
