@@ -1,17 +1,5 @@
-use std::{error, fmt};
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Gaussian3dRenderer(String),
+    #[error("Validation Error: {0} should be {1}")]
+    Validation(String, String),
 }
-
-impl fmt::Display for Error {
-    fn fmt(
-        &self,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl error::Error for Error {}
