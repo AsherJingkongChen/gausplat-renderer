@@ -15,6 +15,7 @@ bytemuck = {workspace = true, features = ["derive"]}
 derive-new = {workspace = true}
 lazy_static = {workspace = true}
 rayon = {workspace = true}
+thiserror = {workspace = true}
 
 [dev-dependencies]
 burn = {workspace = true, features = ["ndarray", "wgpu"]}

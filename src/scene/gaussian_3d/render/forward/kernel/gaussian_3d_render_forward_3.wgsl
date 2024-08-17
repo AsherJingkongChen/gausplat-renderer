@@ -7,7 +7,7 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-// [P]
+// [P] (0.0 ~ )
 @group(0) @binding(1)
 var<storage, read> depths: array<f32>;
 // [P]

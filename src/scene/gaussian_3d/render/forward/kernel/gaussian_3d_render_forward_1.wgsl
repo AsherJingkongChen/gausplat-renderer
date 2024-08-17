@@ -33,9 +33,9 @@ var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
 // [P, 3]
 @group(0) @binding(2)
 var<storage, read> positions: array<array<f32, 3>>;
-// [P, 4]
+// [P, 4] (x, y, z, w) (Normalized)
 @group(0) @binding(3)
-var<storage, read> rotations: array<array<f32, 4>>;
+var<storage, read> rotations: array<vec4<f32>>;
 // [P, 3]
 @group(0) @binding(4)
 var<storage, read> scalings: array<array<f32, 3>>;
@@ -45,19 +45,19 @@ var<storage, read> view_position: vec3<f32>;
 // [4, 4]
 @group(0) @binding(6)
 var<storage, read> view_transform: mat4x4<f32>;
-// [P, 3]
+// [P, 3] (0.0, 1.0)
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
-// [P, 2, 2]
+// [P, 2, 2] (Symmetric)
 @group(0) @binding(8)
 var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P, 3, 3]
+// [P, 3, 3] (Symmetric)
 @group(0) @binding(9)
 var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
-// [P]
+// [P] (0.0 ~ )
 @group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
-// [P, 3]
+// [P, 3] (0.0, 1.0)
 @group(0) @binding(11)
 var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
 // [P, 2]
@@ -114,25 +114,6 @@ fn main(
         return;
     }
 
-    // Specifying the parameters
-
-    let position = vec3<f32>(
-        positions[index][0],
-        positions[index][1],
-        positions[index][2],
-    );
-    let quaternion = vec4<f32>(
-        rotations[index][1],
-        rotations[index][2],
-        rotations[index][3],
-        rotations[index][0],
-    );
-    let scaling = vec3<f32>(
-        scalings[index][0],
-        scalings[index][1],
-        scalings[index][2],
-    );
-
     // Initializing the results
 
     radii[index] = u32();
@@ -143,6 +124,11 @@ fn main(
     // Transforming 3D positions from world space to view space
     // pv[3, P] = vr[3, 3] * pw[3, P] + vt[3, P]
 
+    let position = vec3<f32>(
+        positions[index][0],
+        positions[index][1],
+        positions[index][2],
+    );
     let view_rotation = mat3x3<f32>(
         view_transform[0][0], view_transform[0][1], view_transform[0][2],
         view_transform[1][0], view_transform[1][1], view_transform[1][2],
@@ -167,6 +153,7 @@ fn main(
     // Converting the quaternion to rotation matrix
     // r[P, 3, 3] (Symmetric) = q[P, 4] (x, y, z, w)
 
+    let quaternion = rotations[index];
     let q_wx = quaternion.w * quaternion.x;
     let q_wy = quaternion.w * quaternion.y;
     let q_wz = quaternion.w * quaternion.z;
@@ -186,6 +173,11 @@ fn main(
         (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
         (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
     ) * 2.0;
+    let scaling = vec3<f32>(
+        scalings[index][0],
+        scalings[index][1],
+        scalings[index][2],
+    );
     let rotation_scaling = mat3x3<f32>(
         rotation[0] * scaling[0],
         rotation[1] * scaling[1],
@@ -459,31 +451,22 @@ fn main(
 
     // [P, 3]
     colors_rgb_3d[index] = color_rgb_3d;
-
     // [P, 2, 2] (Symmetric)
     conics[index] = conic;
-
     // [P, 3, 3] (Symmetric)
     covariances_3d[index] = covariance_3d;
-
     // [P]
     depths[index] = depth;
-
-    // [P, 3] (0.0, 1.0)
+    // [P, 3]
     is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
-
     // [P, 2]
     positions_2d_in_screen[index] = position_2d_in_screen;
-
     // [P]
     radii[index] = u32(radius);
-
     // [P]
     tile_touched_counts[index] = tile_touched_count;
-
     // [P, 2]
     tiles_touched_max[index] = tile_touched_max;
-
     // [P, 2]
     tiles_touched_min[index] = tile_touched_min;
 }
