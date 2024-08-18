@@ -7,7 +7,7 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-// [P] (0.0 ~ )
+// [P] (0.2 ~ )
 @group(0) @binding(1)
 var<storage, read> depths: array<f32>;
 // [P]
@@ -26,7 +26,7 @@ var<storage, read> tiles_touched_min: array<vec2<u32>>;
 @group(0) @binding(6)
 var<storage, read_write> point_keys_and_indexes: array<array<u32, 3>>;
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(256, 1, 1)
 fn main(
     // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,

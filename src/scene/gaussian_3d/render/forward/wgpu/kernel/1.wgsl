@@ -54,7 +54,7 @@ var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 3, 3] (Symmetric)
 @group(0) @binding(9)
 var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
-// [P] (0.0 ~ )
+// [P] (0.2 ~ )
 @group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
 // [P, 3] (0.0, 1.0)
@@ -102,7 +102,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
 );
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(256, 1, 1)
 fn main(
     // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -130,15 +130,11 @@ fn main(
         positions[index][2],
     );
     let view_rotation = mat3x3<f32>(
-        view_transform[0][0], view_transform[0][1], view_transform[0][2],
-        view_transform[1][0], view_transform[1][1], view_transform[1][2],
-        view_transform[2][0], view_transform[2][1], view_transform[2][2],
+        view_transform[0].xyz,
+        view_transform[1].xyz,
+        view_transform[2].xyz,
     );
-    let view_translation = vec3<f32>(
-        view_transform[3][0],
-        view_transform[3][1],
-        view_transform[3][2],
-    );
+    let view_translation = view_transform[3].xyz;
     let position_3d_in_view = view_rotation * position + view_translation;
     let depth = position_3d_in_view.z + EPSILON;
     let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
@@ -204,10 +200,8 @@ fn main(
 
     // [2, 3]
     let projection_jacobian = mat3x2<f32>(
-        focal_length_x_normalized,
-        0.0,
-        0.0,
-        focal_length_y_normalized,
+        focal_length_x_normalized, 0.0,
+        0.0, focal_length_y_normalized,
         -focal_length_x_normalized * position_3d_in_view_x_normalized_clamped,
         -focal_length_y_normalized * position_3d_in_view_y_normalized_clamped,
     );

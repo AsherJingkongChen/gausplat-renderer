@@ -12,7 +12,7 @@ var<storage, read> point_tile_indexes: array<u32>;
 @group(0) @binding(2)
 var<storage, read_write> tile_point_ranges: array<u32>;
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(256, 1, 1)
 fn main(
     // (1 ~ T)
     @builtin(global_invocation_id) global_id: vec3<u32>,

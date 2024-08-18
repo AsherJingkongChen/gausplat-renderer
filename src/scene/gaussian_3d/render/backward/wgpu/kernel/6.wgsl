@@ -57,7 +57,7 @@ const OPACITY_MAX: f32 = 0.99;
 const OPACITY_MIN: f32 = 1.0 / 255.0;
 const TRANSMITTANCE_MIN: f32 = 1e-4;
 
-@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y)
+@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y, 1)
 fn main(
     // (0 ~ T_X * T_Y)
     @builtin(local_invocation_index) local_index: u32,
@@ -93,11 +93,11 @@ fn main(
 
         if is_pixel_done && !was_pixel_done {
             was_pixel_done = true;
-            atomicAdd(&pixel_done_count, 1u);
+            let count = atomicAdd(&pixel_done_count, 1u) + 1u;
 
             // Leaving if all the pixels of tile are done
 
-            if atomicLoad(&pixel_done_count) == BATCH_SIZE {
+            if count == BATCH_SIZE {
                 break;
             }
         }

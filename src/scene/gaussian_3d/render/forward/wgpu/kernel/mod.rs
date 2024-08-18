@@ -1,31 +1,15 @@
-use burn::backend::wgpu::kernel_wgsl;
+use burn::backend::wgpu::{KernelSource, SourceTemplate};
 use bytemuck::{Pod, Zeroable};
-use derive_new::new;
 
-kernel_wgsl!(
-    Gaussian3dRenderForward1,
-    "./gaussian_3d_render_forward_1.wgsl"
-);
-kernel_wgsl!(
-    Gaussian3dRenderForward2,
-    "./gaussian_3d_render_forward_2.wgsl"
-);
-kernel_wgsl!(
-    Gaussian3dRenderForward3,
-    "./gaussian_3d_render_forward_3.wgsl"
-);
-kernel_wgsl!(
-    Gaussian3dRenderForward5,
-    "./gaussian_3d_render_forward_5.wgsl"
-);
-kernel_wgsl!(
-    Gaussian3dRenderForward6,
-    "./gaussian_3d_render_forward_6.wgsl"
-);
+pub struct Kernel1WgslSource;
+pub struct Kernel2WgslSource;
+pub struct Kernel3WgslSource;
+pub struct Kernel5WgslSource;
+pub struct Kernel6WgslSource;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct Gaussian3dRenderForward1Arguments {
+pub struct Kernel1Arguments {
     pub colors_sh_degree_max: u32,
     pub filter_low_pass: f32,
     pub focal_length_x: f32,
@@ -54,14 +38,14 @@ pub(super) struct Gaussian3dRenderForward1Arguments {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct Gaussian3dRenderForward2Arguments {
+pub struct Kernel2Arguments {
     /// `P`
     pub point_count: u32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct Gaussian3dRenderForward3Arguments {
+pub struct Kernel3Arguments {
     /// `P`
     pub point_count: u32,
     /// `I_X / T_X`
@@ -70,16 +54,42 @@ pub(super) struct Gaussian3dRenderForward3Arguments {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct Gaussian3dRenderForward5Arguments {
+pub struct Kernel5Arguments {
     /// `T`
     pub tile_touched_count: u32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub(super) struct Gaussian3dRenderForward6Arguments {
+pub struct Kernel6Arguments {
     /// `I_X`
     pub image_size_x: u32,
     /// `I_Y`
     pub image_size_y: u32,
+}
+
+impl KernelSource for Kernel1WgslSource {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./1.wgsl"))
+    }
+}
+impl KernelSource for Kernel2WgslSource {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./2.wgsl"))
+    }
+}
+impl KernelSource for Kernel3WgslSource {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./3.wgsl"))
+    }
+}
+impl KernelSource for Kernel5WgslSource {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./5.wgsl"))
+    }
+}
+impl KernelSource for Kernel6WgslSource {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./6.wgsl"))
+    }
 }

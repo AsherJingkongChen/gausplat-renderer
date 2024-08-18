@@ -15,7 +15,7 @@ var<storage, read_write> tile_touched_count: u32;
 @group(0) @binding(3)
 var<storage, read_write> tile_touched_offsets: array<u32>;
 
-@compute @workgroup_size(1)
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     // Specifying the parameters
 

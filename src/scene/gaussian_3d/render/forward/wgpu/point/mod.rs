@@ -2,19 +2,19 @@ use bytemuck::{Pod, Zeroable};
 
 #[repr(C, packed(4))]
 #[derive(Clone, Copy, Debug, Eq, Pod, Zeroable)]
-pub(super) struct PointKeyAndIndex {
+pub struct PointKeyAndIndex {
     pub key: [u32; 2],
     pub index: u32,
 }
 
 impl PointKeyAndIndex {
     #[inline]
-    pub(super) fn key(&self) -> u64 {
+    pub fn key(&self) -> u64 {
         (self.key[0] as u64) << 32 | (self.key[1] as u64)
     }
 
     #[inline]
-    pub(super) fn tile_index(&self) -> u32 {
+    pub fn tile_index(&self) -> u32 {
         self.key[0]
     }
 }
