@@ -9,7 +9,7 @@ use burn::{
     },
     tensor::ops::{FloatTensor, IntTensor},
 };
-use bytemuck::{bytes_of, cast_slice, cast_slice_mut, from_bytes};
+use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use rayon::{
     iter::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
@@ -44,7 +44,7 @@ pub struct RendererOutput<B: Backend> {
     /// `[P, 3]`
     pub positions: B::FloatTensorPrimitive<2>,
     /// `[P, 2]`
-    pub positions_2d_in_screen: B::FloatTensorPrimitive<2>,
+    pub positions_2d: B::FloatTensorPrimitive<2>,
     /// `[P]`
     pub radii: B::IntTensorPrimitive<1>,
     /// `[P, 4]`
@@ -66,11 +66,9 @@ pub struct RendererOutput<B: Backend> {
 pub(super) fn render_gaussian_3d_scene_wgpu(
     scene: &Gaussian3dScene<Wgpu>,
     view: &sparse_view::View,
-    options: &RenderOptions,
+    options: &RendererOptions,
 ) -> forward::RendererOutput<Wgpu> {
     use wgpu::*;
-
-    let mut duration = std::time::Instant::now();
 
     // Specifying the parameters
 
@@ -164,7 +162,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     // [P, 3 (+ 1)] (the alignment of vec3<f32> is 16 = (3 + 1) * 4 bytes)
     let is_colors_rgb_3d_clamped = client.empty(point_count * (3 + 1) * 4);
     // [P, 2]
-    let positions_2d_in_screen = client.empty(point_count * 2 * 4);
+    let positions_2d = client.empty(point_count * 2 * 4);
     // [P]
     let radii = client.empty(point_count * 4);
     // [P]
@@ -201,7 +199,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &covariances_3d,
             &depths,
             &is_colors_rgb_3d_clamped,
-            &positions_2d_in_screen,
+            &positions_2d,
             &radii,
             &tile_touched_counts,
             &tiles_touched_max,
@@ -209,37 +207,28 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         ],
     );
 
-    println!("wgsl 1: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
-
     // Performing the forward pass #2
 
-    let arguments = client.create(bytes_of(&Kernel2Arguments {
-        point_count: point_count as u32,
-    }));
-    // T
-    let tile_touched_count = client.empty(4);
-    // [P]
-    let tile_touched_offsets = client.empty(point_count * 4);
+    // (T, [P])
+    let (tile_touched_count, tile_touched_offsets) = {
+        let counts = &client.read(&tile_touched_counts).read();
+        let counts = cast_slice::<u8, u32>(counts).to_vec();
 
-    client.execute(
-        Kernel::Custom(Box::new(SourceKernel::new(
-            Kernel2WgslSource,
-            WorkGroup { x: 1, y: 1, z: 1 },
-            WorkgroupSize { x: 1, y: 1, z: 1 },
-        ))),
-        &[
-            &arguments,
-            &tile_touched_counts,
-            &tile_touched_count,
-            &tile_touched_offsets,
-        ],
-    );
+        let mut count = *counts.last().unwrap_or(&0);
+        let offsets = counts
+            .into_iter()
+            .scan(0, |state, count| {
+                let offset = *state;
+                *state += count;
+                Some(offset)
+            })
+            .collect::<Vec<_>>();
+        count += *offsets.last().unwrap_or(&0);
 
-    client.sync();
+        (count as usize, client.create(cast_slice(&offsets)))
+    };
 
-    println!("wgsl 2: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    println!("tile_touched_count (wgsl): {:?}", tile_touched_count);
 
     // Performing the forward pass #3
 
@@ -247,13 +236,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         point_count: point_count as u32,
         tile_count_x,
     }));
-    // T
-    let tile_touched_count =
-        *from_bytes::<u32>(&client.read(&tile_touched_count).read()) as usize;
-    // [T, 3] ([tile_index, depth, point_index])
     let point_keys_and_indexes = client.empty(tile_touched_count * 3 * 4);
-
-    println!("tile_touched_count (wgsl): {:?}", tile_touched_count);
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -280,9 +263,6 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         ],
     );
 
-    println!("wgsl 3: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
-
     // Performing the forward pass #4
 
     // ([T], [T])
@@ -299,9 +279,6 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             .map(|point| (point.index, point.tile_index()))
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
-
-    println!("wgsl 4: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
 
     // Performing the forward pass #5
 
@@ -343,9 +320,6 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         &[&arguments, &point_tile_indexes, &tile_point_ranges],
     );
 
-    println!("wgsl 5: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
-
     // Performing the forward pass #6
 
     let arguments = client.create(bytes_of(&Kernel6Arguments {
@@ -381,16 +355,13 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &conics,
             &opacities,
             &point_indexes,
-            &positions_2d_in_screen,
+            &positions_2d,
             &tile_point_ranges,
             &colors_rgb_2d,
             &point_rendered_counts,
             &transmittances,
         ],
     );
-
-    println!("wgsl 6: {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
 
     // Specifying the results
 
@@ -472,11 +443,11 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             positions,
         ),
         // [P, 2]
-        positions_2d_in_screen: FloatTensor::<Wgpu, 2>::new(
+        positions_2d: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
             [point_count, 2].into(),
-            positions_2d_in_screen,
+            positions_2d,
         ),
         // [P]
         radii: IntTensor::<Wgpu, 1>::new(
@@ -530,8 +501,6 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             view_transform,
         ),
     };
-
-    println!("wgsl 7: {:?}", duration.elapsed());
 
     output
 }

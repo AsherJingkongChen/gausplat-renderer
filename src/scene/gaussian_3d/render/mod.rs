@@ -15,18 +15,18 @@ pub type Wgpu =
 pub trait Gaussian3dRenderer<B: Backend> {
     fn backward(
         output: forward::RendererOutput<B>,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> backward::RendererOutput<B>;
 
     fn forward(
         scene: &Gaussian3dScene<B>,
         view: &sparse_view::View,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> forward::RendererOutput<B>;
 }
 
 #[derive(Clone, Copy, Default, Debug)]
-pub struct RenderOptions {
+pub struct RendererOptions {
     pub colors_sh_degree_max: u32,
 }
 
@@ -45,7 +45,7 @@ impl Gaussian3dScene<Wgpu> {
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> RenderOutput<Wgpu> {
         let output = Self::forward(self, view, options);
         let colors_rgb_2d = Tensor::new(output.colors_rgb_2d);
@@ -58,7 +58,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> Tensor<Autodiff<Wgpu>, 3> {
         use burn::backend::autodiff::{
             checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
@@ -118,7 +118,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn backward(
         output: forward::RendererOutput<Wgpu>,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> backward::RendererOutput<Wgpu> {
         backward::render_gaussian_3d_scene_wgpu(output, options)
     }
@@ -126,7 +126,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn forward(
         scene: &Gaussian3dScene<Wgpu>,
         view: &sparse_view::View,
-        options: &RenderOptions,
+        options: &RendererOptions,
     ) -> forward::RendererOutput<Wgpu> {
         forward::render_gaussian_3d_scene_wgpu(scene, view, options)
     }

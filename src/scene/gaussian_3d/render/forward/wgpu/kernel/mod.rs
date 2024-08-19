@@ -38,13 +38,6 @@ pub struct Kernel1Arguments {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct Kernel2Arguments {
-    /// `P`
-    pub point_count: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Kernel3Arguments {
     /// `P`
     pub point_count: u32,
@@ -71,11 +64,6 @@ pub struct Kernel6Arguments {
 impl KernelSource for Kernel1WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./1.wgsl"))
-    }
-}
-impl KernelSource for Kernel2WgslSource {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./2.wgsl"))
     }
 }
 impl KernelSource for Kernel3WgslSource {

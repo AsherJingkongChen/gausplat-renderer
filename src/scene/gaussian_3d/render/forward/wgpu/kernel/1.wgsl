@@ -62,7 +62,7 @@ var<storage, read_write> depths: array<f32>;
 var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
 // [P, 2]
 @group(0) @binding(12)
-var<storage, read_write> positions_2d_in_screen: array<vec2<f32>>;
+var<storage, read_write> positions_2d: array<vec2<f32>>;
 // [P]
 @group(0) @binding(13)
 var<storage, read_write> radii: array<u32>;
@@ -145,6 +145,24 @@ fn main(
     if depth <= 0.2 {
         return;
     }
+
+    // Transforming 3D positions from view space (normalized) to screen space (2D)
+    // ps[2, P] = pv[3, P]
+
+    // P.xyz = view_rotation.3x3 * M.xyz + view_translation.xyz
+    // Q.xy = P.xyz / P.z * focal_length.xy + image_size_half.xy - 0.5
+    
+    // dPx'/dPx = 1 / Pz * Fx
+    // dPx/dMx = V[0][0]
+    // dPy/dMy = V[1][1]
+    // dPz/dMz = V[2][2]
+    // dPz'/dPz = 0
+    // dPz'/dMz = 0
+
+    let position_2d = vec2<f32>(
+        position_3d_in_view_x_normalized * arguments.focal_length_x + arguments.image_size_half_x - 0.5,
+        position_3d_in_view_y_normalized * arguments.focal_length_y + arguments.image_size_half_y - 0.5,
+    );
 
     // Converting the quaternion to rotation matrix
     // r[P, 3, 3] (Symmetric) = q[P, 4] (x, y, z, w)
@@ -242,14 +260,6 @@ fn main(
     );
     let radius = ceil(sqrt(extent_max) * 3.0);
 
-    // Transforming 3D positions from view space (normalized) to screen space (2D)
-    // ps[2, P] = pv[3, P]
-
-    let position_2d_in_screen = vec2<f32>(
-        position_3d_in_view_x_normalized * arguments.focal_length_x + arguments.image_size_half_x - 0.5,
-        position_3d_in_view_y_normalized * arguments.focal_length_y + arguments.image_size_half_y - 0.5,
-    );
-
     // Finding the tiles touched
 
     let tile_size_f32 = vec2<f32>(
@@ -258,24 +268,24 @@ fn main(
     );
     let tile_touched_max = vec2<u32>(
         clamp(
-            u32((position_2d_in_screen.x + radius + tile_size_f32.x - 1.0) / tile_size_f32.x),
+            u32((position_2d.x + radius + tile_size_f32.x - 1.0) / tile_size_f32.x),
             0u,
             arguments.tile_count_x,
         ),
         clamp(
-            u32((position_2d_in_screen.y + radius + tile_size_f32.y - 1.0) / tile_size_f32.y),
+            u32((position_2d.y + radius + tile_size_f32.y - 1.0) / tile_size_f32.y),
             0u,
             arguments.tile_count_y,
         ),
     );
     let tile_touched_min = vec2<u32>(
         clamp(
-            u32((position_2d_in_screen.x - radius) / tile_size_f32.x),
+            u32((position_2d.x - radius) / tile_size_f32.x),
             0u,
             arguments.tile_count_x,
         ),
         clamp(
-            u32((position_2d_in_screen.y - radius) / tile_size_f32.y),
+            u32((position_2d.y - radius) / tile_size_f32.y),
             0u,
             arguments.tile_count_y,
         ),
@@ -454,7 +464,7 @@ fn main(
     // [P, 3]
     is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
     // [P, 2]
-    positions_2d_in_screen[index] = position_2d_in_screen;
+    positions_2d[index] = position_2d;
     // [P]
     radii[index] = u32(radius);
     // [P]
