@@ -102,14 +102,18 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
 );
 
-@compute @workgroup_size(256, 1, 1)
+const GROUP_SIZE_X: u32 = 16;
+const GROUP_SIZE_Y: u32 = 16;
+
+@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(
-    // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
     // Checking the index
 
-    let index = global_id.x;
+    // (0 ~ P)
+    let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
     if index >= arguments.point_count {
         return;
     }
@@ -148,16 +152,6 @@ fn main(
 
     // Transforming 3D positions from view space (normalized) to screen space (2D)
     // ps[2, P] = pv[3, P]
-
-    // P.xyz = view_rotation.3x3 * M.xyz + view_translation.xyz
-    // Q.xy = P.xyz / P.z * focal_length.xy + image_size_half.xy - 0.5
-    
-    // dPx'/dPx = 1 / Pz * Fx
-    // dPx/dMx = V[0][0]
-    // dPy/dMy = V[1][1]
-    // dPz/dMz = V[2][2]
-    // dPz'/dPz = 0
-    // dPz'/dMz = 0
 
     let position_2d = vec2<f32>(
         position_3d_in_view_x_normalized * arguments.focal_length_x + arguments.image_size_half_x - 0.5,
@@ -216,7 +210,6 @@ fn main(
         arguments.view_bound_y,
     );
 
-    // [2, 3]
     let projection_jacobian = mat3x2<f32>(
         focal_length_x_normalized, 0.0,
         0.0, focal_length_y_normalized,
@@ -299,7 +292,7 @@ fn main(
     }
 
     // Computing the view direction in world space
-    // d[3, P] = pw[3, P] - vw[3, 1]
+    // vd[3, P] = pw[3, P] - vw[3, 1]
 
     let view_direction = normalize(position - view_position);
 

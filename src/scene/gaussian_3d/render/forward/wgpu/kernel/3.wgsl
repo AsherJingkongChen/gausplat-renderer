@@ -26,14 +26,18 @@ var<storage, read> tiles_touched_min: array<vec2<u32>>;
 @group(0) @binding(6)
 var<storage, read_write> point_keys_and_indexes: array<array<u32, 3>>;
 
-@compute @workgroup_size(256, 1, 1)
+const GROUP_SIZE_X: u32 = 16;
+const GROUP_SIZE_Y: u32 = 16;
+
+@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(
-    // (0 ~ P)
     @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
     // Checking the index
 
-    let index = global_id.x;
+    // (0 ~ P)
+    let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
     if index >= arguments.point_count {
         return;
     }

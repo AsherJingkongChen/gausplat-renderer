@@ -23,7 +23,7 @@ var<storage, read> point_indexes: array<u32>;
 // [P, 2]
 @group(0) @binding(5)
 var<storage, read> positions_2d: array<vec2<f32>>;
-// [(I_X / T_X) * (I_Y / T_Y), 2]
+// [I_Y / T_Y, I_X / T_X, 2]
 @group(0) @binding(6)
 var<storage, read> tile_point_ranges: array<vec2<u32>>;
 // [I_Y, I_X, 3] (0.0 ~ 1.0)
@@ -48,20 +48,18 @@ var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 var<workgroup> pixel_done_count: atomic<u32>;
 
 // T_X
-const TILE_SIZE_X: u32 = 16;
+const GROUP_SIZE_X: u32 = 16;
 // T_Y
-const TILE_SIZE_Y: u32 = 16;
+const GROUP_SIZE_Y: u32 = 16;
 // T_X * T_Y
-const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
+const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 const OPACITY_MAX: f32 = 0.99;
 const OPACITY_MIN: f32 = 1.0 / 255.0;
 const TRANSMITTANCE_MIN: f32 = 1e-4;
 
-@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y, 1)
+@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(
-    // (0 ~ I_X, 0 ~ I_Y)
     @builtin(global_invocation_id) global_id: vec3<u32>,
-    // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     @builtin(workgroup_id) group_id: vec3<u32>,
     // (I_X / T_X, I_Y / T_Y)
     @builtin(num_workgroups) group_count: vec3<u32>,
@@ -70,10 +68,13 @@ fn main(
 ) {
     // Specifying the parameters
 
+    // (0 ~ I_X, 0 ~ I_Y)
     let pixel = global_id.xy;
     let pixel_f32 = vec2<f32>(pixel);
     let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
+
+    // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
 

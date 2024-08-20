@@ -2,7 +2,6 @@ use burn::backend::wgpu::{KernelSource, SourceTemplate};
 use bytemuck::{Pod, Zeroable};
 
 pub struct Kernel1WgslSource;
-pub struct Kernel2WgslSource;
 pub struct Kernel3WgslSource;
 pub struct Kernel5WgslSource;
 pub struct Kernel6WgslSource;

@@ -72,8 +72,6 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
 
     // Specifying the parameters
 
-    // T_X * T_Y
-    let batch_size = TILE_SIZE_X * TILE_SIZE_Y;
     let colors_sh_degree_max = options.colors_sh_degree_max;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
@@ -90,16 +88,16 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     let focal_length_y =
         (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
+    // T_X
+    let tile_size_x = GROUP_SIZE_X;
+    // T_Y
+    let tile_size_y = GROUP_SIZE_Y;
     // I_X / T_X
-    let tile_count_x = (image_size_x as u32 + TILE_SIZE_X - 1) / TILE_SIZE_X;
+    let tile_count_x = (image_size_x as u32 + tile_size_x - 1) / tile_size_x;
     // I_Y / T_Y
-    let tile_count_y = (image_size_y as u32 + TILE_SIZE_Y - 1) / TILE_SIZE_Y;
+    let tile_count_y = (image_size_y as u32 + tile_size_y - 1) / tile_size_y;
     // (I_X / T_X) * (I_Y / T_Y)
     let tile_count = (tile_count_x * tile_count_y) as usize;
-    // T_X
-    let tile_size_x = TILE_SIZE_X;
-    // T_Y
-    let tile_size_y = TILE_SIZE_Y;
     let view_bound_x =
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     let view_bound_y =
@@ -112,6 +110,8 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     };
 
     // Performing the forward pass #1
+
+    let mut duration = std::time::Instant::now();
 
     let arguments = client.create(bytes_of(&Kernel1Arguments {
         colors_sh_degree_max,
@@ -130,6 +130,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         view_bound_x,
         view_bound_y,
     }));
+
     // [P, 3]
     let positions = into_contiguous(scene.positions().into_primitive()).handle;
     // [P, 1]
@@ -176,13 +177,13 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         Kernel::Custom(Box::new(SourceKernel::new(
             Kernel1WgslSource,
             WorkGroup {
-                x: (point_count as u32 + batch_size - 1) / batch_size,
+                x: (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
                 y: 1,
                 z: 1,
             },
             WorkgroupSize {
-                x: batch_size,
-                y: 1,
+                x: GROUP_SIZE_X,
+                y: GROUP_SIZE_Y,
                 z: 1,
             },
         ))),
@@ -207,6 +208,10 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         ],
     );
 
+    client.sync();
+    println!("Duration (Forward 1): {:?}", duration.elapsed());
+    duration = std::time::Instant::now();
+
     // Performing the forward pass #2
 
     // (T, [P])
@@ -230,6 +235,9 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
 
     println!("tile_touched_count (wgsl): {:?}", tile_touched_count);
 
+    println!("Duration (Forward 2): {:?}", duration.elapsed());
+    duration = std::time::Instant::now();
+
     // Performing the forward pass #3
 
     let arguments = client.create(bytes_of(&Kernel3Arguments {
@@ -242,13 +250,13 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         Kernel::Custom(Box::new(SourceKernel::new(
             Kernel3WgslSource,
             WorkGroup {
-                x: (point_count as u32 + batch_size - 1) / batch_size,
+                x: (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
                 y: 1,
                 z: 1,
             },
             WorkgroupSize {
-                x: batch_size,
-                y: 1,
+                x: GROUP_SIZE_X,
+                y: GROUP_SIZE_Y,
                 z: 1,
             },
         ))),
@@ -262,6 +270,10 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &point_keys_and_indexes,
         ],
     );
+
+    client.sync();
+    println!("Duration (Forward 3): {:?}", duration.elapsed());
+    duration = std::time::Instant::now();
 
     // Performing the forward pass #4
 
@@ -280,12 +292,15 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
 
+    println!("Duration (Forward 4): {:?}", duration.elapsed());
+    duration = std::time::Instant::now();
+
     // Performing the forward pass #5
 
     let arguments = client.create(bytes_of(&Kernel5Arguments {
         tile_touched_count: tile_touched_count as u32,
     }));
-    // [(I_X / T_X) * (I_Y / T_Y), 2]
+    // [I_Y / T_Y, I_X / T_X, 2]
     let tile_point_ranges = {
         let mut ranges = vec![[0; 2]; tile_count];
 
@@ -307,18 +322,21 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         Kernel::Custom(Box::new(SourceKernel::new(
             Kernel5WgslSource,
             WorkGroup {
-                x: (tile_touched_count as u32 + batch_size - 1) / batch_size,
+                x: (tile_touched_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
                 y: 1,
                 z: 1,
             },
             WorkgroupSize {
-                x: batch_size,
-                y: 1,
+                x: GROUP_SIZE_X,
+                y: GROUP_SIZE_Y,
                 z: 1,
             },
         ))),
         &[&arguments, &point_tile_indexes, &tile_point_ranges],
     );
+
+    client.sync();
+    println!("Duration (Forward 5): {:?}", duration.elapsed());
 
     // Performing the forward pass #6
 
@@ -362,6 +380,9 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &transmittances,
         ],
     );
+
+    client.sync();
+    println!("Duration (Forward 6): {:?}", duration.elapsed());
 
     // Specifying the results
 
@@ -470,7 +491,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             [point_count, 3].into(),
             scalings,
         ),
-        // [(I_X / T_X) * (I_Y / T_Y), 2]
+        // [I_Y / T_Y, I_X / T_X, 2]
         tile_point_ranges: IntTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
