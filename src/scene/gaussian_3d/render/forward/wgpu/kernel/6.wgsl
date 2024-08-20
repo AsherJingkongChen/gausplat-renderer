@@ -16,7 +16,7 @@ var<storage, read> colors_rgb_3d: array<vec3<f32>>;
 var<storage, read> conics: array<mat2x2<f32>>;
 // [P] (0.0 ~ 1.0)
 @group(0) @binding(3)
-var<storage, read> opacities: array<f32>;
+var<storage, read> opacities_3d: array<f32>;
 // [T] (0 ~ P)
 @group(0) @binding(4)
 var<storage, read> point_indexes: array<u32>;
@@ -41,14 +41,14 @@ var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
 // [T_X * T_Y, 2, 2]
 var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
 // [T_X * T_Y]
-var<workgroup> batch_opacities: array<f32, BATCH_SIZE>;
+var<workgroup> batch_opacities_3d: array<f32, BATCH_SIZE>;
 // [T_X * T_Y, 2]
 var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_X * T_Y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
-const OPACITY_MAX: f32 = 0.99;
-const OPACITY_MIN: f32 = 1.0 / 255.0;
+const OPACITY_2D_MAX: f32 = 0.99;
+const OPACITY_2D_MIN: f32 = 1.0 / 255.0;
 const TRANSMITTANCE_MIN: f32 = 1e-4;
 // T_X
 const GROUP_SIZE_X: u32 = 16;
@@ -112,7 +112,7 @@ fn main(
             let point_index = point_indexes[index];
             batch_colors_rgb_3d[local_index] = colors_rgb_3d[point_index];
             batch_conics[local_index] = conics[point_index];
-            batch_opacities[local_index] = opacities[point_index];
+            batch_opacities_3d[local_index] = opacities_3d[point_index];
             batch_positions_2d[local_index] = positions_2d[point_index];
         }
         workgroupBarrier();
@@ -131,7 +131,7 @@ fn main(
         for (var batch_index = 0u; batch_index < batch_point_count; batch_index++) {
             point_rendered_state++;
 
-            // Computing the density of the point
+            // Computing the density
             // a[I_Y, I_X, 1, 1] =
             // d[I_Y, I_X, 1, 2] * c'^-1[I_Y, I_X, 2, 2] * d[I_Y, I_X, 2, 1]
 
@@ -146,16 +146,14 @@ fn main(
                 continue;
             }
 
-            // Computing the opacity of the pixel
+            // Computing the 2D opacity
 
-            let opacity_2d = min(
-                batch_opacities[batch_index] * density,
-                OPACITY_MAX,
-            );
+            let opacity_3d = batch_opacities_3d[batch_index];
+            let opacity_2d = min(opacity_3d * density, OPACITY_2D_MAX);
 
-            // Skipping if the opacity is too low
+            // Skipping if the 2D opacity is too low
 
-            if opacity_2d < OPACITY_MIN {
+            if opacity_2d < OPACITY_2D_MIN {
                 continue;
             }
 

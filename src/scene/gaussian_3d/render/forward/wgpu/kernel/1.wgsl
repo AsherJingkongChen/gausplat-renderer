@@ -32,7 +32,7 @@ var<storage, read> arguments: Arguments;
 var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
 // [P, 3]
 @group(0) @binding(2)
-var<storage, read> positions: array<array<f32, 3>>;
+var<storage, read> positions_3d: array<array<f32, 3>>;
 // [P, 4] (x, y, z, w) (Normalized)
 @group(0) @binding(3)
 var<storage, read> rotations: array<vec4<f32>>;
@@ -128,10 +128,10 @@ fn main(
     // Transforming 3D positions from world space to view space
     // pv[3, P] = vr[3, 3] * pw[3, P] + vt[3, P]
 
-    let position = vec3<f32>(
-        positions[index][0],
-        positions[index][1],
-        positions[index][2],
+    let position_3d = vec3<f32>(
+        positions_3d[index][0],
+        positions_3d[index][1],
+        positions_3d[index][2],
     );
     let view_rotation = mat3x3<f32>(
         view_transform[0].xyz,
@@ -139,7 +139,7 @@ fn main(
         view_transform[2].xyz,
     );
     let view_translation = view_transform[3].xyz;
-    let position_3d_in_view = view_rotation * position + view_translation;
+    let position_3d_in_view = view_rotation * position_3d + view_translation;
     let depth = position_3d_in_view.z + EPSILON;
     let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
     let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
@@ -294,7 +294,7 @@ fn main(
     // Computing the view direction in world space
     // vd[3, P] = pw[3, P] - vw[3, 1]
 
-    let view_direction = normalize(position - view_position);
+    let view_direction = normalize(position_3d - view_position);
 
     // Transforming 3D color from SH space to RGB space
     // c_rgb[P, 3] = c_sh[P, 16, 3]

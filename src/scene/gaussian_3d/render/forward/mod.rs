@@ -34,17 +34,17 @@ pub struct RendererOutput<B: Backend> {
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
-    pub opacities: B::FloatTensorPrimitive<2>,
+    pub opacities_3d: B::FloatTensorPrimitive<2>,
     /// `P`
     pub point_count: u32,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`
     pub point_rendered_counts: B::IntTensorPrimitive<2>,
-    /// `[P, 3]`
-    pub positions: B::FloatTensorPrimitive<2>,
     /// `[P, 2]`
     pub positions_2d: B::FloatTensorPrimitive<2>,
+    /// `[P, 3]`
+    pub positions_3d: B::FloatTensorPrimitive<2>,
     /// `[P]`
     pub radii: B::IntTensorPrimitive<1>,
     /// `[P, 4]`
@@ -132,9 +132,9 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     }));
 
     // [P, 3]
-    let positions = into_contiguous(scene.positions().into_primitive()).handle;
+    let positions_3d = into_contiguous(scene.positions().into_primitive()).handle;
     // [P, 1]
-    let opacities = into_contiguous(scene.opacities().into_primitive()).handle;
+    let opacities_3d = into_contiguous(scene.opacities().into_primitive()).handle;
     // [P, 4]
     let rotations = into_contiguous(scene.rotations().into_primitive()).handle;
     // [P, 3]
@@ -190,7 +190,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         &[
             &arguments,
             &colors_sh,
-            &positions,
+            &positions_3d,
             &rotations,
             &scalings,
             &view_position,
@@ -371,7 +371,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &arguments,
             &colors_rgb_3d,
             &conics,
-            &opacities,
+            &opacities_3d,
             &point_indexes,
             &positions_2d,
             &tile_point_ranges,
@@ -434,11 +434,11 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             is_colors_rgb_3d_clamped,
         ),
         // [P, 1]
-        opacities: FloatTensor::<Wgpu, 2>::new(
+        opacities_3d: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
             [point_count, 1].into(),
-            opacities,
+            opacities_3d,
         ),
         // P
         point_count: point_count as u32,
@@ -456,19 +456,19 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             [image_size_y, image_size_x].into(),
             point_rendered_counts,
         ),
-        // [P, 3]
-        positions: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3].into(),
-            positions,
-        ),
         // [P, 2]
         positions_2d: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
             [point_count, 2].into(),
             positions_2d,
+        ),
+        // [P, 3]
+        positions_3d: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3].into(),
+            positions_3d,
         ),
         // [P]
         radii: IntTensor::<Wgpu, 1>::new(
