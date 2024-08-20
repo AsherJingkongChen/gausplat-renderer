@@ -47,15 +47,15 @@ var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_X * T_Y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
+const OPACITY_MAX: f32 = 0.99;
+const OPACITY_MIN: f32 = 1.0 / 255.0;
+const TRANSMITTANCE_MIN: f32 = 1e-4;
 // T_X
 const GROUP_SIZE_X: u32 = 16;
 // T_Y
 const GROUP_SIZE_Y: u32 = 16;
 // T_X * T_Y
 const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
-const OPACITY_MAX: f32 = 0.99;
-const OPACITY_MIN: f32 = 1.0 / 255.0;
-const TRANSMITTANCE_MIN: f32 = 1e-4;
 
 @compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(
