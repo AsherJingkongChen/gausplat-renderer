@@ -84,7 +84,7 @@ fn main(
     var is_pixel_done = !is_pixel_valid;
     var point_rendered_count = 0u;
     var point_rendered_state = 0u;
-    var transmittance = 1.0;
+    var transmittance_state = 1.0;
     var was_pixel_done = false;
 
     // Processing batches of points of the tile
@@ -155,13 +155,13 @@ fn main(
                 continue;
             }
 
-            // Computing the next transmittance
+            // Computing the transmittance
 
-            let transmittance_next = transmittance * (1.0 - opacity_2d);
+            let transmittance = transmittance_state * (1.0 - opacity_2d);
 
             // Leaving before the transmittance is too low
 
-            if transmittance_next < TRANSMITTANCE_MIN {
+            if transmittance < TRANSMITTANCE_MIN {
                 is_pixel_done = true;
                 break;
             }
@@ -169,12 +169,12 @@ fn main(
             // Blending the 3D colors of the pixel into the 2D color in RGB space
 
             let color_rgb_3d = batch_colors_rgb_3d[batch_index];
-            color_rgb_2d += opacity_2d * transmittance * color_rgb_3d;
+            color_rgb_2d += opacity_2d * transmittance_state * color_rgb_3d;
 
             // Updating the states
 
             point_rendered_count = point_rendered_state;
-            transmittance = transmittance_next;
+            transmittance_state = transmittance;
         }
 
         tile_point_count -= batch_point_count;
@@ -193,6 +193,6 @@ fn main(
         // [I_Y, I_X]
         point_rendered_counts[pixel_index] = point_rendered_count;
         // [I_Y, I_X]
-        transmittances[pixel_index] = transmittance;
+        transmittances[pixel_index] = transmittance_state;
     }
 }

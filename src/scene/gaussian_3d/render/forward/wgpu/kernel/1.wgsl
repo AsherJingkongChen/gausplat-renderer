@@ -187,11 +187,7 @@ fn main(
         (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
         (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
     ) * 2.0;
-    let scaling = vec3<f32>(
-        scalings[index][0],
-        scalings[index][1],
-        scalings[index][2],
-    );
+    let scaling = scalings[index];
     let rotation_scaling = mat3x3<f32>(
         rotation[0] * scaling[0],
         rotation[1] * scaling[1],
@@ -314,42 +310,35 @@ fn main(
     // Transforming 3D color from SH space to RGB space
     // c_rgb[P, 3] = c_sh[P, 16, 3]
 
-    let color_sh_0 = array<vec3<f32>, 1>(
-        vec3<f32>(
-            colors_sh[index][0][0],
-            colors_sh[index][0][1],
-            colors_sh[index][0][2],
-        ),
+    let color_sh = array<vec3<f32>, 16>(
+        vec3<f32>(colors_sh[index][0u][0], colors_sh[index][0u][1], colors_sh[index][0u][2]),
+        vec3<f32>(colors_sh[index][1u][0], colors_sh[index][1u][1], colors_sh[index][1u][2]),
+        vec3<f32>(colors_sh[index][2u][0], colors_sh[index][2u][1], colors_sh[index][2u][2]),
+        vec3<f32>(colors_sh[index][3u][0], colors_sh[index][3u][1], colors_sh[index][3u][2]),
+        vec3<f32>(colors_sh[index][4u][0], colors_sh[index][4u][1], colors_sh[index][4u][2]),
+        vec3<f32>(colors_sh[index][5u][0], colors_sh[index][5u][1], colors_sh[index][5u][2]),
+        vec3<f32>(colors_sh[index][6u][0], colors_sh[index][6u][1], colors_sh[index][6u][2]),
+        vec3<f32>(colors_sh[index][7u][0], colors_sh[index][7u][1], colors_sh[index][7u][2]),
+        vec3<f32>(colors_sh[index][8u][0], colors_sh[index][8u][1], colors_sh[index][8u][2]),
+        vec3<f32>(colors_sh[index][9u][0], colors_sh[index][9u][1], colors_sh[index][9u][2]),
+        vec3<f32>(colors_sh[index][10][0], colors_sh[index][10][1], colors_sh[index][10][2]),
+        vec3<f32>(colors_sh[index][11][0], colors_sh[index][11][1], colors_sh[index][11][2]),
+        vec3<f32>(colors_sh[index][12][0], colors_sh[index][12][1], colors_sh[index][12][2]),
+        vec3<f32>(colors_sh[index][13][0], colors_sh[index][13][1], colors_sh[index][13][2]),
+        vec3<f32>(colors_sh[index][14][0], colors_sh[index][14][1], colors_sh[index][14][2]),
+        vec3<f32>(colors_sh[index][15][0], colors_sh[index][15][1], colors_sh[index][15][2]),
     );
-    var color_rgb_3d = color_sh_0[0] * SH_C_0[0];
+    var color_rgb_3d = color_sh[0] * SH_C_0[0];
 
     if arguments.colors_sh_degree_max >= 1 {
         vd_x = view_driection_normalized.x;
         vd_y = view_driection_normalized.y;
         vd_z = view_driection_normalized.z;
 
-        let color_sh_1 = array<vec3<f32>, 3>(
-            vec3<f32>(
-                colors_sh[index][1][0],
-                colors_sh[index][1][1],
-                colors_sh[index][1][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][2][0],
-                colors_sh[index][2][1],
-                colors_sh[index][2][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][3][0],
-                colors_sh[index][3][1],
-                colors_sh[index][3][2],
-            ),
-        );
-
         color_rgb_3d +=
-            color_sh_1[0] * (SH_C_1[0] * (vd_y)) +
-            color_sh_1[1] * (SH_C_1[1] * (vd_z)) +
-            color_sh_1[2] * (SH_C_1[2] * (vd_x));
+            color_sh[1] * (SH_C_1[0] * (vd_y)) +
+            color_sh[2] * (SH_C_1[1] * (vd_z)) +
+            color_sh[3] * (SH_C_1[2] * (vd_x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
@@ -358,91 +347,25 @@ fn main(
         vd_yy = vd_y * vd_y;
         vd_zz = vd_z * vd_z;
 
-        let color_sh_2 = array<vec3<f32>, 5>(
-            vec3<f32>(
-                colors_sh[index][4][0],
-                colors_sh[index][4][1],
-                colors_sh[index][4][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][5][0],
-                colors_sh[index][5][1],
-                colors_sh[index][5][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][6][0],
-                colors_sh[index][6][1],
-                colors_sh[index][6][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][7][0],
-                colors_sh[index][7][1],
-                colors_sh[index][7][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][8][0],
-                colors_sh[index][8][1],
-                colors_sh[index][8][2],
-            ),
-        );
-
         color_rgb_3d +=
-            color_sh_2[0] * (SH_C_2[0] * (vd_xy)) +
-            color_sh_2[1] * (SH_C_2[1] * (vd_y * vd_z)) +
-            color_sh_2[2] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
-            color_sh_2[3] * (SH_C_2[3] * (vd_x * vd_z)) +
-            color_sh_2[4] * (SH_C_2[4] * (vd_xx - vd_yy));
+            color_sh[4] * (SH_C_2[0] * (vd_xy)) +
+            color_sh[5] * (SH_C_2[1] * (vd_y * vd_z)) +
+            color_sh[6] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
+            color_sh[7] * (SH_C_2[3] * (vd_x * vd_z)) +
+            color_sh[8] * (SH_C_2[4] * (vd_xx - vd_yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
         vd_zz_5_1 = vd_zz * 5.0 - 1.0;
 
-        let color_sh_3 = array<vec3<f32>, 7>(
-            vec3<f32>(
-                colors_sh[index][9][0],
-                colors_sh[index][9][1],
-                colors_sh[index][9][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][10][0],
-                colors_sh[index][10][1],
-                colors_sh[index][10][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][11][0],
-                colors_sh[index][11][1],
-                colors_sh[index][11][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][12][0],
-                colors_sh[index][12][1],
-                colors_sh[index][12][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][13][0],
-                colors_sh[index][13][1],
-                colors_sh[index][13][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][14][0],
-                colors_sh[index][14][1],
-                colors_sh[index][14][2],
-            ),
-            vec3<f32>(
-                colors_sh[index][15][0],
-                colors_sh[index][15][1],
-                colors_sh[index][15][2],
-            ),
-        );
-
         color_rgb_3d +=
-            color_sh_3[0] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
-            color_sh_3[1] * (SH_C_3[1] * (vd_z * vd_xy)) +
-            color_sh_3[2] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) +
-            color_sh_3[3] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
-            color_sh_3[4] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
-            color_sh_3[5] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
-            color_sh_3[6] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+            color_sh[9u] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
+            color_sh[10] * (SH_C_3[1] * (vd_z * vd_xy)) +
+            color_sh[11] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) +
+            color_sh[12] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
+            color_sh[13] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
+            color_sh[14] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
+            color_sh[15] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;
