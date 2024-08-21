@@ -76,21 +76,21 @@ fn main(
     // vo[P, 3] = pw[P, 3] - vw[1, 3]
     // vd[P, 3] = norm(vo)
 
-    let view_offsets = view_offsets[index];
+    let view_offset = view_offsets[index];
     let view_direction = view_directions[index];
-    var x = f32();
-    var y = f32();
-    var z = f32();
-    var xx = f32();
-    var xy = f32();
-    var xz = f32();
-    var yy = f32();
-    var yz = f32();
-    var zz = f32();
-    var xx_yy = f32();
-    var xx_yy_3 = f32();
-    var z_10 = f32();
-    var zz_5_1 = f32();
+    var vd_x = f32();
+    var vd_y = f32();
+    var vd_z = f32();
+    var vd_xx = f32();
+    var vd_xy = f32();
+    var vd_xz = f32();
+    var vd_yy = f32();
+    var vd_yz = f32();
+    var vd_zz = f32();
+    var vd_xx_yy = f32();
+    var vd_xx_yy_3 = f32();
+    var vd_z_10 = f32();
+    var vd_zz_5_1 = f32();
 
     // Computing the gradients
     // (d c_sh[P, 16, 3], d vd[P, 3]) = d c_rgb[P, 3]
@@ -116,19 +116,18 @@ fn main(
 
     let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_clamped[index];
     var color_sh_grad = array<vec3<f32>, 16>();
-    // d/dvd c_rgb[3, 3]
     var color_rgb_3d_to_view_direction_grad = mat3x3<f32>();
 
     color_sh_grad[0] = color_rgb_3d_grad * (SH_C_0[0]);
 
     if arguments.colors_sh_degree_max >= 1 {
-        x = view_direction.x;
-        y = view_direction.y;
-        z = view_direction.z;
+        vd_x = view_direction.x;
+        vd_y = view_direction.y;
+        vd_z = view_direction.z;
 
-        color_sh_grad[1] = color_rgb_3d_grad * (SH_C_1[0] * (y));
-        color_sh_grad[2] = color_rgb_3d_grad * (SH_C_1[1] * (z));
-        color_sh_grad[3] = color_rgb_3d_grad * (SH_C_1[2] * (x));
+        color_sh_grad[1] = color_rgb_3d_grad * (SH_C_1[0] * (vd_y));
+        color_sh_grad[2] = color_rgb_3d_grad * (SH_C_1[1] * (vd_z));
+        color_sh_grad[3] = color_rgb_3d_grad * (SH_C_1[2] * (vd_x));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
             color_sh[3] * (SH_C_1[2]),
@@ -138,71 +137,87 @@ fn main(
     }
 
     if arguments.colors_sh_degree_max >= 2 {
-        xx = x * x;
-        xy = x * y;
-        xz = x * z;
-        yy = y * y;
-        yz = y * z;
-        zz = z * z;
-        xx_yy = xx - yy;
+        vd_xx = vd_x * vd_x;
+        vd_xy = vd_x * vd_y;
+        vd_xz = vd_x * vd_z;
+        vd_yy = vd_y * vd_y;
+        vd_yz = vd_y * vd_z;
+        vd_zz = vd_z * vd_z;
+        vd_xx_yy = vd_xx - vd_yy;
 
-        color_sh_grad[4] = color_rgb_3d_grad * (SH_C_2[0] * (xy));
-        color_sh_grad[5] = color_rgb_3d_grad * (SH_C_2[1] * (yz));
-        color_sh_grad[6] = color_rgb_3d_grad * (SH_C_2[2] * (zz * 3.0 - 1.0));
-        color_sh_grad[7] = color_rgb_3d_grad * (SH_C_2[3] * (xz));
-        color_sh_grad[8] = color_rgb_3d_grad * (SH_C_2[4] * (xx_yy));
+        color_sh_grad[4] = color_rgb_3d_grad * (SH_C_2[0] * (vd_xy));
+        color_sh_grad[5] = color_rgb_3d_grad * (SH_C_2[1] * (vd_yz));
+        color_sh_grad[6] = color_rgb_3d_grad * (SH_C_2[2] * (vd_zz * 3.0 - 1.0));
+        color_sh_grad[7] = color_rgb_3d_grad * (SH_C_2[3] * (vd_xz));
+        color_sh_grad[8] = color_rgb_3d_grad * (SH_C_2[4] * (vd_xx_yy));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
-            color_sh[4] * (SH_C_2[0] * (y)) +
-            color_sh[7] * (SH_C_2[3] * (z)) +
-            color_sh[8] * (SH_C_2[4] * (x * 2.0)),
+            color_sh[4] * (SH_C_2[0] * (vd_y)) +
+            color_sh[7] * (SH_C_2[3] * (vd_z)) +
+            color_sh[8] * (SH_C_2[4] * (vd_x * 2.0)),
 
-            color_sh[4] * (SH_C_2[0] * (x)) +
-            color_sh[5] * (SH_C_2[1] * (z)) +
-            color_sh[8] * (SH_C_2[4] * (y * -2.0)),
+            color_sh[4] * (SH_C_2[0] * (vd_x)) +
+            color_sh[5] * (SH_C_2[1] * (vd_z)) +
+            color_sh[8] * (SH_C_2[4] * (vd_y * -2.0)),
 
-            color_sh[5] * (SH_C_2[1] * (y)) +
-            color_sh[6] * (SH_C_2[2] * (z * 6.0)) +
-            color_sh[7] * (SH_C_2[3] * (x)),
+            color_sh[5] * (SH_C_2[1] * (vd_y)) +
+            color_sh[6] * (SH_C_2[2] * (vd_z * 6.0)) +
+            color_sh[7] * (SH_C_2[3] * (vd_x)),
         );
     }
 
     if arguments.colors_sh_degree_max >= 3 {
-        xx_yy_3 = xx_yy * 3.0;
-        z_10 = z * 10.0;
-        zz_5_1 = zz * 5.0 - 1.0;
+        vd_xx_yy_3 = vd_xx_yy * 3.0;
+        vd_z_10 = vd_z * 10.0;
+        vd_zz_5_1 = vd_zz * 5.0 - 1.0;
 
-        color_sh_grad[9u] = color_rgb_3d_grad * (SH_C_3[0] * (y * (xx * 3.0 - yy)));
-        color_sh_grad[10] = color_rgb_3d_grad * (SH_C_3[1] * (z * (xy)));
-        color_sh_grad[11] = color_rgb_3d_grad * (SH_C_3[2] * (y * (zz_5_1)));
-        color_sh_grad[12] = color_rgb_3d_grad * (SH_C_3[3] * (z * (zz_5_1 - 2.0)));
-        color_sh_grad[13] = color_rgb_3d_grad * (SH_C_3[4] * (x * (zz_5_1)));
-        color_sh_grad[14] = color_rgb_3d_grad * (SH_C_3[5] * (z * (xx_yy)));
-        color_sh_grad[15] = color_rgb_3d_grad * (SH_C_3[6] * (x * (xx - yy * 3.0)));
+        color_sh_grad[9u] = color_rgb_3d_grad * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy)));
+        color_sh_grad[10] = color_rgb_3d_grad * (SH_C_3[1] * (vd_z * (vd_xy)));
+        color_sh_grad[11] = color_rgb_3d_grad * (SH_C_3[2] * (vd_y * (vd_zz_5_1)));
+        color_sh_grad[12] = color_rgb_3d_grad * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0)));
+        color_sh_grad[13] = color_rgb_3d_grad * (SH_C_3[4] * (vd_x * (vd_zz_5_1)));
+        color_sh_grad[14] = color_rgb_3d_grad * (SH_C_3[5] * (vd_z * (vd_xx_yy)));
+        color_sh_grad[15] = color_rgb_3d_grad * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
-            color_sh[9u] * (SH_C_3[0] * (xy * 6.0)) +
-            color_sh[10] * (SH_C_3[1] * (yz)) +
-            color_sh[13] * (SH_C_3[4] * (zz_5_1)) +
-            color_sh[14] * (SH_C_3[5] * (xz * 2.0)) +
-            color_sh[15] * (SH_C_3[6] * (xx_yy_3)),
+            color_sh[9u] * (SH_C_3[0] * (vd_xy * 6.0)) +
+            color_sh[10] * (SH_C_3[1] * (vd_yz)) +
+            color_sh[13] * (SH_C_3[4] * (vd_zz_5_1)) +
+            color_sh[14] * (SH_C_3[5] * (vd_xz * 2.0)) +
+            color_sh[15] * (SH_C_3[6] * (vd_xx_yy_3)),
 
-            color_sh[9u] * (SH_C_3[0] * (xx_yy_3)) +
-            color_sh[10] * (SH_C_3[1] * (xz)) +
-            color_sh[11] * (SH_C_3[2] * (zz_5_1)) +
-            color_sh[14] * (SH_C_3[5] * (yz * -2.0)) +
-            color_sh[15] * (SH_C_3[6] * (xy * -6.0)),
+            color_sh[9u] * (SH_C_3[0] * (vd_xx_yy_3)) +
+            color_sh[10] * (SH_C_3[1] * (vd_xz)) +
+            color_sh[11] * (SH_C_3[2] * (vd_zz_5_1)) +
+            color_sh[14] * (SH_C_3[5] * (vd_yz * -2.0)) +
+            color_sh[15] * (SH_C_3[6] * (vd_xy * -6.0)),
 
-            color_sh[10] * (SH_C_3[1] * (xy)) +
-            color_sh[11] * (SH_C_3[2] * (y * z_10)) +
-            color_sh[12] * (SH_C_3[3] * (zz_5_1 * 3.0)) +
-            color_sh[13] * (SH_C_3[4] * (x * z_10)) +
-            color_sh[14] * (SH_C_3[5] * (xx_yy))
+            color_sh[10] * (SH_C_3[1] * (vd_xy)) +
+            color_sh[11] * (SH_C_3[2] * (vd_y * vd_z_10)) +
+            color_sh[12] * (SH_C_3[3] * (vd_zz_5_1 * 3.0)) +
+            color_sh[13] * (SH_C_3[4] * (vd_x * vd_z_10)) +
+            color_sh[14] * (SH_C_3[5] * (vd_xx_yy))
         );
     }
 
     // d vd[1, 3] = d c_rgb[1, 3] * d/dvd c_rgb[3, 3]
     let view_direction_grad = color_rgb_3d_grad * color_rgb_3d_to_view_direction_grad;
+
+    // d pw[1, 3] = d vo[1, 3] = d vd[1, 3] * d/vo vd[3, 3]
+    let vo_xx = view_offset.x * view_offset.x;
+    let vo_yy = view_offset.y * view_offset.y;
+    let vo_zz = view_offset.z * view_offset.z;
+    let vo_xy_n = -view_offset.x * view_offset.y;
+    let vo_xz_n = -view_offset.x * view_offset.z;
+    let vo_yz_n = -view_offset.y * view_offset.z;
+    let vo_l2_invsqrt3 = pow(inverseSqrt(vo_xx + vo_yy + vo_zz), 3.0);
+    let position_3d_grad = view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
+        vo_yy + vo_zz, vo_xy_n, vo_xz_n,
+        vo_xy_n, vo_xx + vo_zz, vo_yz_n,
+        vo_xz_n, vo_yz_n, vo_xx + vo_yy,
+    );
+
+    // TODO: End of colors and directions
 
     // Specifying the results
 
@@ -223,5 +238,10 @@ fn main(
         array<f32, 3>(color_sh_grad[13][0], color_sh_grad[13][1], color_sh_grad[13][2]),
         array<f32, 3>(color_sh_grad[14][0], color_sh_grad[14][1], color_sh_grad[14][2]),
         array<f32, 3>(color_sh_grad[15][0], color_sh_grad[15][1], color_sh_grad[15][2]),
+    );
+    positions_3d_grad[index] = array<f32, 3>(
+        position_3d_grad[0],
+        position_3d_grad[1],
+        position_3d_grad[2],
     );
 }
