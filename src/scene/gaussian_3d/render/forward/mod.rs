@@ -60,7 +60,7 @@ pub struct RendererOutput<B: Backend> {
     /// `[P, 3]`
     pub view_directions: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`
-    pub view_directions_normalized: B::FloatTensorPrimitive<2>,
+    pub view_offsets: B::FloatTensorPrimitive<2>,
     /// `[4, 4]`
     pub view_transform: B::FloatTensorPrimitive<2>,
 }
@@ -177,7 +177,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     // [P, 3 (+ 1)]
     let view_directions = client.empty(point_count * (3 + 1) * 4);
     // [P, 3 (+ 1)]
-    let view_directions_normalized = client.empty(point_count * (3 + 1) * 4);
+    let view_offsets = client.empty(point_count * (3 + 1) * 4);
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -212,7 +212,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &tiles_touched_max,
             &tiles_touched_min,
             &view_directions,
-            &view_directions_normalized,
+            &view_offsets,
         ],
     );
 
@@ -523,11 +523,11 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             view_directions,
         ),
         // [P, 3 (+ 1)]
-        view_directions_normalized: FloatTensor::<Wgpu, 2>::new(
+        view_offsets: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
             [point_count, 3 + 1].into(),
-            view_directions_normalized,
+            view_offsets,
         ),
         // [4, 4]
         view_transform: FloatTensor::<Wgpu, 2>::new(

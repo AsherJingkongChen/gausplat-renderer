@@ -5,8 +5,7 @@ pub struct Kernel1WgslSource;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct Kernel1Arguments {
-}
+pub struct Kernel1Arguments {}
 
 impl KernelSource for Kernel1WgslSource {
     fn source(&self) -> SourceTemplate {

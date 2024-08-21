@@ -80,7 +80,7 @@ var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 var<storage, read_write> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
 @group(0) @binding(18)
-var<storage, read_write> view_directions_normalized: array<vec3<f32>>;
+var<storage, read_write> view_offsets: array<vec3<f32>>;
 
 const EPSILON: f32 = 1.1920929e-7;
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -132,7 +132,7 @@ fn main(
     tiles_touched_min[index] = vec2<u32>();
 
     // Transforming 3D positions from world space to view space
-    // pv[3, P] = vr[3, 3] * pw[3, P] + vt[3, P]
+    // pv[P, 3] = vr[3, 3] * pw[P, 3] + vt[P, 3]
 
     let position_3d = vec3<f32>(
         positions_3d[index][0],
@@ -155,7 +155,7 @@ fn main(
     }
 
     // Transforming 3D positions from view space (normalized) to screen space (2D)
-    // ps[2, P] = pv[3, P]
+    // ps[P, 2] = pv[P, 3]
 
     let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
     let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
@@ -197,7 +197,8 @@ fn main(
 
     // Computing 2D covariance matrix
     // t[P, 2, 3] = j[P, 2, 3] * vr[1, 3, 3]
-    // c'[P, 2, 2] (Symmetric) = t[P, 2, 3] * c[P, 3, 3] * t^T[P, 3, 2] + f[1, 2, 2]
+    // c'[P, 2, 2] (Symmetric) =
+    // t[P, 2, 3] * c[P, 3, 3] * t^T[P, 3, 2] + f[1, 2, 2]
 
     let focal_length_x_normalized = arguments.focal_length_x / depth;
     let focal_length_y_normalized = arguments.focal_length_y / depth;
@@ -242,7 +243,7 @@ fn main(
     ) * (1.0 / covariance_2d_det);
 
     // Computing the max radius using the 2D covariance matrix
-    // r[P]
+    // r[P] = c'[P, 2, 2] (Symmetric)
 
     let covariance_2d_middle = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
     let extent_difference = max(
@@ -294,21 +295,22 @@ fn main(
     }
 
     // Computing the view direction in world space
-    // vd[3, P] = pw[3, P] - vw[3, 1]
+    // vo[P, 3] = pw[P, 3] - vw[1, 3]
+    // vd[P, 3] = norm(vo)
 
-    let view_direction = position_3d - view_position;
-    let view_driection_normalized = normalize(view_direction);
-    var vd_x = f32();
-    var vd_y = f32();
-    var vd_z = f32();
-    var vd_xx = f32();
-    var vd_xy = f32();
-    var vd_yy = f32();
-    var vd_zz = f32();
-    var vd_zz_5_1 = f32();
+    let view_offset = position_3d - view_position;
+    let view_direction = normalize(view_offset);
+    var x = f32();
+    var y = f32();
+    var z = f32();
+    var xx = f32();
+    var xy = f32();
+    var yy = f32();
+    var zz = f32();
+    var zz_5_1 = f32();
 
     // Transforming 3D color from SH space to RGB space
-    // c_rgb[P, 3] = c_sh[P, 16, 3]
+    // c_rgb[P, 3] = (c_sh[P, 16, 3], vd[P, 3])
 
     let color_sh = array<vec3<f32>, 16>(
         vec3<f32>(colors_sh[index][0u][0], colors_sh[index][0u][1], colors_sh[index][0u][2]),
@@ -328,44 +330,45 @@ fn main(
         vec3<f32>(colors_sh[index][14][0], colors_sh[index][14][1], colors_sh[index][14][2]),
         vec3<f32>(colors_sh[index][15][0], colors_sh[index][15][1], colors_sh[index][15][2]),
     );
-    var color_rgb_3d = color_sh[0] * SH_C_0[0];
+
+    var color_rgb_3d = color_sh[0] * (SH_C_0[0]);
 
     if arguments.colors_sh_degree_max >= 1 {
-        vd_x = view_driection_normalized.x;
-        vd_y = view_driection_normalized.y;
-        vd_z = view_driection_normalized.z;
+        x = view_direction.x;
+        y = view_direction.y;
+        z = view_direction.z;
 
         color_rgb_3d +=
-            color_sh[1] * (SH_C_1[0] * (vd_y)) +
-            color_sh[2] * (SH_C_1[1] * (vd_z)) +
-            color_sh[3] * (SH_C_1[2] * (vd_x));
+            color_sh[1] * (SH_C_1[0] * (y)) +
+            color_sh[2] * (SH_C_1[1] * (z)) +
+            color_sh[3] * (SH_C_1[2] * (x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
-        vd_xx = vd_x * vd_x;
-        vd_xy = vd_x * vd_y;
-        vd_yy = vd_y * vd_y;
-        vd_zz = vd_z * vd_z;
+        xx = x * x;
+        xy = x * y;
+        yy = y * y;
+        zz = z * z;
 
         color_rgb_3d +=
-            color_sh[4] * (SH_C_2[0] * (vd_xy)) +
-            color_sh[5] * (SH_C_2[1] * (vd_y * vd_z)) +
-            color_sh[6] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
-            color_sh[7] * (SH_C_2[3] * (vd_x * vd_z)) +
-            color_sh[8] * (SH_C_2[4] * (vd_xx - vd_yy));
+            color_sh[4] * (SH_C_2[0] * (xy)) +
+            color_sh[5] * (SH_C_2[1] * (y * z)) +
+            color_sh[6] * (SH_C_2[2] * (zz * 3.0 - 1.0)) +
+            color_sh[7] * (SH_C_2[3] * (x * z)) +
+            color_sh[8] * (SH_C_2[4] * (xx - yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
-        vd_zz_5_1 = vd_zz * 5.0 - 1.0;
+        zz_5_1 = zz * 5.0 - 1.0;
 
         color_rgb_3d +=
-            color_sh[9u] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
-            color_sh[10] * (SH_C_3[1] * (vd_z * vd_xy)) +
-            color_sh[11] * (SH_C_3[2] * (vd_y * vd_zz_5_1)) +
-            color_sh[12] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
-            color_sh[13] * (SH_C_3[4] * (vd_x * vd_zz_5_1)) +
-            color_sh[14] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
-            color_sh[15] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+            color_sh[9u] * (SH_C_3[0] * (y * (xx * 3.0 - yy))) +
+            color_sh[10] * (SH_C_3[1] * (z * (xy))) +
+            color_sh[11] * (SH_C_3[2] * (y * (zz_5_1))) +
+            color_sh[12] * (SH_C_3[3] * (z * (zz_5_1 - 2.0))) +
+            color_sh[13] * (SH_C_3[4] * (x * (zz_5_1))) +
+            color_sh[14] * (SH_C_3[5] * (z * (xx - yy))) +
+            color_sh[15] * (SH_C_3[6] * (x * (xx - yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;
@@ -398,5 +401,5 @@ fn main(
     // [P, 3]
     view_directions[index] = view_direction;
     // [P, 3]
-    view_directions_normalized[index] = view_driection_normalized;
+    view_offsets[index] = view_offset;
 }

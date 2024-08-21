@@ -18,12 +18,14 @@ pub struct RendererOutput<B: Backend> {
 
 pub(super) fn render_gaussian_3d_scene_wgpu(
     output: forward::RendererOutput<Wgpu>,
-    options: &RenderOptions,
+    options: &RendererOptions,
 ) -> backward::RendererOutput<Wgpu> {
     use wgpu::*;
 
     <Wgpu as ActivationOps<Wgpu>>::relu_backward::<2>;
     <Wgpu as ModuleOps<Wgpu>>::conv2d;
     <Autodiff<Wgpu> as ModuleOps<Autodiff<Wgpu>>>::conv2d;
-    RendererOutput { _b: std::marker::PhantomData }
+    RendererOutput {
+        _b: std::marker::PhantomData,
+    }
 }

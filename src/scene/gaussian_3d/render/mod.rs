@@ -4,7 +4,7 @@ pub mod forward;
 pub use crate::scene::gaussian_3d::{
     AutodiffBackend, Backend, Gaussian3dScene, Tensor,
 };
-pub use burn::backend::autodiff::Autodiff;
+pub use burn::{backend::autodiff::Autodiff, config::Config};
 pub use gausplat_importer::scene::sparse_view;
 
 use burn::backend::wgpu;
@@ -25,8 +25,9 @@ pub trait Gaussian3dRenderer<B: Backend> {
     ) -> forward::RendererOutput<B>;
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Config, Copy, Debug)]
 pub struct RendererOptions {
+    /// `<= 3`
     pub colors_sh_degree_max: u32,
 }
 
@@ -129,5 +130,13 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
         options: &RendererOptions,
     ) -> forward::RendererOutput<Wgpu> {
         forward::render_gaussian_3d_scene_wgpu(scene, view, options)
+    }
+}
+
+impl Default for RendererOptions {
+    fn default() -> Self {
+        Self {
+            colors_sh_degree_max: 3,
+        }
     }
 }
