@@ -57,8 +57,10 @@ pub struct RendererOutput<B: Backend> {
     pub transmittances: B::FloatTensorPrimitive<2>,
     pub view_bound_x: f32,
     pub view_bound_y: f32,
-    /// `[3]`
-    pub view_position: B::FloatTensorPrimitive<1>,
+    /// `[P, 3]`
+    pub view_directions: B::FloatTensorPrimitive<2>,
+    /// `[P, 3]`
+    pub view_directions_normalized: B::FloatTensorPrimitive<2>,
     /// `[4, 4]`
     pub view_transform: B::FloatTensorPrimitive<2>,
 }
@@ -160,7 +162,7 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     let covariances_3d = client.empty(point_count * (3 + 1) * 3 * 4);
     // [P]
     let depths = client.empty(point_count * 4);
-    // [P, 3 (+ 1)] (the alignment of vec3<f32> is 16 = (3 + 1) * 4 bytes)
+    // [P, 3 (+ 1)]
     let is_colors_rgb_3d_clamped = client.empty(point_count * (3 + 1) * 4);
     // [P, 2]
     let positions_2d = client.empty(point_count * 2 * 4);
@@ -172,6 +174,10 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     let tiles_touched_max = client.empty(point_count * 2 * 4);
     // [P, 2]
     let tiles_touched_min = client.empty(point_count * 2 * 4);
+    // [P, 3 (+ 1)]
+    let view_directions = client.empty(point_count * (3 + 1) * 4);
+    // [P, 3 (+ 1)]
+    let view_directions_normalized = client.empty(point_count * (3 + 1) * 4);
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -205,6 +211,8 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             &tile_touched_counts,
             &tiles_touched_max,
             &tiles_touched_min,
+            &view_directions,
+            &view_directions_normalized,
         ],
     );
 
@@ -507,12 +515,19 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
         ),
         view_bound_x,
         view_bound_y,
-        // [3]
-        view_position: FloatTensor::<Wgpu, 1>::new(
+        // [P, 3 (+ 1)]
+        view_directions: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
-            [3].into(),
-            view_position,
+            [point_count, 3 + 1].into(),
+            view_directions,
+        ),
+        // [P, 3 (+ 1)]
+        view_directions_normalized: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3 + 1].into(),
+            view_directions_normalized,
         ),
         // [4, 4]
         view_transform: FloatTensor::<Wgpu, 2>::new(

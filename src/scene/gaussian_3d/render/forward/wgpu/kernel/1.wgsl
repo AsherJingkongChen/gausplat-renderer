@@ -45,19 +45,19 @@ var<storage, read> view_position: vec3<f32>;
 // [4, 4]
 @group(0) @binding(6)
 var<storage, read> view_transform: mat4x4<f32>;
-// [P, 3] (0.0, 1.0)
+// [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(8)
 var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P, 3, 3] (Symmetric)
+// [P, 3 (+ 1), 3] (Symmetric)
 @group(0) @binding(9)
 var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
 // [P] (0.2 ~ )
 @group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
-// [P, 3] (0.0, 1.0)
+// [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(11)
 var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
 // [P, 2]
@@ -75,6 +75,12 @@ var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 // [P, 2]
 @group(0) @binding(16)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
+// [P, 3 (+ 1)]
+@group(0) @binding(17)
+var<storage, read_write> view_directions: array<vec3<f32>>;
+// [P, 3 (+ 1)]
+@group(0) @binding(18)
+var<storage, read_write> view_directions_normalized: array<vec3<f32>>;
 
 const EPSILON: f32 = 1.1920929e-7;
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -141,8 +147,6 @@ fn main(
     let view_translation = view_transform[3].xyz;
     let position_3d_in_view = view_rotation * position_3d + view_translation;
     let depth = position_3d_in_view.z + EPSILON;
-    let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
-    let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
 
     // Performing viewing-frustum culling
 
@@ -153,6 +157,8 @@ fn main(
     // Transforming 3D positions from view space (normalized) to screen space (2D)
     // ps[2, P] = pv[3, P]
 
+    let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
+    let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
     let position_2d = vec2<f32>(
         position_3d_in_view_x_normalized * arguments.focal_length_x + arguments.image_size_half_x - 0.5,
         position_3d_in_view_y_normalized * arguments.focal_length_y + arguments.image_size_half_y - 0.5,
@@ -210,13 +216,13 @@ fn main(
         arguments.view_bound_y,
     );
 
-    let projection_jacobian = mat3x2<f32>(
+    let projection = mat3x2<f32>(
         focal_length_x_normalized, 0.0,
         0.0, focal_length_y_normalized,
         -focal_length_x_normalized * position_3d_in_view_x_normalized_clamped,
         -focal_length_y_normalized * position_3d_in_view_y_normalized_clamped,
     );
-    let transform = projection_jacobian * view_rotation;
+    let transform = projection * view_rotation;
     let covariance_2d = transform * covariance_3d * transpose(transform) + mat2x2<f32>(
         arguments.filter_low_pass, 0.0,
         0.0, arguments.filter_low_pass,
@@ -294,7 +300,16 @@ fn main(
     // Computing the view direction in world space
     // vd[3, P] = pw[3, P] - vw[3, 1]
 
-    let view_direction = normalize(position_3d - view_position);
+    let view_direction = position_3d - view_position;
+    let view_driection_normalized = normalize(view_direction);
+    var vd_x = f32();
+    var vd_y = f32();
+    var vd_z = f32();
+    var vd_xx = f32();
+    var vd_xy = f32();
+    var vd_yy = f32();
+    var vd_zz = f32();
+    var vd_zz_5_1 = f32();
 
     // Transforming 3D color from SH space to RGB space
     // c_rgb[P, 3] = c_sh[P, 16, 3]
@@ -308,19 +323,10 @@ fn main(
     );
     var color_rgb_3d = color_sh_0[0] * SH_C_0[0];
 
-    var vd_x = f32();
-    var vd_y = f32();
-    var vd_z = f32();
-    var vd_xx = f32();
-    var vd_xy = f32();
-    var vd_yy = f32();
-    var vd_zz = f32();
-    var vd_zz_5_1 = f32();
-
     if arguments.colors_sh_degree_max >= 1 {
-        vd_x = view_direction.x;
-        vd_y = view_direction.y;
-        vd_z = view_direction.z;
+        vd_x = view_driection_normalized.x;
+        vd_y = view_driection_normalized.y;
+        vd_z = view_driection_normalized.z;
 
         let color_sh_1 = array<vec3<f32>, 3>(
             vec3<f32>(
@@ -466,4 +472,8 @@ fn main(
     tiles_touched_max[index] = tile_touched_max;
     // [P, 2]
     tiles_touched_min[index] = tile_touched_min;
+    // [P, 3]
+    view_directions[index] = view_direction;
+    // [P, 3]
+    view_directions_normalized[index] = view_driection_normalized;
 }

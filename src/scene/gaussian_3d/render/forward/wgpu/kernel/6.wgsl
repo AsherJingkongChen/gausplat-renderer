@@ -8,7 +8,7 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
-// [P, 3] (0.0 ~ 1.0)
+// [P, 3 (+ 1)] (0.0 ~ 1.0)
 @group(0) @binding(1)
 var<storage, read> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
@@ -68,12 +68,12 @@ fn main(
 ) {
     // Specifying the parameters
 
+    let image_size = vec2<u32>(arguments.image_size_x, arguments.image_size_y);
     // (0 ~ I_X, 0 ~ I_Y)
     let pixel = global_id.xy;
-    let pixel_f32 = vec2<f32>(pixel);
-    let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
-    let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
-
+    let position_pixel = vec2<f32>(pixel);
+    let pixel_index = pixel.y * image_size.x + pixel.x;
+    let is_pixel_valid = pixel.x < image_size.x && pixel.y < image_size.y;
     // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
@@ -97,7 +97,7 @@ fn main(
             was_pixel_done = true;
             let count = atomicAdd(&pixel_done_count, 1u) + 1u;
 
-            // Leaving if all the pixels of tile are done
+            // Leaving if all the pixels of tile are finished rendering
 
             if count == BATCH_SIZE {
                 break;
@@ -117,28 +117,26 @@ fn main(
         }
         workgroupBarrier();
 
-        // Skipping if the pixel is done
+        // Skipping if the pixel is finished rendering
 
         if is_pixel_done {
             continue;
         }
 
-        // Computing the 2D colors in RGB space using the batch parameters
+        // Computing the 2D color of the pixel in RGB space using the batch parameters
         // [T_X * T_Y]
 
         let batch_point_count = min(tile_point_count, BATCH_SIZE);
-
         for (var batch_index = 0u; batch_index < batch_point_count; batch_index++) {
             point_rendered_state++;
 
-            // Computing the density
-            // a[I_Y, I_X, 1, 1] =
-            // d[I_Y, I_X, 1, 2] * c'^-1[I_Y, I_X, 2, 2] * d[I_Y, I_X, 2, 1]
+            // Computing the density of the point in the pixel
+            // g[1, 1] = d^T[1, 2] * c'^-1[2, 2] * d[2, 1]
 
             let position_2d = batch_positions_2d[batch_index];
-            let direction = position_2d - pixel_f32;
+            let position_offset = position_2d - position_pixel;
             let conic = batch_conics[batch_index];
-            let density = exp(-0.5 * dot(direction * conic, direction));
+            let density = exp(-0.5 * dot(position_offset * conic, position_offset));
 
             // Skipping if the density is greater than one
 
@@ -146,7 +144,7 @@ fn main(
                 continue;
             }
 
-            // Computing the 2D opacity
+            // Computing the 2D opacity of the point in the pixel
 
             let opacity_3d = batch_opacities_3d[batch_index];
             let opacity_2d = min(opacity_3d * density, OPACITY_2D_MAX);
@@ -173,10 +171,10 @@ fn main(
             let color_rgb_3d = batch_colors_rgb_3d[batch_index];
             color_rgb_2d += opacity_2d * transmittance * color_rgb_3d;
 
-            // Updating the pixel state
+            // Updating the states
 
-            transmittance = transmittance_next;
             point_rendered_count = point_rendered_state;
+            transmittance = transmittance_next;
         }
 
         tile_point_count -= batch_point_count;

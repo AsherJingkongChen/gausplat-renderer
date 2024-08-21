@@ -42,10 +42,9 @@ fn main(
         return;
     }
 
-    // Leaving if invisible
+    // Leaving if the point is invisible
 
-    let is_visible = radii[index] > 0u;
-    if !is_visible {
+    if radii[index] == 0u {
         return;
     }
 
