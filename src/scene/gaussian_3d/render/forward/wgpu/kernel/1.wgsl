@@ -128,8 +128,6 @@ fn main(
 
     radii[index] = u32();
     tile_touched_counts[index] = u32();
-    tiles_touched_max[index] = vec2<u32>();
-    tiles_touched_min[index] = vec2<u32>();
 
     // Transforming the 3D position from world space to view space
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
@@ -153,14 +151,15 @@ fn main(
     // Projecting the 3D position from view space (normalized) to screen space (2D)
     // Pv'[2, 1] = T[2, 3] * Pv[3, 1]
     //
-    // T [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
-    //    [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
+    // T = [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
+    //      [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
 
-    let position_3d_in_view_x_normalized = position_3d_in_view.x / depth;
-    let position_3d_in_view_y_normalized = position_3d_in_view.y / depth;
+    let position_3d_in_view_normalized = position_3d_in_view.xy / depth;
     let position_2d = vec2<f32>(
-        position_3d_in_view_x_normalized * arguments.focal_length_x + arguments.image_size_half_x - 0.5,
-        position_3d_in_view_y_normalized * arguments.focal_length_y + arguments.image_size_half_y - 0.5,
+        position_3d_in_view_normalized.x * arguments.focal_length_x +
+        arguments.image_size_half_x - 0.5,
+        position_3d_in_view_normalized.y * arguments.focal_length_y +
+        arguments.image_size_half_y - 0.5,
     );
 
     // Converting the quaternion to rotation matrix
@@ -181,9 +180,9 @@ fn main(
     // T[3, 3] = R[3, 3] * S[3, 3]
     // Σ[3, 3] (Symmetric) = T[3, 3] * T^t[3, 3]
     //
-    // S [[S.x, 0,   0]
-    //    [0,   S.y, 0]
-    //    [0,   0,   S.z]]
+    // S = [[S.x, 0,   0]
+    //      [0,   S.y, 0]
+    //      [0,   0,   S.z]]
 
     let rotation = mat3x3<f32>(
         (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
@@ -202,36 +201,31 @@ fn main(
     // T[2, 3] = J[2, 3] * Rv[3, 3]
     // Σ'[2, 2] (Symmetric) = T[2, 3] * Σ[3, 3] * T^t[3, 2] + F[2, 2]
     //
-    // J [[f.x / Pv.z, 0,          -f.x * Pv.x_c / Pv.z^2]
-    //    [0,          f.y / Pv.z, -f.y * Pv.y_c / Pv.z^2]]
-    // F [[0.3, 0]]
-    //    [0,   0.3]]
+    // J = [[f.x / Pv.z, 0,          -f.x * Pv.x / Pv.z^2]
+    //      [0,          f.y / Pv.z, -f.y * Pv.y / Pv.z^2]]
+    // F = [[0.3, 0]]
+    //      [0,   0.3]]
     //
-    // Pv.x_c is the clamped Pv.x
-    // Pv.y_c is the clamped Pv.y
+    // Pv.x and Pv.y are the clamped
 
-    let focal_length_x_normalized = arguments.focal_length_x / depth;
-    let focal_length_y_normalized = arguments.focal_length_y / depth;
-    let position_3d_in_view_x_normalized_clamped = clamp(
-        position_3d_in_view_x_normalized,
-        -arguments.view_bound_x,
-        arguments.view_bound_x,
+    let focal_length_normalized = vec2<f32>(
+        arguments.focal_length_x,
+        arguments.focal_length_y,
+    ) / depth;
+    let position_3d_in_view_normalized_clamped = clamp(
+        position_3d_in_view_normalized,
+        vec2<f32>(-arguments.view_bound_x, -arguments.view_bound_y),
+        vec2<f32>(arguments.view_bound_x, arguments.view_bound_y),
     );
-    var position_3d_in_view_y_normalized_clamped = clamp(
-        position_3d_in_view_y_normalized,
-        -arguments.view_bound_y,
-        arguments.view_bound_y,
-    );
-
     let projection = mat3x2<f32>(
-        focal_length_x_normalized, 0.0,
-        0.0, focal_length_y_normalized,
-        -focal_length_x_normalized * position_3d_in_view_x_normalized_clamped,
-        -focal_length_y_normalized * position_3d_in_view_y_normalized_clamped,
+        focal_length_normalized.x, 0.0,
+        0.0, focal_length_normalized.y,
+        -focal_length_normalized.x * position_3d_in_view_normalized_clamped.x,
+        -focal_length_normalized.y * position_3d_in_view_normalized_clamped.y,
     );
-    let transform_3d_to_2d = projection * view_rotation;
+    let covariance_3d_to_2d = projection * view_rotation;
     let covariance_2d =
-        transform_3d_to_2d * covariance_3d * transpose(transform_3d_to_2d) + mat2x2<f32>(
+        covariance_3d_to_2d * covariance_3d * transpose(covariance_3d_to_2d) + mat2x2<f32>(
             arguments.filter_low_pass, 0.0,
             0.0, arguments.filter_low_pass,
         );
