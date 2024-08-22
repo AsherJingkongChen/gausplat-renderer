@@ -100,6 +100,8 @@ fn main(
     // ∂L/∂D[1, 16] = ∂L/∂C_rgb[1, 3] * C_sh^t[3, 16]
     // ∂L/∂Dv[1, 3] = ∂L/∂D[1, 16] * ∂D/∂Dv[16, 3]
     //              = ∂L/∂C_rgb[1, 3] * (C_sh^t[3, 16] * ∂D/∂Dv[16, 3])
+    //              = ∂L/∂C_rgb[1, 3] * ∂C_rgb/∂Dv[3, 3]
+    // ∂C_rgb/∂Dv[3, 3] = C_sh^t[3, 16] * ∂D/∂Dv[16, 3]
     // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
     // ∂Ov/∂Pw[3, 3] = I
     //
@@ -128,7 +130,7 @@ fn main(
     let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_clamped[index];
     // ∂L/∂C_sh[16, 3]
     var color_sh_grad = array<vec3<f32>, 16>();
-    // C_sh^t[3, 16] * ∂D/∂Dv[16, 3]
+    // ∂C_rgb/∂Dv[3, 3]
     var color_rgb_3d_to_view_direction_grad = mat3x3<f32>();
 
     color_sh_grad[0] = color_rgb_3d_grad * (SH_C_0[0]);
@@ -209,7 +211,7 @@ fn main(
             color_sh[11] * (SH_C_3[2] * (vd_y * vd_z_10)) +
             color_sh[12] * (SH_C_3[3] * (vd_zz_5_1 * 3.0)) +
             color_sh[13] * (SH_C_3[4] * (vd_x * vd_z_10)) +
-            color_sh[14] * (SH_C_3[5] * (vd_xx_yy))
+            color_sh[14] * (SH_C_3[5] * (vd_xx_yy)),
         );
     }
 
@@ -247,6 +249,7 @@ fn main(
     // Σ' and Σ'^-1 are symmetric
 
     let conic_grad = conics_grad[index];
+    // ∂L/∂Σ'[2, 2]
     let covariance_2d_grad = -conic * conic_grad * conic;
 
     // Computing the gradients
@@ -257,24 +260,53 @@ fn main(
     //    =〈∂L/∂Σ' * T * Σ^t, ∂T〉+〈T^t * ∂L/∂Σ' * T, ∂Σ〉+〈Σ^t * T^t * ∂L/∂Σ', ∂T^t〉
     //    =〈∂L/∂Σ' * T * Σ^t + (∂L/∂Σ')^t * T * Σ, ∂T〉+〈T^t * ∂L/∂Σ' * T, ∂Σ〉
     // ∂L =〈∂L/∂T, ∂T〉
-    //    =〈∂L/∂T, J∂ * Rv + Rv * ∂J〉
+    //    =〈∂L/∂T, ∂J * Rv + J * ∂Rv〉
+    //    =〈∂L/∂T * Rv^t, ∂J〉+〈J^t * ∂L/∂T, ∂Rv〉
     //
     // ∂L/∂Σ[3, 3] = T^t[3, 2] * ∂L/∂Σ'[2, 2] * T[2, 3]
-    // ∂L/∂T[2, 3] = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ^t[3, 3]
-    //             + (∂L/∂Σ')^t[2, 2] * T[2, 3] * Σ[3, 3]
+    // ∂L/∂T[2, 3] = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ^t[3, 3] + (∂L/∂Σ')^t[2, 2] * T[2, 3] * Σ[3, 3]
+    //             = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ[3, 3] * 2
+    // ∂L/∂J[2, 3] = ∂L/∂T[2, 3] * Rv^t[3, 3]
+    //
+    // Σ and Σ' are symmetric
 
-    if covariance_2d_det[index] == 0.0 {
+    let covariance_2d_det = covariances_2d_det[index];
+    // ∂L/∂Σ[3, 3]
+    let covariance_3d_grad = select(
+        transpose(covariance_3d_to_2d) * covariance_2d_grad * covariance_3d_to_2d,
+        mat3x3<f32>(),
+        covariance_2d_det == 0.0,
+    );
+    // ∂L/∂T[2, 3]
+    let covariance_3d_to_2d_grad =
+        2.0 * covariance_2d_grad * covariance_3d_to_2d * covariance_3d;
+    // ∂L/∂J[2, 3]
+    let projection_grad = covariance_3d_to_2d_grad * transpose(view_rotation);
 
-    }
-    // if covariance_2d_det == 0.0 {
-    //     return;
-    // }
+    // Computing the gradients
+    //
+    // ∂L/∂Pv[3] = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
+    // ∂L/∂Pv[3] = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.y〉)
+    // ∂J/∂Pv.x[2, 3] = [[0, 0, -f.x / Pv.z^2]
+    //                   [0, 0, 0            ]]
+    // ∂J/∂Pv.x[2, 3] = [[0, 0, 0            ]
+    //                   [0, 0, -f.y / Pv.z^2]]
+    // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2, 0,             2 * f.x * Pv.x / Pv.z^3]
+    //                   [0,             -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
+    //
+    // Pv.x and Pv.y were clamped
 
-    // let covariance_2d_01_n = -covariance_2d[0][1];
-    // let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
-    //     covariance_2d[1][1], covariance_2d_01_n,
-    //     covariance_2d_01_n, covariance_2d[0][0],
-    // );
+    let focal_length_normalized_depth = focal_length_normalized / depth;
+    let position_3d_in_view_grad = vec3<f32>(
+        - is_position_3d_in_view_clamped.x * focal_length_normalized_depth.x * projection_grad[2][0],
+        - is_position_3d_in_view_clamped.y * focal_length_normalized_depth.y * projection_grad[2][1],
+		- focal_length_normalized_depth.x * projection_grad[0][0]
+		- focal_length_normalized_depth.y * projection_grad[1][1]
+		+ 2 * focal_length_normalized_depth.x *
+          position_3d_in_view_normalized_clamped.x * projection_grad[2][0]
+		+ 2 * focal_length_normalized_depth.y *
+          position_3d_in_view_normalized_clamped.y * projection_grad[2][1],
+    );
 
     // Specifying the results
 
