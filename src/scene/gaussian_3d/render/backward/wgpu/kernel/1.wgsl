@@ -185,6 +185,10 @@ fn main(
             let position_2d_grad = conic * position_offset * image_size * density_density_grad_half_n;
 
             // Updating the gradients of the point
+            // - 3D color in RGB space
+            // - Inverse of 2D covariance
+            // - 3D opacity
+            // - 2D position
 
             let point_index = batch_point_indexes[batch_index];
 

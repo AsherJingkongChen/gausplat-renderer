@@ -68,13 +68,12 @@ fn main(
 
     // (0 ~ P)
     let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
-    if index >= arguments.point_count {
+    if index >= arguments.point_count || radii[index] != 0u {
         return;
     }
 
-    // Load the view direction in world space
-    // vo[P, 3] = pw[P, 3] - vw[1, 3]
-    // vd[P, 3] = norm(vo)
+    // Loading the view direction in world space
+    // Dv[3] <= Ov[3] = Pw[3] - V[3]
 
     let view_offset = view_offsets[index];
     let view_direction = view_directions[index];
@@ -93,29 +92,43 @@ fn main(
     var vd_zz_5_1 = f32();
 
     // Computing the gradients
-    // (d c_sh[P, 16, 3], d vd[P, 3]) = d c_rgb[P, 3]
+    //
+    // ∂L =〈∂L/∂C_rgb, D * ∂C_sh + ∂D * C_sh〉
+    //    =〈D^t * ∂L/∂C_rgb, ∂C_sh〉+〈∂L/∂C_rgb * C_sh^t, ∂D〉
+    //
+    // ∂L/∂C_sh[16, 3] = D^t[16, 1] * ∂L/∂C_rgb[1, 3]
+    // ∂L/∂D[1, 16] = ∂L/∂C_rgb[1, 3] * C_sh^t[3, 16]
+    // ∂L/∂Dv[1, 3] = ∂L/∂D[1, 16] * ∂D/∂Dv[16, 3]
+    //              = ∂L/∂C_rgb[1, 3] * (C_sh^t[3, 16] * ∂D/∂Dv[16, 3])
+    // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
+    // ∂Ov/∂Pw[3, 3] = I
+    //
+    // C_rgb was clamped
 
     let color_sh = array<vec3<f32>, 16>(
-        vec3<f32>(colors_sh[index][0u][0], colors_sh[index][0u][1], colors_sh[index][0u][2]),
-        vec3<f32>(colors_sh[index][1u][0], colors_sh[index][1u][1], colors_sh[index][1u][2]),
-        vec3<f32>(colors_sh[index][2u][0], colors_sh[index][2u][1], colors_sh[index][2u][2]),
-        vec3<f32>(colors_sh[index][3u][0], colors_sh[index][3u][1], colors_sh[index][3u][2]),
-        vec3<f32>(colors_sh[index][4u][0], colors_sh[index][4u][1], colors_sh[index][4u][2]),
-        vec3<f32>(colors_sh[index][5u][0], colors_sh[index][5u][1], colors_sh[index][5u][2]),
-        vec3<f32>(colors_sh[index][6u][0], colors_sh[index][6u][1], colors_sh[index][6u][2]),
-        vec3<f32>(colors_sh[index][7u][0], colors_sh[index][7u][1], colors_sh[index][7u][2]),
-        vec3<f32>(colors_sh[index][8u][0], colors_sh[index][8u][1], colors_sh[index][8u][2]),
-        vec3<f32>(colors_sh[index][9u][0], colors_sh[index][9u][1], colors_sh[index][9u][2]),
-        vec3<f32>(colors_sh[index][10][0], colors_sh[index][10][1], colors_sh[index][10][2]),
-        vec3<f32>(colors_sh[index][11][0], colors_sh[index][11][1], colors_sh[index][11][2]),
-        vec3<f32>(colors_sh[index][12][0], colors_sh[index][12][1], colors_sh[index][12][2]),
-        vec3<f32>(colors_sh[index][13][0], colors_sh[index][13][1], colors_sh[index][13][2]),
-        vec3<f32>(colors_sh[index][14][0], colors_sh[index][14][1], colors_sh[index][14][2]),
-        vec3<f32>(colors_sh[index][15][0], colors_sh[index][15][1], colors_sh[index][15][2]),
+        vec_from_array_f32_3(colors_sh[index][0u]),
+        vec_from_array_f32_3(colors_sh[index][1u]),
+        vec_from_array_f32_3(colors_sh[index][2u]),
+        vec_from_array_f32_3(colors_sh[index][3u]),
+        vec_from_array_f32_3(colors_sh[index][4u]),
+        vec_from_array_f32_3(colors_sh[index][5u]),
+        vec_from_array_f32_3(colors_sh[index][6u]),
+        vec_from_array_f32_3(colors_sh[index][7u]),
+        vec_from_array_f32_3(colors_sh[index][8u]),
+        vec_from_array_f32_3(colors_sh[index][9u]),
+        vec_from_array_f32_3(colors_sh[index][10]),
+        vec_from_array_f32_3(colors_sh[index][11]),
+        vec_from_array_f32_3(colors_sh[index][12]),
+        vec_from_array_f32_3(colors_sh[index][13]),
+        vec_from_array_f32_3(colors_sh[index][14]),
+        vec_from_array_f32_3(colors_sh[index][15]),
     );
 
+    // ∂L/∂C_rgb[1, 3]
     let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_clamped[index];
+    // ∂L/∂C_sh[16, 3]
     var color_sh_grad = array<vec3<f32>, 16>();
+    // C_sh^t[3, 16] * ∂D/∂Dv[16, 3]
     var color_rgb_3d_to_view_direction_grad = mat3x3<f32>();
 
     color_sh_grad[0] = color_rgb_3d_grad * (SH_C_0[0]);
@@ -200,10 +213,10 @@ fn main(
         );
     }
 
-    // d vd[1, 3] = d c_rgb[1, 3] * d/dvd c_rgb[3, 3]
+    // ∂L/∂Dv[1, 3]
     let view_direction_grad = color_rgb_3d_grad * color_rgb_3d_to_view_direction_grad;
 
-    // d pw[1, 3] = d vo[1, 3] = d vd[1, 3] * d/vo vd[3, 3]
+    // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
     let vo_xx = view_offset.x * view_offset.x;
     let vo_yy = view_offset.y * view_offset.y;
     let vo_zz = view_offset.z * view_offset.z;
@@ -219,29 +232,79 @@ fn main(
 
     // TODO: End of colors and directions
 
+    // Computing the gradients
+    //
+    // ∂I = ∂(Σ'^-1 * Σ')
+    //    = Σ'^-1 * ∂Σ' + ∂Σ'^-1 * Σ'
+    // ∂Σ'^-1 = -Σ'^-1 * ∂Σ' * Σ'^-1
+    // ∂L =〈∂L/∂Σ'^-1, ∂Σ'^-1〉
+    //    =〈∂L/∂Σ'^-1, -Σ'^-1 * ∂Σ' * Σ'^-1〉
+    //    =〈-Σ'^-1^t * ∂L/∂Σ'^-1 * Σ'^-1^t, ∂Σ'〉
+    //
+    // ∂L/∂Σ'[2, 2] = -Σ'^-1^t[2, 2] * ∂L/∂Σ'^-1[2, 2] * Σ'^-1^t[2, 2]
+    //              = -Σ'^-1[2, 2] * ∂L/∂Σ'^-1[2, 2] * Σ'^-1[2, 2]
+    //
+    // Σ' and Σ'^-1 are symmetric
+
+    let conic_grad = conics_grad[index];
+    let covariance_2d_grad = -conic * conic_grad * conic;
+
+    // Computing the gradients
+    //
+    // ∂L =〈∂L/∂Σ', ∂Σ'〉
+    //    =〈∂L/∂Σ', ∂(T * Σ * T^t)〉
+    //    =〈∂L/∂Σ', ∂T * Σ * T^t + T * ∂Σ * T^t + T * Σ * ∂T^t〉
+    //    =〈∂L/∂Σ' * T * Σ^t, ∂T〉+〈T^t * ∂L/∂Σ' * T, ∂Σ〉+〈Σ^t * T^t * ∂L/∂Σ', ∂T^t〉
+    //    =〈∂L/∂Σ' * T * Σ^t + (∂L/∂Σ')^t * T * Σ, ∂T〉+〈T^t * ∂L/∂Σ' * T, ∂Σ〉
+    // ∂L =〈∂L/∂T, ∂T〉
+    //    =〈∂L/∂T, J∂ * Rv + Rv * ∂J〉
+    //
+    // ∂L/∂Σ[3, 3] = T^t[3, 2] * ∂L/∂Σ'[2, 2] * T[2, 3]
+    // ∂L/∂T[2, 3] = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ^t[3, 3]
+    //             + (∂L/∂Σ')^t[2, 2] * T[2, 3] * Σ[3, 3]
+
+    if covariance_2d_det[index] == 0.0 {
+
+    }
+    // if covariance_2d_det == 0.0 {
+    //     return;
+    // }
+
+    // let covariance_2d_01_n = -covariance_2d[0][1];
+    // let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
+    //     covariance_2d[1][1], covariance_2d_01_n,
+    //     covariance_2d_01_n, covariance_2d[0][0],
+    // );
+
     // Specifying the results
 
+    // [P, 16, 3]
     colors_sh_grad[index] = array<array<f32, 3>, 16>(
-        array<f32, 3>(color_sh_grad[0u][0], color_sh_grad[0u][1], color_sh_grad[0u][2]),
-        array<f32, 3>(color_sh_grad[1u][0], color_sh_grad[1u][1], color_sh_grad[1u][2]),
-        array<f32, 3>(color_sh_grad[2u][0], color_sh_grad[2u][1], color_sh_grad[2u][2]),
-        array<f32, 3>(color_sh_grad[3u][0], color_sh_grad[3u][1], color_sh_grad[3u][2]),
-        array<f32, 3>(color_sh_grad[4u][0], color_sh_grad[4u][1], color_sh_grad[4u][2]),
-        array<f32, 3>(color_sh_grad[5u][0], color_sh_grad[5u][1], color_sh_grad[5u][2]),
-        array<f32, 3>(color_sh_grad[6u][0], color_sh_grad[6u][1], color_sh_grad[6u][2]),
-        array<f32, 3>(color_sh_grad[7u][0], color_sh_grad[7u][1], color_sh_grad[7u][2]),
-        array<f32, 3>(color_sh_grad[8u][0], color_sh_grad[8u][1], color_sh_grad[8u][2]),
-        array<f32, 3>(color_sh_grad[9u][0], color_sh_grad[9u][1], color_sh_grad[9u][2]),
-        array<f32, 3>(color_sh_grad[10][0], color_sh_grad[10][1], color_sh_grad[10][2]),
-        array<f32, 3>(color_sh_grad[11][0], color_sh_grad[11][1], color_sh_grad[11][2]),
-        array<f32, 3>(color_sh_grad[12][0], color_sh_grad[12][1], color_sh_grad[12][2]),
-        array<f32, 3>(color_sh_grad[13][0], color_sh_grad[13][1], color_sh_grad[13][2]),
-        array<f32, 3>(color_sh_grad[14][0], color_sh_grad[14][1], color_sh_grad[14][2]),
-        array<f32, 3>(color_sh_grad[15][0], color_sh_grad[15][1], color_sh_grad[15][2]),
+        array_from_vec3_f32(color_sh_grad[0u]),
+        array_from_vec3_f32(color_sh_grad[1u]),
+        array_from_vec3_f32(color_sh_grad[2u]),
+        array_from_vec3_f32(color_sh_grad[3u]),
+        array_from_vec3_f32(color_sh_grad[4u]),
+        array_from_vec3_f32(color_sh_grad[5u]),
+        array_from_vec3_f32(color_sh_grad[6u]),
+        array_from_vec3_f32(color_sh_grad[7u]),
+        array_from_vec3_f32(color_sh_grad[8u]),
+        array_from_vec3_f32(color_sh_grad[9u]),
+        array_from_vec3_f32(color_sh_grad[10]),
+        array_from_vec3_f32(color_sh_grad[11]),
+        array_from_vec3_f32(color_sh_grad[12]),
+        array_from_vec3_f32(color_sh_grad[13]),
+        array_from_vec3_f32(color_sh_grad[14]),
+        array_from_vec3_f32(color_sh_grad[15]),
     );
-    positions_3d_grad[index] = array<f32, 3>(
-        position_3d_grad[0],
-        position_3d_grad[1],
-        position_3d_grad[2],
-    );
+    // [P, 3]
+    positions_3d_grad[index] = array_from_vec3_f32(position_3d_grad);
+}
+
+fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
+    return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {
+    return vec3<f32>(a[0], a[1], a[2]);
 }

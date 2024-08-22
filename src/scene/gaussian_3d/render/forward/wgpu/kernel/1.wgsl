@@ -237,7 +237,7 @@ fn main(
         );
 
     // Computing the inverse of the 2D covariance matrix
-    // Σ'^-1[2, 2] (Symmetric) = Σ'[2, 2]
+    // Σ'^-1[2, 2] (Symmetric) <= Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
 
@@ -248,10 +248,10 @@ fn main(
     }
 
     let covariance_2d_01_n = -covariance_2d[0][1];
-    let conic = mat2x2<f32>(
+    let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,
         covariance_2d_01_n, covariance_2d[0][0],
-    ) * (1.0 / covariance_2d_det);
+    );
 
     // Computing the max radius using the 2D covariance matrix
     // r <= Σ'[2, 2]
