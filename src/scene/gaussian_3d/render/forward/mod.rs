@@ -61,7 +61,7 @@ pub struct RendererOutput<B: Backend> {
     pub view_directions: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`
     pub view_offsets: B::FloatTensorPrimitive<2>,
-    /// `[4, 4]`
+    /// `[3 (+ 1), 4]`
     pub view_transform: B::FloatTensorPrimitive<2>,
 }
 
@@ -134,9 +134,11 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     }));
 
     // [P, 3]
-    let positions_3d = into_contiguous(scene.positions().into_primitive()).handle;
+    let positions_3d =
+        into_contiguous(scene.positions().into_primitive()).handle;
     // [P, 1]
-    let opacities_3d = into_contiguous(scene.opacities().into_primitive()).handle;
+    let opacities_3d =
+        into_contiguous(scene.opacities().into_primitive()).handle;
     // [P, 4]
     let rotations = into_contiguous(scene.rotations().into_primitive()).handle;
     // [P, 3]
@@ -144,16 +146,9 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     // [3]
     let view_position =
         client.create(bytes_of(&view.view_position.map(|c| c as f32)));
-    // [4, 4]
-    let view_transform = {
-        let view_transform_in_column_major = [
-            view.view_transform.map(|r| r[0] as f32),
-            view.view_transform.map(|r| r[1] as f32),
-            view.view_transform.map(|r| r[2] as f32),
-            view.view_transform.map(|r| r[3] as f32),
-        ];
-        client.create(bytes_of(&view_transform_in_column_major))
-    };
+    // [3 (+ 1), 4]
+    let view_transform = client
+        .create(bytes_of(&view.view_transform.map(|c| c.map(|c| c as f32))));
     // [P, 3 (+ 1)] (the alignment of vec3<f32> is 16 = (3 + 1) * 4 bytes)
     let colors_rgb_3d = client.empty(point_count * (3 + 1) * 4);
     // [P, 2, 2]
@@ -529,11 +524,11 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
             [point_count, 3 + 1].into(),
             view_offsets,
         ),
-        // [4, 4]
+        // [3 (+ 1), 4]
         view_transform: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
             device.to_owned(),
-            [4, 4].into(),
+            [3 + 1, 4].into(),
             view_transform,
         ),
     };
