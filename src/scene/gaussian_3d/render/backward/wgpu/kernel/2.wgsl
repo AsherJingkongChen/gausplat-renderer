@@ -8,7 +8,7 @@ struct Arguments {
 var<storage, read> arguments: Arguments;
 // [P, 3 (+ 1)]
 @group(0) @binding(1)
-var<storage, read> colors_rgb_3d_grad: array<vec3<f32>>; // dL_dcolor // HIDE
+var<storage, read> colors_rgb_3d_grad: array<vec3<f32>>;
 // [P, 16, 3]
 @group(0) @binding(2)
 var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
@@ -68,10 +68,19 @@ var<storage, read> view_offsets: array<vec3<f32>>;
 var<storage, read> view_rotation: mat3x3<f32>;
 // [P, 16, 3]
 @group(0) @binding(21)
-var<storage, read_write> colors_sh_grad: array<array<array<f32, 3>, 16>>; // dL_dshs // OUTPUT
-// [P, 3]
+var<storage, read_write> colors_sh_grad: array<array<array<f32, 3>, 16>>;
+// [P]
 @group(0) @binding(22)
-var<storage, read_write> positions_3d_grad: array<array<f32, 3>>; // dL_dmeans // OUTPUT
+var<storage, read_write> positions_2d_grad_norm: array<f32>;
+// [P, 3]
+@group(0) @binding(23)
+var<storage, read_write> positions_3d_grad: array<array<f32, 3>>;
+// [P, 4] (x, y, z, w)
+@group(0) @binding(24)
+var<storage, read_write> rotations_grad: array<vec4<f32>>;
+// [P, 3]
+@group(0) @binding(25)
+var<storage, read_write> scalings_grad: array<array<f32, 3>>;
 
 const SH_C_0: array<f32, 1> = array<f32, 1>(
     0.2820948,
@@ -113,10 +122,6 @@ fn main(
     if index >= arguments.point_count || radii[index] != 0u {
         return;
     }
-
-    // Specifying the parameters
-
-    var position_3d_grad = vec3<f32>();
 
     // Loading the view direction in world space
     // Dv[3] <= Ov[3] = Pw[3] - V[3]
@@ -280,7 +285,7 @@ fn main(
     let vo_yz_n = -view_offset.y * view_offset.z;
     let vo_l2_invsqrt3 = pow(inverseSqrt(vo_xx + vo_yy + vo_zz), 3.0);
     // ∂L/∂Pw[1, 3]
-    position_3d_grad += view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
+    var position_3d_grad = view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
         vo_yy + vo_zz, vo_xy_n, vo_xz_n,
         vo_xy_n, vo_xx + vo_zz, vo_yz_n,
         vo_xz_n, vo_yz_n, vo_xx + vo_yy,

@@ -58,7 +58,7 @@ var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 3 (+ 1), 3] (Symmetric)
 @group(0) @binding(9)
 var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
-// [P] (0.2 ~ )
+// [P]
 @group(0) @binding(10)
 var<storage, read_write> depths: array<f32>;
 // [P, 3 (+ 1)] (0.0, 1.0)
@@ -235,14 +235,9 @@ fn main(
 
     let covariance_2d_det = determinant(covariance_2d);
 
-    // Leaving if the 2D covariance matrix is non-invertible
-
-    if covariance_2d_det == 0.0 {
-        return;
-    }
-
     let covariance_2d_01_n = -covariance_2d[0][1];
-    let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
+    let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det == 0.0);
+    let conic = covariance_2d_det_inv * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,
         covariance_2d_01_n, covariance_2d[0][0],
     );
@@ -374,15 +369,15 @@ fn main(
 
     // Specifying the results
 
-    // [P, 3]
+    // [P, 3 (+ 1)]
     colors_rgb_3d[index] = color_rgb_3d;
     // [P, 2, 2] (Symmetric)
     conics[index] = conic;
-    // [P, 3, 3] (Symmetric)
+    // [P, 3 (+ 1), 3] (Symmetric)
     covariances_3d[index] = covariance_3d;
     // [P]
     depths[index] = depth;
-    // [P, 3]
+    // [P, 3 (+ 1)]
     is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
     // [P, 2]
     positions_2d[index] = position_2d;
@@ -394,9 +389,9 @@ fn main(
     tiles_touched_max[index] = tile_touched_max;
     // [P, 2]
     tiles_touched_min[index] = tile_touched_min;
-    // [P, 3]
+    // [P, 3 (+ 1)]
     view_directions[index] = view_direction;
-    // [P, 3]
+    // [P, 3 (+ 1)]
     view_offsets[index] = view_offset;
 }
 

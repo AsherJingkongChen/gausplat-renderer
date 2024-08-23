@@ -12,7 +12,7 @@ var<storage, read> arguments: Arguments;
 var<storage, read> conics: array<mat2x2<f32>>;
 // [I_Y, I_X, 3]
 @group(0) @binding(2)
-var<storage, read> colors_rgb_2d_grad: array<array<f32, 3>>; // dL_dpixels
+var<storage, read> colors_rgb_2d_grad: array<array<f32, 3>>;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
 @group(0) @binding(3)
 var<storage, read> colors_rgb_3d: array<vec3<f32>>;
@@ -36,16 +36,16 @@ var<storage, read> tile_point_ranges: array<vec2<u32>>;
 var<storage, read> transmittances: array<f32>;
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
-var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>; // dL_dcolors, // HIDE
-// [P, 2, 2]
+var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
+// [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
-var<storage, read_write> conics_grad: array<atomic<f32>>; // dL_dconic2D, // HIDE
+var<storage, read_write> conics_grad: array<atomic<f32>>;
 // [P]
 @group(0) @binding(12)
-var<storage, read_write> opacities_3d_grad: array<atomic<f32>>; // dL_dopacity, // OUTPUT
+var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
 // [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> positions_2d_grad: array<atomic<f32>>; // dL_dmean2D, // OUTPUT
+var<storage, read_write> positions_2d_grad: array<atomic<f32>>;
 
 // [T_X * T_Y, 3]
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
