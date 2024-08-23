@@ -82,10 +82,10 @@ pub(super) fn render_gaussian_3d_scene_wgpu(
     let image_size_x = view.image_width as usize;
     // I_Y
     let image_size_y = view.image_height as usize;
-    // I_X / 2
-    let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
-    // I_Y / 2
-    let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
+    // I_X * 0.5 - 0.5
+    let image_size_half_x = (image_size_x as f64 * 0.5 - 0.5) as f32;
+    // I_Y * 0.5 - 0.5
+    let image_size_half_y = (image_size_y as f64 * 0.5 - 0.5) as f32;
     let focal_length_x =
         (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     let focal_length_y =

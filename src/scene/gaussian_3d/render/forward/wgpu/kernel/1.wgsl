@@ -7,9 +7,9 @@ struct Arguments {
     image_size_x: u32,
     // I_Y
     image_size_y: u32,
-    // I_X / 2
+    // I_X * 0.5 - 0.5
     image_size_half_x: f32,
-    // I_Y / 2
+    // I_Y * 0.5 - 0.5
     image_size_half_y: f32,
     // P
     point_count: u32,
@@ -23,6 +23,10 @@ struct Arguments {
     tile_size_y: u32,
     view_bound_x: f32,
     view_bound_y: f32,
+}
+struct ViewTransform {
+    rotation: mat3x3<f32>,
+    translation: vec3<f32>,
 }
 
 @group(0) @binding(0)
@@ -44,7 +48,7 @@ var<storage, read> scalings: array<array<f32, 3>>;
 var<storage, read> view_position: vec3<f32>;
 // [3 (+ 1), 4]
 @group(0) @binding(6)
-var<storage, read> view_transform: mat4x3<f32>;
+var<storage, read> view_transform: ViewTransform;
 // [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
@@ -133,12 +137,8 @@ fn main(
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
-    let view_rotation = mat3x3<f32>(
-        view_transform[0],
-        view_transform[1],
-        view_transform[2],
-    );
-    let view_translation = view_transform[3];
+    let view_rotation = view_transform.rotation;
+    let view_translation = view_transform.translation;
     let position_3d_in_view = view_rotation * position_3d + view_translation;
     let depth = position_3d_in_view.z + EPSILON;
 
@@ -148,18 +148,20 @@ fn main(
         return;
     }
 
-    // Projecting the 3D position from view space (normalized) to screen space (2D)
+    // Transforming the 3D position to 2D position (view => normalized => clip => screen)
     // Pv'[2, 1] = T[2, 3] * Pv[3, 1]
     //
     // T = [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
     //      [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
 
-    let position_3d_in_view_normalized = position_3d_in_view.xy / depth;
-    let position_2d = vec2<f32>(
-        position_3d_in_view_normalized.x * arguments.focal_length_x +
-        arguments.image_size_half_x - 0.5,
-        position_3d_in_view_normalized.y * arguments.focal_length_y +
-        arguments.image_size_half_y - 0.5,
+    let position_3d_in_normalized = position_3d_in_view.xy / depth;
+    let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
+        arguments.focal_length_x,
+        arguments.focal_length_y,
+    );
+    let position_2d = position_3d_in_clip + vec2<f32>(
+        arguments.image_size_half_x,
+        arguments.image_size_half_y,
     );
 
     // Converting the quaternion to rotation matrix
@@ -177,8 +179,8 @@ fn main(
     let q_zz = quaternion.z * quaternion.z;
 
     // Computing the 3D covariance matrix from rotation and scaling
-    // T[3, 3] = R[3, 3] * S[3, 3]
-    // Σ[3, 3] (Symmetric) = T[3, 3] * T^t[3, 3]
+    // RS[3, 3] = R[3, 3] * S[3, 3]
+    // Σ[3, 3] (Symmetric) = RS[3, 3] * RS^t[3, 3]
     //
     // S = [[S.x, 0,   0]
     //      [0,   S.y, 0]
@@ -208,27 +210,26 @@ fn main(
     //
     // Pv.x and Pv.y are the clamped
 
-    let focal_length_normalized = vec2<f32>(
+    let focal_length_z = vec2<f32>(
         arguments.focal_length_x,
         arguments.focal_length_y,
     ) / depth;
-    let position_3d_in_view_normalized_clamped = clamp(
-        position_3d_in_view_normalized,
+    let position_3d_in_normalized_clamped = clamp(
+        position_3d_in_normalized,
         vec2<f32>(-arguments.view_bound_x, -arguments.view_bound_y),
         vec2<f32>(arguments.view_bound_x, arguments.view_bound_y),
     );
-    let projection = mat3x2<f32>(
-        focal_length_normalized.x, 0.0,
-        0.0, focal_length_normalized.y,
-        -focal_length_normalized.x * position_3d_in_view_normalized_clamped.x,
-        -focal_length_normalized.y * position_3d_in_view_normalized_clamped.y,
+    let projection_affine = mat3x2<f32>(
+        focal_length_z.x, 0.0,
+        0.0, focal_length_z.y,
+        -focal_length_z.x * position_3d_in_normalized_clamped.x,
+        -focal_length_z.y * position_3d_in_normalized_clamped.y,
     );
-    let covariance_3d_to_2d = projection * view_rotation;
-    let covariance_2d =
-        covariance_3d_to_2d * covariance_3d * transpose(covariance_3d_to_2d) + mat2x2<f32>(
-            arguments.filter_low_pass, 0.0,
-            0.0, arguments.filter_low_pass,
-        );
+    let transform_2d = projection_affine * view_rotation;
+    let covariance_2d = transform_2d * covariance_3d * transpose(transform_2d) + mat2x2<f32>(
+        arguments.filter_low_pass, 0.0,
+        0.0, arguments.filter_low_pass,
+    );
 
     // Computing the inverse of the 2D covariance matrix
     // Σ'^-1[2, 2] (Symmetric) <= Σ'[2, 2]
@@ -267,29 +268,23 @@ fn main(
         f32(arguments.tile_size_x),
         f32(arguments.tile_size_y),
     );
-    let tile_touched_max = vec2<u32>(
-        clamp(
+    let tile_touched_max = clamp(
+        vec2<u32>(
             u32((position_2d.x + radius + tile_size_f32.x - 1.0) / tile_size_f32.x),
-            0u, arguments.tile_count_x,
-        ),
-        clamp(
             u32((position_2d.y + radius + tile_size_f32.y - 1.0) / tile_size_f32.y),
-            0u, arguments.tile_count_y,
         ),
+        vec2<u32>(),
+        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
     );
-    let tile_touched_min = vec2<u32>(
-        clamp(
+    let tile_touched_min = clamp(
+        vec2<u32>(
             u32((position_2d.x - radius) / tile_size_f32.x),
-            0u, arguments.tile_count_x,
-        ),
-        clamp(
             u32((position_2d.y - radius) / tile_size_f32.y),
-            0u, arguments.tile_count_y,
         ),
+        vec2<u32>(),
+        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
     );
-    let tile_touched_count =
-        (tile_touched_max.x - tile_touched_min.x) *
-        (tile_touched_max.y - tile_touched_min.y);
+    let tile_touched_count = (tile_touched_max.x - tile_touched_min.x) * (tile_touched_max.y - tile_touched_min.y);
     
     // Leaving if no tile is touched
 
@@ -343,10 +338,9 @@ fn main(
         vd_y = view_direction.y;
         vd_z = view_direction.z;
 
-        color_rgb_3d +=
-            color_sh[1] * (SH_C_1[0] * (vd_y)) +
-            color_sh[2] * (SH_C_1[1] * (vd_z)) +
-            color_sh[3] * (SH_C_1[2] * (vd_x));
+        color_rgb_3d += color_sh[1] * (SH_C_1[0] * (vd_y));
+        color_rgb_3d += color_sh[2] * (SH_C_1[1] * (vd_z));
+        color_rgb_3d += color_sh[3] * (SH_C_1[2] * (vd_x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
@@ -355,25 +349,23 @@ fn main(
         vd_yy = vd_y * vd_y;
         vd_zz = vd_z * vd_z;
 
-        color_rgb_3d +=
-            color_sh[4] * (SH_C_2[0] * (vd_xy)) +
-            color_sh[5] * (SH_C_2[1] * (vd_y * vd_z)) +
-            color_sh[6] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0)) +
-            color_sh[7] * (SH_C_2[3] * (vd_x * vd_z)) +
-            color_sh[8] * (SH_C_2[4] * (vd_xx - vd_yy));
+        color_rgb_3d += color_sh[4] * (SH_C_2[0] * (vd_xy));
+        color_rgb_3d += color_sh[5] * (SH_C_2[1] * (vd_y * vd_z));
+        color_rgb_3d += color_sh[6] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0));
+        color_rgb_3d += color_sh[7] * (SH_C_2[3] * (vd_x * vd_z));
+        color_rgb_3d += color_sh[8] * (SH_C_2[4] * (vd_xx - vd_yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
         vd_zz_5_1 = vd_zz * 5.0 - 1.0;
 
-        color_rgb_3d +=
-            color_sh[9u] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy))) +
-            color_sh[10] * (SH_C_3[1] * (vd_z * (vd_xy))) +
-            color_sh[11] * (SH_C_3[2] * (vd_y * (vd_zz_5_1))) +
-            color_sh[12] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0))) +
-            color_sh[13] * (SH_C_3[4] * (vd_x * (vd_zz_5_1))) +
-            color_sh[14] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy))) +
-            color_sh[15] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+        color_rgb_3d += color_sh[9u] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy)));
+        color_rgb_3d += color_sh[10] * (SH_C_3[1] * (vd_z * (vd_xy)));
+        color_rgb_3d += color_sh[11] * (SH_C_3[2] * (vd_y * (vd_zz_5_1)));
+        color_rgb_3d += color_sh[12] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0)));
+        color_rgb_3d += color_sh[13] * (SH_C_3[4] * (vd_x * (vd_zz_5_1)));
+        color_rgb_3d += color_sh[14] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy)));
+        color_rgb_3d += color_sh[15] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;

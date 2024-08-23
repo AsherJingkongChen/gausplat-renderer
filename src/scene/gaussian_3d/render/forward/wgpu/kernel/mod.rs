@@ -17,9 +17,9 @@ pub struct Kernel1Arguments {
     pub image_size_x: u32,
     /// `I_Y`
     pub image_size_y: u32,
-    /// `I_X / 2`
+    /// `I_X * 0.5 - 0.5`
     pub image_size_half_x: f32,
-    /// `I_Y / 2`
+    /// `I_Y * 0.5 - 0.5`
     pub image_size_half_y: f32,
     /// `P`
     pub point_count: u32,

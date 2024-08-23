@@ -72,6 +72,12 @@ fn main(
         return;
     }
 
+    // Specifying the parameters
+
+    let view_rotation_transposed = transpose(view_rotation);
+
+    var position_3d_grad = vec3<f32>();
+
     // Loading the view direction in world space
     // Dv[3] <= Ov[3] = Pw[3] - V[3]
 
@@ -93,17 +99,16 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L =〈∂L/∂C_rgb, D * ∂C_sh + ∂D * C_sh〉
-    //    =〈D^t * ∂L/∂C_rgb, ∂C_sh〉+〈∂L/∂C_rgb * C_sh^t, ∂D〉
+    // ∂L =〈∂L/∂C_rgb, ∂D * C_sh + D * ∂C_sh〉
+    //    =〈∂L/∂C_rgb * C_sh^t, ∂D〉+〈D^t * ∂L/∂C_rgb, ∂C_sh〉
     //
     // ∂L/∂C_sh[16, 3] = D^t[16, 1] * ∂L/∂C_rgb[1, 3]
+    //
     // ∂L/∂D[1, 16] = ∂L/∂C_rgb[1, 3] * C_sh^t[3, 16]
     // ∂L/∂Dv[1, 3] = ∂L/∂D[1, 16] * ∂D/∂Dv[16, 3]
     //              = ∂L/∂C_rgb[1, 3] * (C_sh^t[3, 16] * ∂D/∂Dv[16, 3])
     //              = ∂L/∂C_rgb[1, 3] * ∂C_rgb/∂Dv[3, 3]
     // ∂C_rgb/∂Dv[3, 3] = C_sh^t[3, 16] * ∂D/∂Dv[16, 3]
-    // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
-    // ∂Ov/∂Pw[3, 3] = I
     //
     // C_rgb was clamped
 
@@ -215,10 +220,18 @@ fn main(
         );
     }
 
+    // Computing the gradients
+    //
+    // ∂L/∂Dv[1, 3] = ∂L/∂C_rgb[1, 3] * ∂C_rgb/∂Dv[3, 3]
+    // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
+    // ∂Ov/∂Pw[3, 3] = I
+    // ∂Dv/∂Ov[3, 3] = [[Dv.y^2 + Dv.z^2, -Dv.x * Dv.y,    -Dv.x * Dv.z]
+    //                  [-Dv.x * Dv.y,    Dv.x^2 + Dv.z^2, -Dv.y * Dv.z]
+    //                  [-Dv.x * Dv.z,    -Dv.y * Dv.z,    Dv.x^2 + Dv.y^2]]
+    //               * (Dv.x^2 + Dv.y^2 + Dv.z^2)^-3/2
+
     // ∂L/∂Dv[1, 3]
     let view_direction_grad = color_rgb_3d_grad * color_rgb_3d_to_view_direction_grad;
-
-    // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
     let vo_xx = view_offset.x * view_offset.x;
     let vo_yy = view_offset.y * view_offset.y;
     let vo_zz = view_offset.z * view_offset.z;
@@ -226,13 +239,12 @@ fn main(
     let vo_xz_n = -view_offset.x * view_offset.z;
     let vo_yz_n = -view_offset.y * view_offset.z;
     let vo_l2_invsqrt3 = pow(inverseSqrt(vo_xx + vo_yy + vo_zz), 3.0);
-    let position_3d_grad = view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
+    // ∂L/∂Pw[1, 3]
+    position_3d_grad += view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
         vo_yy + vo_zz, vo_xy_n, vo_xz_n,
         vo_xy_n, vo_xx + vo_zz, vo_yz_n,
         vo_xz_n, vo_yz_n, vo_xx + vo_yy,
     );
-
-    // TODO: End of colors and directions
 
     // Computing the gradients
     //
@@ -271,17 +283,18 @@ fn main(
     // Σ and Σ' are symmetric
 
     let covariance_2d_det = covariances_2d_det[index];
+    let covariance_3d = covariances_3d[index];
+    let transform_2d = transforms_2d[index];
     // ∂L/∂Σ[3, 3]
     let covariance_3d_grad = select(
-        transpose(covariance_3d_to_2d) * covariance_2d_grad * covariance_3d_to_2d,
+        transpose(transform_2d) * covariance_2d_grad * transform_2d,
         mat3x3<f32>(),
         covariance_2d_det == 0.0,
     );
     // ∂L/∂T[2, 3]
-    let covariance_3d_to_2d_grad =
-        2.0 * covariance_2d_grad * covariance_3d_to_2d * covariance_3d;
+    let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
     // ∂L/∂J[2, 3]
-    let projection_grad = covariance_3d_to_2d_grad * transpose(view_rotation);
+    let projection_affine_grad = transform_2d_grad * view_rotation_transposed;
 
     // Computing the gradients
     //
@@ -293,20 +306,105 @@ fn main(
     //                   [0, 0, -f.y / Pv.z^2]]
     // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2, 0,             2 * f.x * Pv.x / Pv.z^3]
     //                   [0,             -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
-    //
-    // Pv.x and Pv.y were clamped
 
-    let focal_length_normalized_depth = focal_length_normalized / depth;
+    let depth = depths[index];
+    let focal_length_z = focal_lengths_z[index];
+    let focal_length_zz = focal_length_z / depth;
+    let is_position_3d_in_normalized_clamped = is_positions_3d_in_normalized_clamped[index];
+    let position_3d_in_normalized_clamped = positions_3d_in_normalized_clamped[index];
+    let focal_length_zz_projection_affine_grad_2 = focal_length_zz * projection_affine_grad[2];
+    // ∂L/∂Pv[3]
     let position_3d_in_view_grad = vec3<f32>(
-        - is_position_3d_in_view_clamped.x * focal_length_normalized_depth.x * projection_grad[2][0],
-        - is_position_3d_in_view_clamped.y * focal_length_normalized_depth.y * projection_grad[2][1],
-		- focal_length_normalized_depth.x * projection_grad[0][0]
-		- focal_length_normalized_depth.y * projection_grad[1][1]
-		+ 2 * focal_length_normalized_depth.x *
-          position_3d_in_view_normalized_clamped.x * projection_grad[2][0]
-		+ 2 * focal_length_normalized_depth.y *
-          position_3d_in_view_normalized_clamped.y * projection_grad[2][1],
+        - is_position_3d_in_normalized_clamped.x * focal_length_zz_projection_affine_grad_2.x,
+        - is_position_3d_in_normalized_clamped.y * focal_length_zz_projection_affine_grad_2.y,
+		- focal_length_zz.x * projection_affine_grad[0][0]
+		- focal_length_zz.y * projection_affine_grad[1][1]
+		+ 2 * position_3d_in_normalized_clamped.x * focal_length_zz_projection_affine_grad_2.x
+		+ 2 * position_3d_in_normalized_clamped.y * focal_length_zz_projection_affine_grad_2.y,
     );
+
+    // Computing the gradients
+    //
+    // ∂L =〈∂L/∂Pv, ∂Pv〉
+    //    =〈∂L/∂Pv, ∂(Rv * Pw + Tv)〉
+    //    =〈∂L/∂Pv, ∂Rv * Pw + Rv * ∂Pw〉
+    //    =〈∂L/∂Pv * Pw^t, ∂Rv〉+〈Rv^t * ∂L/∂Pv, ∂Pw〉
+    //
+    // ∂L/∂Pw[3, 1] = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
+
+    position_3d_grad += view_rotation_transposed * position_3d_in_view_grad;
+
+    // Computing the gradients
+    //
+    // ∂L =〈∂L/∂Σ, ∂Σ〉
+    //    =〈∂L/∂Σ, ∂(RS * RS^t)〉
+    //    =〈∂L/∂Σ, ∂RS * (RS)^t + RS * ∂RS^t〉
+    //    =〈∂L/∂Σ * RS, ∂RS〉+〈RS^t * ∂L/∂Σ, ∂RS^t〉
+    //    =〈∂L/∂Σ * RS, ∂RS〉+〈(∂L/∂Σ)^t * RS, ∂RS〉
+    //    =〈2 * ∂L/∂Σ * RS, ∂RS〉
+    //
+    // ∂L/∂RS[3, 3] = 2 * ∂L/∂Σ[3, 3] * RS[3, 3]
+    //
+    // Σ is symmetric
+
+    let rotation_scaling_grad = 2.0 * covariance_3d_grad * rotation_scaling;
+
+    // Computing the gradients
+    //
+    // ∂L =〈∂L/∂RS, ∂RS〉
+    //    =〈∂L/∂RS, ∂R * S + R * ∂S〉
+    //    =〈∂L/∂RS * S^t, ∂R〉+〈R^t * ∂L/∂RS, ∂S〉
+    //
+    // ∂L/∂R[3, 3] = ∂L/∂RS[3, 3] * S^t[3, 3]
+    // ∂L/∂S[3, 3] = R^t[3, 3] * ∂L/∂RS[3, 3]
+    //
+    // S is symmetric
+
+    let rotation = rotations[index];
+    let scaling = scalings[index];
+    // ∂L/∂R[3, 3]
+    let rotation_grad = mat3x3<f32>(
+        rotation_scaling_grad[0] * scaling[0],
+        rotation_scaling_grad[1] * scaling[1],
+        rotation_scaling_grad[2] * scaling[2],
+    );
+    // ∂L/∂S[3, 3]
+    let scaling_grad = transpose(rotation) * rotation_scaling_grad;
+
+    // // Converting the quaternion to rotation matrix
+    // // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
+
+    // let quaternion = rotations[index];
+    // let q_wx = quaternion.w * quaternion.x;
+    // let q_wy = quaternion.w * quaternion.y;
+    // let q_wz = quaternion.w * quaternion.z;
+    // let q_xx = quaternion.x * quaternion.x;
+    // let q_xy = quaternion.x * quaternion.y;
+    // let q_xz = quaternion.x * quaternion.z;
+    // let q_yy = quaternion.y * quaternion.y;
+    // let q_yz = quaternion.y * quaternion.z;
+    // let q_zz = quaternion.z * quaternion.z;
+
+    // // Computing the 3D covariance matrix from rotation and scaling
+    // // T[3, 3] = R[3, 3] * S[3, 3]
+    // // Σ[3, 3] (Symmetric) = T[3, 3] * T^t[3, 3]
+    // //
+    // // S = [[S.x, 0,   0]
+    // //      [0,   S.y, 0]
+    // //      [0,   0,   S.z]]
+
+    // let rotation = mat3x3<f32>(
+    //     (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
+    //     (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
+    //     (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
+    // ) * 2.0;
+    // let scaling = scalings[index];
+    // let rotation_scaling = mat3x3<f32>(
+    //     rotation[0] * scaling[0],
+    //     rotation[1] * scaling[1],
+    //     rotation[2] * scaling[2],
+    // );
+    // let covariance_3d = rotation_scaling * transpose(rotation_scaling);
 
     // Specifying the results
 
