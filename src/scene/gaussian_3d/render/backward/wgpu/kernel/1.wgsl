@@ -79,12 +79,11 @@ fn main(
 ) {
     // Specifying the parameters
 
-    let image_size = vec2<u32>(arguments.image_size_x, arguments.image_size_y);
     // (0 ~ I_X, 0 ~ I_Y)
     let pixel = global_id.xy;
     let position_pixel = vec2<f32>(pixel);
-    let pixel_index = pixel.y * image_size.x + pixel.x;
-    let is_pixel_valid = pixel.x < image_size.x && pixel.y < image_size.y;
+    let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
+    let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
@@ -132,7 +131,7 @@ fn main(
 
             if point_rendered_state > point_rendered_count {
                 point_rendered_state--;
-				continue;
+                continue;
             }
 
             // Computing the density of the point in the pixel
@@ -177,12 +176,12 @@ fn main(
             );
             let opacity_3d_grad = density * opacity_2d_grad;
             let density_grad = opacity_3d * opacity_2d_grad;
-            let density_density_grad_half_n = -0.5 * density * density_grad;
-            let conic_grad = mat2x2<f32>(
+            let density_density_grad_n = -density * density_grad;
+            let conic_grad = 0.5 * density_density_grad_n * mat2x2<f32>(
                 position_offset * position_offset.x,
                 position_offset * position_offset.y,
-            ) * density_density_grad_half_n;
-            let position_2d_grad = conic * position_offset * image_size * density_density_grad_half_n;
+            );
+            let position_2d_grad = conic * position_offset * density_density_grad_n;
 
             // Updating the gradients of the point
             // - 3D color in RGB space

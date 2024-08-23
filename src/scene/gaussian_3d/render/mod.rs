@@ -85,8 +85,34 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 grads: &mut Gradients,
                 checkpointer: &mut Checkpointer,
             ) {
-                let grad = grads.consume::<Wgpu, 3>(&ops.node);
-                println!("grad: {:?}", grad);
+                let grad = Tensor::<Wgpu, 3>::new(grads.consume::<Wgpu, 3>(&ops.node));
+                println!("grad.max: {:?}", grad.to_owned().max().into_scalar());
+                println!("grad.mean: {:?}", grad.to_owned().mean().into_scalar());
+                println!("grad.min: {:?}", grad.to_owned().min().into_scalar());
+
+                // grad.max: 1.1158236e-5
+                // grad.mean: -2.8301318e-7
+                // grad.min: -1.5639705e-5
+                // Duration (loss): 1.254431708s
+                // score_mae: 0.2822224
+                // score_mssim: 0.27705392
+                // score_loss: 0.3703671
+
+                // impl: num_rendered: 563720
+                // loss l1: 0.23170578479766846 [23/08 06:48:31]
+                // loss lmssim: 0.27757564187049866 [23/08 06:48:31]
+                // loss: 0.329849511384964 [23/08 06:48:31]
+                // {'grad_out_color': {'max': 1.5975578207871877e-05,
+                //                     'mean': -1.9003134354989015e-07,
+                //                     'min': -1.406932369718561e-05}} [23/08 06:48:31]
+                // {'grad_colors_precomp': -3.204176923787827e-09,
+                //  'grad_cov3Ds_precomp': -0.00041207735193893313,
+                //  'grad_means2D': 1.123854787010714e-07,
+                //  'grad_means3D': -6.222077786333102e-08,
+                //  'grad_opacities': -1.6489802874275483e-06,
+                //  'grad_rotations': 1.3779735472363646e-17,
+                //  'grad_scales': -3.72117392544169e-06,
+                //  'grad_sh': -5.649266818230636e-11} [23/08 06:48:31]
             }
         }
 

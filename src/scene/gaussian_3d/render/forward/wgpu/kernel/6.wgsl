@@ -68,12 +68,11 @@ fn main(
 ) {
     // Specifying the parameters
 
-    let image_size = vec2<u32>(arguments.image_size_x, arguments.image_size_y);
     // (0 ~ I_X, 0 ~ I_Y)
     let pixel = global_id.xy;
     let position_pixel = vec2<f32>(pixel);
-    let pixel_index = pixel.y * image_size.x + pixel.x;
-    let is_pixel_valid = pixel.x < image_size.x && pixel.y < image_size.y;
+    let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
+    let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;

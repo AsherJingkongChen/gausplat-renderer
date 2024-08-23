@@ -149,10 +149,9 @@ fn main(
     }
 
     // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // Pv'[2, 1] = P[2, 3] * Pv[3, 1]
-    //
-    // P = [[f.x / Pv.z, 0,          (I.x * 0.5 - 0.5) / Pv.z]
-    //      [0,          f.y / Pv.z, (I.y * 0.5 - 0.5) / Pv.z]]
+    // Pv'[2, 1] <= Pv[3, 1]
+    // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
+    //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
 
     let position_3d_in_normalized = position_3d_in_view.xy / depth;
     let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
@@ -211,7 +210,7 @@ fn main(
     //
     // Pv.x and Pv.y are the clamped
 
-    let focal_length_z = vec2<f32>(
+    let focal_length_normalized = vec2<f32>(
         arguments.focal_length_x,
         arguments.focal_length_y,
     ) / depth;
@@ -221,10 +220,9 @@ fn main(
         vec2<f32>(arguments.view_bound_x, arguments.view_bound_y),
     );
     let projection_affine = mat3x2<f32>(
-        focal_length_z.x, 0.0,
-        0.0, focal_length_z.y,
-        -focal_length_z.x * position_3d_in_normalized_clamped.x,
-        -focal_length_z.y * position_3d_in_normalized_clamped.y,
+        vec2<f32>(focal_length_normalized.x, 0.0),
+        vec2<f32>(0.0, focal_length_normalized.y),
+        -focal_length_normalized * position_3d_in_normalized_clamped,
     );
     let transform_2d = projection_affine * view_rotation;
     let covariance_2d = transform_2d * covariance_3d * transpose(transform_2d) + mat2x2<f32>(

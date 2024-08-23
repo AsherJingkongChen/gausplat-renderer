@@ -74,8 +74,6 @@ fn main(
 
     // Specifying the parameters
 
-    let view_rotation_transposed = transpose(view_rotation);
-
     var position_3d_grad = vec3<f32>();
 
     // Loading the view direction in world space
@@ -294,33 +292,37 @@ fn main(
     // ∂L/∂T[2, 3]
     let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
     // ∂L/∂J[2, 3]
-    let projection_affine_grad = transform_2d_grad * view_rotation_transposed;
+    let projection_affine_grad = transform_2d_grad * transpose(view_rotation);
 
     // Computing the gradients
     //
-    // ∂L/∂Pv = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
-    //        = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.y〉)
+    // ∂L/∂Pv[3] = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
+    //           = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.z〉)
     // ∂J/∂Pv.x[2, 3] = [[0, 0, -f.x / Pv.z^2]
     //                   [0, 0, 0            ]]
     // ∂J/∂Pv.x[2, 3] = [[0, 0, 0            ]
     //                   [0, 0, -f.y / Pv.z^2]]
-    // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2,  0,             2 * f.x * Pv.x / Pv.z^3]
-    //                   [ 0,            -f.y / Pv.z^2,  2 * f.y * Pv.y / Pv.z^3]]
+    // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2,  0,            2 * f.x * Pv.x / Pv.z^3]
+    //                   [ 0,            -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
 
     let depth = depths[index];
-    let focal_length_z = focal_lengths_z[index];
-    let focal_length_zz = focal_length_z / depth;
+    // Using positions_3d_in_normalized
     let is_position_3d_in_normalized_clamped = is_positions_3d_in_normalized_clamped[index];
+    // (Pv.x / Pv.z, Pv.y / Pv.z)
     let position_3d_in_normalized_clamped = positions_3d_in_normalized_clamped[index];
-    let focal_length_zz_projection_affine_grad_2 = focal_length_zz * projection_affine_grad[2];
+    let focal_length_normalized = focal_lengths_normalized[index];
+    // (f.x / Pv.z^2, f.y / Pv.z^2)
+    let focal_length_normalized2 = focal_length_normalized / depth;
+    // (f.x / Pv.z^2 * (∂L/∂J).2,0, f.y / Pv.z^2 * (∂L/∂J).2,1)
+    let focal_length_normalized2_projection_affine_grad_2 =
+        focal_length_normalized2 * projection_affine_grad[2];
     // ∂L/∂Pv[3]
     let position_3d_in_view_grad = vec3<f32>(
-        - is_position_3d_in_normalized_clamped.x * focal_length_zz_projection_affine_grad_2.x,
-        - is_position_3d_in_normalized_clamped.y * focal_length_zz_projection_affine_grad_2.y,
-		- focal_length_zz.x * projection_affine_grad[0][0]
-		- focal_length_zz.y * projection_affine_grad[1][1]
-		+ 2 * position_3d_in_normalized_clamped.x * focal_length_zz_projection_affine_grad_2.x
-		+ 2 * position_3d_in_normalized_clamped.y * focal_length_zz_projection_affine_grad_2.y,
+        - is_position_3d_in_normalized_clamped.x * focal_length_normalized2_projection_affine_grad_2.x,
+        - is_position_3d_in_normalized_clamped.y * focal_length_normalized2_projection_affine_grad_2.y,
+        - focal_length_normalized2.x * projection_affine_grad[0][0]
+        - focal_length_normalized2.y * projection_affine_grad[1][1]
+        + 2 * dot(position_3d_in_normalized_clamped, focal_length_zz_projection_affine_grad_2),
     );
 
     // Computing the gradients
@@ -331,8 +333,9 @@ fn main(
     //    =〈∂L/∂Pv * Pw^t, ∂Rv〉+〈Rv^t * ∂L/∂Pv, ∂Pw〉
     //
     // ∂L/∂Pw[3, 1] = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
+    // (∂L/∂Pw)^t[1, 3] = (∂L/∂Pv)^t[1, 3] * Rv[3, 3]
 
-    position_3d_grad += view_rotation_transposed * position_3d_in_view_grad;
+    position_3d_grad += position_3d_in_view_grad * view_rotation;
 
     // Computing the gradients
     //
@@ -377,20 +380,20 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L/∂Q = (∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w)
-    //       = (∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w)
-    // ∂R/∂Q.x = [[0,    Q.y,      Q.z    ]
+    // ∂L/∂Q[4] = (∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w)
+    //          = (∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w)
+    // ∂R/∂Q.x[3, 3] = [[0,    Q.y,      Q.z    ]
     //            [Q.y, -2 * Q.x, -Q.w    ]
     //            [Q.z,  Q.w,     -2 * Q.x]] * 2
-    // ∂R/∂Q.y = [[-2 * Q.y, Q.x,  Q.w    ]
-    //            [ Q.x,     0,    Q.z    ]
-    //            [-Q.w,     Q.z, -2 * Q.y]] * 2
-    // ∂R/∂Q.z = [[-2 * Q.z, -Q.w,     Q.x]
-    //            [ Q.w,     -2 * Q.z, Q.y]
-    //            [ Q.x,      Q.y,     0  ]] * 2
-    // ∂R/∂Q.w = [[ 0,  -Q.z, Q.y]
-    //            [ Q.z, 0,  -Q.x]
-    //            [-Q.y, Q.x, 0  ]] * 2
+    // ∂R/∂Q.y[3, 3] = [[-2 * Q.y, Q.x,  Q.w    ]
+    //                  [ Q.x,     0,    Q.z    ]
+    //                  [-Q.w,     Q.z, -2 * Q.y]] * 2
+    // ∂R/∂Q.z[3, 3] = [[-2 * Q.z, -Q.w,     Q.x]
+    //                  [ Q.w,     -2 * Q.z, Q.y]
+    //                  [ Q.x,      Q.y,     0  ]] * 2
+    // ∂R/∂Q.w[3, 3] = [[ 0,  -Q.z, Q.y]
+    //                  [ Q.z, 0,  -Q.x]
+    //                  [-Q.y, Q.x, 0  ]] * 2
 
     let quaternion = rotations[index];
     let q_x = quaternion.x;
@@ -423,27 +426,20 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L =〈∂L/∂Pv', ∂Pv'〉
-    //    =〈∂L/∂Pv', ∂(P * Pv)〉
-    //    =〈∂L/∂Pv', ∂P * Pv + P * ∂Pv〉
-    //    =〈∂L/∂Pv' * Pv^t, ∂P〉+〈P^t * ∂L/∂Pv', ∂Pv〉
-    // 
+    // ∂L/∂Pw[1, 3] = ∂L/∂Pv'[1, 2] * ∂Pv'/∂Pv[2, 3] * ∂Pv/∂Pw[3, 3]
+    // ∂Pv/∂Pw[3, 3] = Rv
+    // ∂Pv'/∂Pv[2, 3] = [[f.x / Pv.z, 0,          -f.x * Pv.x / Pv.z^2]
+    //                   [0,          f.y / Pv.z, -f.y * Pv.y / Pv.z^2]]
 
-    // // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // // Pv'[2, 1] = P[2, 3] * Pv[3, 1]
-    // //
-    // // P = [[f.x / Pv.z, 0,          (I.x * 0.5 - 0.5) / Pv.z]
-    // //      [0,          f.y / Pv.z, (I.y * 0.5 - 0.5) / Pv.z]]
-
-    // let position_3d_in_normalized = position_3d_in_view.xy / depth;
-    // let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
-    //     arguments.focal_length_x,
-    //     arguments.focal_length_y,
-    // );
-    // let position_2d = position_3d_in_clip + vec2<f32>(
-    //     arguments.image_size_half_x,
-    //     arguments.image_size_half_y,
-    // );
+    let position_2d_grad = positions_2d_grad[index];
+    // ∂Pv'/∂Pv[2, 3]
+    let position_2d_to_position_3d_in_view_grad = mat3x2<f32>(
+        vec2<f32>(focal_length_normalized.x, 0.0),
+        vec2<f32>(0.0, focal_length_normalized.y),
+        -focal_length_normalized * position_3d_in_normalized,
+    );
+    position_3d_grad +=
+        position_2d_grad * position_2d_to_position_3d_in_view_grad * view_rotation;
 
     // Specifying the results
 
