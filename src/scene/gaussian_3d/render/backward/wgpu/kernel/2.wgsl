@@ -12,23 +12,65 @@ var<storage, read> colors_rgb_3d_grad: array<vec3<f32>>; // dL_dcolor // HIDE
 // [P, 16, 3]
 @group(0) @binding(2)
 var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
-// [P, 3 (+ 1)]
+// [P, 2, 2] (Symmetric)
 @group(0) @binding(3)
-var<storage, read> is_colors_rgb_3d_clamped: array<vec3<f32>>;
-// [P]
+var<storage, read> conics: array<mat2x2<f32>>;
+// [P, 2, 2] (Symmetric)
 @group(0) @binding(4)
-var<storage, read> radii: array<u32>;
-// [P, 3 (+ 1)]
+var<storage, read> conics_grad: array<mat2x2<f32>>;
+// [P, 3 (+ 1), 3] (Symmetric)
 @group(0) @binding(5)
+var<storage, read> covariances_3d: array<mat3x3<f32>>;
+// [P]
+@group(0) @binding(6)
+var<storage, read> depths: array<f32>;
+// [P, 2]
+@group(0) @binding(7)
+var<storage, read> focal_lengths_normalized: array<vec2<f32>>;
+// [P, 3 (+ 1)] (0.0 ~ 1.0)
+@group(0) @binding(8)
+var<storage, read> is_colors_rgb_3d_clamped: array<vec3<f32>>;
+// [P, 2]
+@group(0) @binding(9)
+var<storage, read> positions_2d_grad: array<vec2<f32>>;
+// [P, 2]
+@group(0) @binding(10)
+var<storage, read> positions_3d_in_normalized: array<vec2<f32>>;
+// [P, 2]
+@group(0) @binding(11)
+var<storage, read> positions_3d_in_normalized_clamped: array<vec2<f32>>;
+// [P]
+@group(0) @binding(12)
+var<storage, read> radii: array<u32>;
+// [P, 4] (x, y, z, w) (Normalized)
+@group(0) @binding(13)
+var<storage, read> rotations: array<vec4<f32>>;
+// [P, 3 (+ 1), 3]
+@group(0) @binding(14)
+var<storage, read> rotations_matrix: array<mat3x3<f32>>;
+// [P, 3 (+ 1), 3]
+@group(0) @binding(15)
+var<storage, read> rotation_scalings: array<mat3x3<f32>>;
+// [P, 3]
+@group(0) @binding(16)
+var<storage, read> scalings: array<array<f32, 3>>;
+// [P, 2, 3]
+@group(0) @binding(17)
+var<storage, read> transforms_2d: array<mat3x2<f32>>;
+// [P, 3 (+ 1)] (Normalized)
+@group(0) @binding(18)
 var<storage, read> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
-@group(0) @binding(6)
+@group(0) @binding(19)
 var<storage, read> view_offsets: array<vec3<f32>>;
+// [3 (+ 1), 3]
+@group(0) @binding(20)
+var<storage, read> view_rotation: mat3x3<f32>;
 // [P, 16, 3]
-@group(0) @binding(7)
+@group(0) @binding(21)
 var<storage, read_write> colors_sh_grad: array<array<array<f32, 3>, 16>>; // dL_dshs // OUTPUT
 // [P, 3]
-@group(0) @binding(8)
+@group(0) @binding(22)
 var<storage, read_write> positions_3d_grad: array<array<f32, 3>>; // dL_dmeans // OUTPUT
 
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -258,6 +300,7 @@ fn main(
     //
     // Σ' and Σ'^-1 are symmetric
 
+    let conic = conics[index];
     let conic_grad = conics_grad[index];
     // ∂L/∂Σ'[2, 2]
     let covariance_2d_grad = -conic * conic_grad * conic;
@@ -280,15 +323,10 @@ fn main(
     //
     // Σ and Σ' are symmetric
 
-    let covariance_2d_det = covariances_2d_det[index];
     let covariance_3d = covariances_3d[index];
     let transform_2d = transforms_2d[index];
     // ∂L/∂Σ[3, 3]
-    let covariance_3d_grad = select(
-        transpose(transform_2d) * covariance_2d_grad * transform_2d,
-        mat3x3<f32>(),
-        covariance_2d_det == 0.0,
-    );
+    let covariance_3d_grad = transpose(transform_2d) * covariance_2d_grad * transform_2d;
     // ∂L/∂T[2, 3]
     let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
     // ∂L/∂J[2, 3]
@@ -306,10 +344,12 @@ fn main(
     //                   [ 0,            -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
 
     let depth = depths[index];
-    // Using positions_3d_in_normalized
-    let is_position_3d_in_normalized_clamped = is_positions_3d_in_normalized_clamped[index];
+    let position_3d_in_normalized = positions_3d_in_normalized[index];
     // (Pv.x / Pv.z, Pv.y / Pv.z)
     let position_3d_in_normalized_clamped = positions_3d_in_normalized_clamped[index];
+    let is_position_3d_in_normalized_clamped = vec2<f32>(
+        position_3d_in_normalized != position_3d_in_normalized_clamped
+    );
     let focal_length_normalized = focal_lengths_normalized[index];
     // (f.x / Pv.z^2, f.y / Pv.z^2)
     let focal_length_normalized2 = focal_length_normalized / depth;
@@ -322,7 +362,7 @@ fn main(
         - is_position_3d_in_normalized_clamped.y * focal_length_normalized2_projection_affine_grad_2.y,
         - focal_length_normalized2.x * projection_affine_grad[0][0]
         - focal_length_normalized2.y * projection_affine_grad[1][1]
-        + 2 * dot(position_3d_in_normalized_clamped, focal_length_zz_projection_affine_grad_2),
+        + 2 * dot(position_3d_in_normalized_clamped, focal_length_normalized2_projection_affine_grad_2),
     );
 
     // Computing the gradients
@@ -350,6 +390,7 @@ fn main(
     //
     // Σ is symmetric
 
+    let rotation_scaling = rotation_scalings[index];
     let rotation_scaling_grad = 2.0 * covariance_3d_grad * rotation_scaling;
 
     // Computing the gradients
@@ -438,6 +479,7 @@ fn main(
         vec2<f32>(0.0, focal_length_normalized.y),
         -focal_length_normalized * position_3d_in_normalized,
     );
+    // ∂L/∂Pw[1, 3]
     position_3d_grad +=
         position_2d_grad * position_2d_to_position_3d_in_view_grad * view_rotation;
 
