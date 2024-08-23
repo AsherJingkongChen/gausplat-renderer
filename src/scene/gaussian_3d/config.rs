@@ -1,10 +1,7 @@
-pub use super::Backend;
+pub use super::*;
 pub use gausplat_importer::scene::sparse_view;
 
-use crate::{
-    consts::spherical_harmonics::SH_C,
-    scene::gaussian_3d::{Data, Gaussian3dScene, Param, Tensor},
-};
+use crate::consts::spherical_harmonics::SH_C;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_distr::Distribution;
 use std::fmt;

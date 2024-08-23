@@ -149,10 +149,10 @@ fn main(
     }
 
     // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // Pv'[2, 1] = T[2, 3] * Pv[3, 1]
+    // Pv'[2, 1] = P[2, 3] * Pv[3, 1]
     //
-    // T = [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
-    //      [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
+    // P = [[f.x / Pv.z, 0,          (I.x * 0.5 - 0.5) / Pv.z]
+    //      [0,          f.y / Pv.z, (I.y * 0.5 - 0.5) / Pv.z]]
 
     let position_3d_in_normalized = position_3d_in_view.xy / depth;
     let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
@@ -166,6 +166,9 @@ fn main(
 
     // Converting the quaternion to rotation matrix
     // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
+    // R[3, 3] = [[-y * y - z * z + 0.5,  x * y - w * z,        x * z + w * y      ]
+    //            [ x * y + w * z,       -x * x - z * z + 0.5,  y * z - w * x      ]
+    //            [ x * z - w * y,        y * z + w * x,       -x * x - y * y + 0.5]] * 2
 
     let quaternion = rotations[index];
     let q_wx = quaternion.w * quaternion.x;
@@ -182,20 +185,18 @@ fn main(
     // RS[3, 3] = R[3, 3] * S[3, 3]
     // Σ[3, 3] (Symmetric) = RS[3, 3] * RS^t[3, 3]
     //
-    // S = [[S.x, 0,   0]
-    //      [0,   S.y, 0]
-    //      [0,   0,   S.z]]
+    // S is diagonal
 
-    let rotation = mat3x3<f32>(
+    let rotation_matrix = 2.0 * mat3x3<f32>(
         (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
         (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
         (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
-    ) * 2.0;
+    );
     let scaling = scalings[index];
     let rotation_scaling = mat3x3<f32>(
-        rotation[0] * scaling[0],
-        rotation[1] * scaling[1],
-        rotation[2] * scaling[2],
+        rotation_matrix[0] * scaling[0],
+        rotation_matrix[1] * scaling[1],
+        rotation_matrix[2] * scaling[2],
     );
     let covariance_3d = rotation_scaling * transpose(rotation_scaling);
 
@@ -205,7 +206,7 @@ fn main(
     //
     // J = [[f.x / Pv.z, 0,          -f.x * Pv.x / Pv.z^2]
     //      [0,          f.y / Pv.z, -f.y * Pv.y / Pv.z^2]]
-    // F = [[0.3, 0]]
+    // F = [[0.3, 0  ]
     //      [0,   0.3]]
     //
     // Pv.x and Pv.y are the clamped

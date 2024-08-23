@@ -1,9 +1,7 @@
 pub mod backward;
 pub mod forward;
 
-pub use crate::scene::gaussian_3d::{
-    AutodiffBackend, Backend, Gaussian3dScene, Tensor,
-};
+pub use super::*;
 pub use burn::{backend::autodiff::Autodiff, config::Config};
 pub use gausplat_importer::scene::sparse_view;
 
@@ -66,6 +64,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
             grads::Gradients,
             ops::{Backward, Ops, OpsKind},
         };
+        use burn::module::AutodiffModule;
 
         #[derive(Debug)]
         struct BackwardOps;
@@ -86,10 +85,8 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 grads: &mut Gradients,
                 checkpointer: &mut Checkpointer,
             ) {
-                ops.parents;
-                ops.node;
-                ops.state;
-                println!("Backward pass");
+                let grad = grads.consume::<Wgpu, 3>(&ops.node);
+                println!("grad: {:?}", grad);
             }
         }
 
@@ -104,8 +101,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
         {
             OpsKind::Tracked(prep) => prep.finish(
                 (),
-                Tensor::<Wgpu, 3>::ones([545, 980, 3], &Default::default())
-                    .into_primitive(),
+                Self::forward(&self.valid(), view, options).colors_rgb_2d,
             ),
             OpsKind::UnTracked(_) => {
                 unimplemented!("Untracked operations are not supported");
@@ -121,7 +117,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
         output: forward::RendererOutput<Wgpu>,
         options: &RendererOptions,
     ) -> backward::RendererOutput<Wgpu> {
-        backward::render_gaussian_3d_scene_wgpu(output, options)
+        backward::wgpu::render_gaussian_3d_scene(output, options)
     }
 
     fn forward(
@@ -129,7 +125,24 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
         view: &sparse_view::View,
         options: &RendererOptions,
     ) -> forward::RendererOutput<Wgpu> {
-        forward::render_gaussian_3d_scene_wgpu(scene, view, options)
+        forward::wgpu::render_gaussian_3d_scene(scene, view, options)
+    }
+}
+
+impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
+    fn backward(
+        output: forward::RendererOutput<Wgpu>,
+        options: &RendererOptions,
+    ) -> backward::RendererOutput<Wgpu> {
+        backward::wgpu::render_gaussian_3d_scene(output, options)
+    }
+
+    fn forward(
+        scene: &Gaussian3dScene<Wgpu>,
+        view: &sparse_view::View,
+        options: &RendererOptions,
+    ) -> forward::RendererOutput<Wgpu> {
+        forward::wgpu::render_gaussian_3d_scene(scene, view, options)
     }
 }
 

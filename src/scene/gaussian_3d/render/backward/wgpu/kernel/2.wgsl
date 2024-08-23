@@ -421,26 +421,19 @@ fn main(
         dot(rotation_matrix_grad[2], vec3<f32>(q_y, -q_x, 0.0)),
     );
 
-    // // Transforming the 3D position from world space to view space
-    // // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
-
-    // let position_3d = vec_from_array_f32_3(positions_3d[index]);
-    // let view_rotation = view_transform.rotation;
-    // let view_translation = view_transform.translation;
-    // let position_3d_in_view = view_rotation * position_3d + view_translation;
-    // let depth = position_3d_in_view.z + EPSILON;
-
-    // // Performing viewing-frustum culling
-
-    // if depth <= 0.2 {
-    //     return;
-    // }
+    // Computing the gradients
+    //
+    // ∂L =〈∂L/∂Pv', ∂Pv'〉
+    //    =〈∂L/∂Pv', ∂(P * Pv)〉
+    //    =〈∂L/∂Pv', ∂P * Pv + P * ∂Pv〉
+    //    =〈∂L/∂Pv' * Pv^t, ∂P〉+〈P^t * ∂L/∂Pv', ∂Pv〉
+    // 
 
     // // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // // Pv'[2, 1] = T[2, 3] * Pv[3, 1]
+    // // Pv'[2, 1] = P[2, 3] * Pv[3, 1]
     // //
-    // // T = [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
-    // //      [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
+    // // P = [[f.x / Pv.z, 0,          (I.x * 0.5 - 0.5) / Pv.z]
+    // //      [0,          f.y / Pv.z, (I.y * 0.5 - 0.5) / Pv.z]]
 
     // let position_3d_in_normalized = position_3d_in_view.xy / depth;
     // let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
