@@ -298,14 +298,14 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L/∂Pv[3] = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
-    // ∂L/∂Pv[3] = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.y〉)
+    // ∂L/∂Pv = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
+    //        = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.y〉)
     // ∂J/∂Pv.x[2, 3] = [[0, 0, -f.x / Pv.z^2]
     //                   [0, 0, 0            ]]
     // ∂J/∂Pv.x[2, 3] = [[0, 0, 0            ]
     //                   [0, 0, -f.y / Pv.z^2]]
-    // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2, 0,             2 * f.x * Pv.x / Pv.z^3]
-    //                   [0,             -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
+    // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2,  0,             2 * f.x * Pv.x / Pv.z^3]
+    //                   [ 0,            -f.y / Pv.z^2,  2 * f.y * Pv.y / Pv.z^3]]
 
     let depth = depths[index];
     let focal_length_z = focal_lengths_z[index];
@@ -358,53 +358,99 @@ fn main(
     // ∂L/∂R[3, 3] = ∂L/∂RS[3, 3] * S^t[3, 3]
     // ∂L/∂S[3, 3] = R^t[3, 3] * ∂L/∂RS[3, 3]
     //
-    // S is symmetric
+    // S is diagonal
 
-    let rotation = rotations[index];
+    let rotation_matrix = rotations_matrix[index];
     let scaling = scalings[index];
     // ∂L/∂R[3, 3]
-    let rotation_grad = mat3x3<f32>(
+    let rotation_matrix_grad = mat3x3<f32>(
         rotation_scaling_grad[0] * scaling[0],
         rotation_scaling_grad[1] * scaling[1],
         rotation_scaling_grad[2] * scaling[2],
     );
     // ∂L/∂S[3, 3]
-    let scaling_grad = transpose(rotation) * rotation_scaling_grad;
+    let scaling_grad = vec3<f32>(
+        dot(rotation_matrix[0], rotation_scaling_grad[0]),
+        dot(rotation_matrix[1], rotation_scaling_grad[1]),
+        dot(rotation_matrix[2], rotation_scaling_grad[2]),
+    );
 
-    // // Converting the quaternion to rotation matrix
-    // // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
+    // Computing the gradients
+    //
+    // ∂L/∂Q = (∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w)
+    //       = (∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w)
+    // ∂R/∂Q.x = [[0,    Q.y,      Q.z    ]
+    //            [Q.y, -2 * Q.x, -Q.w    ]
+    //            [Q.z,  Q.w,     -2 * Q.x]] * 2
+    // ∂R/∂Q.y = [[-2 * Q.y, Q.x,  Q.w    ]
+    //            [ Q.x,     0,    Q.z    ]
+    //            [-Q.w,     Q.z, -2 * Q.y]] * 2
+    // ∂R/∂Q.z = [[-2 * Q.z, -Q.w,     Q.x]
+    //            [ Q.w,     -2 * Q.z, Q.y]
+    //            [ Q.x,      Q.y,     0  ]] * 2
+    // ∂R/∂Q.w = [[ 0,  -Q.z, Q.y]
+    //            [ Q.z, 0,  -Q.x]
+    //            [-Q.y, Q.x, 0  ]] * 2
 
-    // let quaternion = rotations[index];
-    // let q_wx = quaternion.w * quaternion.x;
-    // let q_wy = quaternion.w * quaternion.y;
-    // let q_wz = quaternion.w * quaternion.z;
-    // let q_xx = quaternion.x * quaternion.x;
-    // let q_xy = quaternion.x * quaternion.y;
-    // let q_xz = quaternion.x * quaternion.z;
-    // let q_yy = quaternion.y * quaternion.y;
-    // let q_yz = quaternion.y * quaternion.z;
-    // let q_zz = quaternion.z * quaternion.z;
+    let quaternion = rotations[index];
+    let q_x = quaternion.x;
+    let q_y = quaternion.y;
+    let q_z = quaternion.z;
+    let q_w = quaternion.w;
+    let q_x_2_n = -2.0 * q_x;
+    let q_y_2_n = -2.0 * q_y;
+    let q_z_2_n = -2.0 * q_z;
+    let q_w_n = -q_w;
 
-    // // Computing the 3D covariance matrix from rotation and scaling
-    // // T[3, 3] = R[3, 3] * S[3, 3]
-    // // Σ[3, 3] (Symmetric) = T[3, 3] * T^t[3, 3]
+    // ∂L/∂Q[4]
+    let rotation_grad = 2.0 * vec4<f32>(
+        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q_y, q_z)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q_y, q_x_2_n, q_w)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q_z, q_w_n, q_x_2_n)),
+
+        dot(rotation_matrix_grad[0], vec3<f32>(q_y_2_n, q_x, q_w_n)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q_x, 0.0, q_z)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q_w, q_z, q_y_2_n)),
+
+        dot(rotation_matrix_grad[0], vec3<f32>(q_z_2_n, q_w, q_x)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q_w_n, q_z_2_n, q_y)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q_x, q_y, 0.0)),
+
+        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q_z, -q_y)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(-q_z, 0.0, q_x)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q_y, -q_x, 0.0)),
+    );
+
+    // // Transforming the 3D position from world space to view space
+    // // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
+
+    // let position_3d = vec_from_array_f32_3(positions_3d[index]);
+    // let view_rotation = view_transform.rotation;
+    // let view_translation = view_transform.translation;
+    // let position_3d_in_view = view_rotation * position_3d + view_translation;
+    // let depth = position_3d_in_view.z + EPSILON;
+
+    // // Performing viewing-frustum culling
+
+    // if depth <= 0.2 {
+    //     return;
+    // }
+
+    // // Transforming the 3D position to 2D position (view => normalized => clip => screen)
+    // // Pv'[2, 1] = T[2, 3] * Pv[3, 1]
     // //
-    // // S = [[S.x, 0,   0]
-    // //      [0,   S.y, 0]
-    // //      [0,   0,   S.z]]
+    // // T = [[f.x / Pv.z, 0,          (I.x - 1) / 2 / Pv.z]
+    // //      [0,          f.y / Pv.z, (I.y - 1) / 2 / Pv.z]]
 
-    // let rotation = mat3x3<f32>(
-    //     (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
-    //     (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
-    //     (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
-    // ) * 2.0;
-    // let scaling = scalings[index];
-    // let rotation_scaling = mat3x3<f32>(
-    //     rotation[0] * scaling[0],
-    //     rotation[1] * scaling[1],
-    //     rotation[2] * scaling[2],
+    // let position_3d_in_normalized = position_3d_in_view.xy / depth;
+    // let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
+    //     arguments.focal_length_x,
+    //     arguments.focal_length_y,
     // );
-    // let covariance_3d = rotation_scaling * transpose(rotation_scaling);
+    // let position_2d = position_3d_in_clip + vec2<f32>(
+    //     arguments.image_size_half_x,
+    //     arguments.image_size_half_y,
+    // );
 
     // Specifying the results
 
