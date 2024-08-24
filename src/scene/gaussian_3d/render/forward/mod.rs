@@ -23,9 +23,9 @@ pub struct RendererOutput<B: Backend> {
     /// `I_Y`
     pub image_size_y: u32,
     /// `I_X / 2`
-    pub image_size_x_half: f32,
+    pub image_size_half_x: f32,
     /// `I_Y / 2`
-    pub image_size_y_half: f32,
+    pub image_size_half_y: f32,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`

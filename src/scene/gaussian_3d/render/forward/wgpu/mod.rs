@@ -112,14 +112,24 @@ pub fn render_gaussian_3d_scene(
     let is_colors_rgb_3d_clamped = client.empty(point_count * (3 + 1) * 4);
     // [P, 2]
     let positions_2d = client.empty(point_count * 2 * 4);
+    // [P, 2]
+    let positions_3d_in_normalized = client.empty(point_count * 2 * 4);
+    // [P, 2]
+    let positions_3d_in_normalized_clamped = client.empty(point_count * 2 * 4);
     // [P]
     let radii = client.empty(point_count * 4);
+    // [P, 3 (+ 1), 3]
+    let rotations_matrix = client.empty(point_count * (3 + 1) * 3 * 4);
+    // [P, 3 (+ 1), 3]
+    let rotation_scalings = client.empty(point_count * (3 + 1) * 3 * 4);
     // [P]
     let tile_touched_counts = client.empty(point_count * 4);
     // [P, 2]
     let tiles_touched_max = client.empty(point_count * 2 * 4);
     // [P, 2]
     let tiles_touched_min = client.empty(point_count * 2 * 4);
+    // [P, 2, 3]
+    let transforms_2d = client.empty(point_count * 2 * 3 * 4);
     // [P, 3 (+ 1)]
     let view_directions = client.empty(point_count * (3 + 1) * 4);
     // [P, 3 (+ 1)]
@@ -153,10 +163,15 @@ pub fn render_gaussian_3d_scene(
             &depths,
             &is_colors_rgb_3d_clamped,
             &positions_2d,
+            &positions_3d_in_normalized,
+            &positions_3d_in_normalized_clamped,
             &radii,
+            &rotations_matrix,
+            &rotation_scalings,
             &tile_touched_counts,
             &tiles_touched_max,
             &tiles_touched_min,
+            &transforms_2d,
             &view_directions,
             &view_offsets,
         ],
@@ -376,10 +391,23 @@ pub fn render_gaussian_3d_scene(
             [point_count, 3 + 1, 3].into(),
             covariances_3d,
         ),
+        // [P]
+        depths: FloatTensor::<Wgpu, 1>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count].into(),
+            depths,
+        ),
+        focal_length_x,
+        focal_length_y,
         // I_X
         image_size_x: image_size_x as u32,
         // I_Y
         image_size_y: image_size_y as u32,
+        // I_X / 2
+        image_size_half_x,
+        // I_Y / 2
+        image_size_half_y,
         // [P, 3 (+ 1)]
         is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
@@ -424,6 +452,20 @@ pub fn render_gaussian_3d_scene(
             [point_count, 3].into(),
             positions_3d,
         ),
+        // [P, 2]
+        positions_3d_in_normalized: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 2].into(),
+            positions_3d_in_normalized,
+        ),
+        // [P, 2]
+        positions_3d_in_normalized_clamped: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 2].into(),
+            positions_3d_in_normalized_clamped,
+        ),
         // [P]
         radii: IntTensor::<Wgpu, 1>::new(
             client.to_owned(),
@@ -437,6 +479,20 @@ pub fn render_gaussian_3d_scene(
             device.to_owned(),
             [point_count, 4].into(),
             rotations,
+        ),
+        // [P, 3 (+ 1), 3]
+        rotations_matrix: FloatTensor::<Wgpu, 3>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3 + 1, 3].into(),
+            rotations_matrix,
+        ),
+        // [P, 3 (+ 1), 3]
+        rotation_scalings: FloatTensor::<Wgpu, 3>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3 + 1, 3].into(),
+            rotation_scalings,
         ),
         // [P, 3]
         scalings: FloatTensor::<Wgpu, 2>::new(
@@ -452,6 +508,13 @@ pub fn render_gaussian_3d_scene(
             [tile_count, 2].into(),
             tile_point_ranges,
         ),
+        // [P, 2, 3]
+        transforms_2d: FloatTensor::<Wgpu, 3>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 2, 3].into(),
+            transforms_2d,
+        ),
         // [I_Y, I_X]
         transmittances: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
@@ -459,8 +522,6 @@ pub fn render_gaussian_3d_scene(
             [image_size_y, image_size_x].into(),
             transmittances,
         ),
-        view_bound_x,
-        view_bound_y,
         // [P, 3 (+ 1)]
         view_directions: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),

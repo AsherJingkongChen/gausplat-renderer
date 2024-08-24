@@ -3,9 +3,9 @@ struct Arguments {
     focal_length_x: f32,
     focal_length_y: f32,
     // I_X / 2
-    image_size_x_half: f32,
+    image_size_half_x: f32,
     // I_Y / 2
-    image_size_y_half: f32,
+    image_size_half_y: f32,
     // P
     point_count: u32,
 }
@@ -500,7 +500,7 @@ fn main(
 
     let position_2d_grad_norm = length(
         position_2d_grad *
-        vec2<f32>(arguments.image_size_x_half, arguments.image_size_y_half)
+        vec2<f32>(arguments.image_size_half_x, arguments.image_size_half_y)
     );
 
     // Specifying the results
