@@ -1,7 +1,6 @@
 struct Arguments {
     // I_X
     image_size_x: u32,
-
     // I_Y
     image_size_y: u32,
 }
@@ -26,6 +25,7 @@ var<storage, read> positions_2d: array<vec2<f32>>;
 // [I_Y / T_Y, I_X / T_X, 2]
 @group(0) @binding(6)
 var<storage, read> tile_point_ranges: array<vec2<u32>>;
+
 // [I_Y, I_X, 3] (0.0 ~ 1.0)
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_2d: array<array<f32, 3>>;

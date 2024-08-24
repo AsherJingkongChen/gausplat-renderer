@@ -8,6 +8,7 @@ var<storage, read> arguments: Arguments;
 // [T] (0 ~ (I_X / T_X) * (I_Y / T_Y))
 @group(0) @binding(1)
 var<storage, read> point_tile_indexes: array<u32>;
+
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(2)
 var<storage, read_write> tile_point_ranges: array<u32>;

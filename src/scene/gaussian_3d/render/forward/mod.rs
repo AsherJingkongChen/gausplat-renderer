@@ -14,10 +14,18 @@ pub struct RendererOutput<B: Backend> {
     pub conics: B::FloatTensorPrimitive<3>,
     /// `[P, 3 (+ 1), 3]`
     pub covariances_3d: B::FloatTensorPrimitive<3>,
+    /// `[P]`
+    pub depths: B::FloatTensorPrimitive<1>,
+    pub focal_length_x: f32,
+    pub focal_length_y: f32,
     /// `I_X`
     pub image_size_x: u32,
     /// `I_Y`
     pub image_size_y: u32,
+    /// `I_X / 2`
+    pub image_size_x_half: f32,
+    /// `I_Y / 2`
+    pub image_size_y_half: f32,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
@@ -32,18 +40,26 @@ pub struct RendererOutput<B: Backend> {
     pub positions_2d: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`
     pub positions_3d: B::FloatTensorPrimitive<2>,
+    /// `[P, 2]`
+    pub positions_3d_in_normalized: B::FloatTensorPrimitive<2>,
+    /// `[P, 2]`
+    pub positions_3d_in_normalized_clamped: B::FloatTensorPrimitive<2>,
     /// `[P]`
     pub radii: B::IntTensorPrimitive<1>,
     /// `[P, 4]`
     pub rotations: B::FloatTensorPrimitive<2>,
+    /// `[P, 3 (+ 1), 3]`
+    pub rotations_matrix: B::FloatTensorPrimitive<3>,
+    /// `[P, 3 (+ 1), 3]`
+    pub rotation_scalings: B::FloatTensorPrimitive<3>,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive<2>,
     /// `[(I_X / T_X) * (I_Y / T_Y), 2]`
     pub tile_point_ranges: B::IntTensorPrimitive<2>,
+    /// `[P, 2, 3]`
+    pub transforms_2d: B::FloatTensorPrimitive<3>,
     /// `[I_Y, I_X]`
     pub transmittances: B::FloatTensorPrimitive<2>,
-    pub view_bound_x: f32,
-    pub view_bound_y: f32,
     /// `[P, 3]`
     pub view_directions: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`

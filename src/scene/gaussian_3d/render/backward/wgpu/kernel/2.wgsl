@@ -1,5 +1,11 @@
 struct Arguments {
     colors_sh_degree_max: u32,
+    focal_length_x: f32,
+    focal_length_y: f32,
+    // I_X / 2
+    image_size_x_half: f32,
+    // I_Y / 2
+    image_size_y_half: f32,
     // P
     point_count: u32,
 }
@@ -24,62 +30,60 @@ var<storage, read> covariances_3d: array<mat3x3<f32>>;
 // [P]
 @group(0) @binding(6)
 var<storage, read> depths: array<f32>;
-// [P, 2]
-@group(0) @binding(7)
-var<storage, read> focal_lengths_normalized: array<vec2<f32>>;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
-@group(0) @binding(8)
+@group(0) @binding(7)
 var<storage, read> is_colors_rgb_3d_clamped: array<vec3<f32>>;
 // [P, 2]
-@group(0) @binding(9)
+@group(0) @binding(8)
 var<storage, read> positions_2d_grad: array<vec2<f32>>;
 // [P, 2]
-@group(0) @binding(10)
+@group(0) @binding(9)
 var<storage, read> positions_3d_in_normalized: array<vec2<f32>>;
 // [P, 2]
-@group(0) @binding(11)
+@group(0) @binding(10)
 var<storage, read> positions_3d_in_normalized_clamped: array<vec2<f32>>;
 // [P]
-@group(0) @binding(12)
+@group(0) @binding(11)
 var<storage, read> radii: array<u32>;
 // [P, 4] (x, y, z, w) (Normalized)
-@group(0) @binding(13)
+@group(0) @binding(12)
 var<storage, read> rotations: array<vec4<f32>>;
 // [P, 3 (+ 1), 3]
-@group(0) @binding(14)
+@group(0) @binding(13)
 var<storage, read> rotations_matrix: array<mat3x3<f32>>;
 // [P, 3 (+ 1), 3]
-@group(0) @binding(15)
+@group(0) @binding(14)
 var<storage, read> rotation_scalings: array<mat3x3<f32>>;
 // [P, 3]
-@group(0) @binding(16)
+@group(0) @binding(15)
 var<storage, read> scalings: array<array<f32, 3>>;
 // [P, 2, 3]
-@group(0) @binding(17)
+@group(0) @binding(16)
 var<storage, read> transforms_2d: array<mat3x2<f32>>;
 // [P, 3 (+ 1)] (Normalized)
-@group(0) @binding(18)
+@group(0) @binding(17)
 var<storage, read> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
-@group(0) @binding(19)
+@group(0) @binding(18)
 var<storage, read> view_offsets: array<vec3<f32>>;
 // [3 (+ 1), 3]
-@group(0) @binding(20)
-var<storage, read> view_rotation: mat3x3<f32>;
+@group(0) @binding(19)
+var<storage, read> view_transform_rotation: mat3x3<f32>;
+
 // [P, 16, 3]
-@group(0) @binding(21)
+@group(0) @binding(20)
 var<storage, read_write> colors_sh_grad: array<array<array<f32, 3>, 16>>;
 // [P]
-@group(0) @binding(22)
+@group(0) @binding(21)
 var<storage, read_write> positions_2d_grad_norm: array<f32>;
 // [P, 3]
-@group(0) @binding(23)
+@group(0) @binding(22)
 var<storage, read_write> positions_3d_grad: array<array<f32, 3>>;
 // [P, 4] (x, y, z, w)
-@group(0) @binding(24)
+@group(0) @binding(23)
 var<storage, read_write> rotations_grad: array<vec4<f32>>;
 // [P, 3]
-@group(0) @binding(25)
+@group(0) @binding(24)
 var<storage, read_write> scalings_grad: array<array<f32, 3>>;
 
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -335,7 +339,7 @@ fn main(
     // ∂L/∂T[2, 3]
     let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
     // ∂L/∂J[2, 3]
-    let projection_affine_grad = transform_2d_grad * transpose(view_rotation);
+    let projection_affine_grad = transform_2d_grad * transpose(view_transform_rotation);
 
     // Computing the gradients
     //
@@ -355,7 +359,10 @@ fn main(
     let is_position_3d_in_normalized_clamped = vec2<f32>(
         position_3d_in_normalized != position_3d_in_normalized_clamped
     );
-    let focal_length_normalized = focal_lengths_normalized[index];
+    let focal_length_normalized = vec2<f32>(
+        arguments.focal_length_x,
+        arguments.focal_length_y
+    ) / depth;
     // (f.x / Pv.z^2, f.y / Pv.z^2)
     let focal_length_normalized2 = focal_length_normalized / depth;
     // (f.x / Pv.z^2 * (∂L/∂J).2,0, f.y / Pv.z^2 * (∂L/∂J).2,1)
@@ -380,7 +387,7 @@ fn main(
     // ∂L/∂Pw[3, 1] = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
     // (∂L/∂Pw)^t[1, 3] = (∂L/∂Pv)^t[1, 3] * Rv[3, 3]
 
-    position_3d_grad += position_3d_in_view_grad * view_rotation;
+    position_3d_grad += position_3d_in_view_grad * view_transform_rotation;
 
     // Computing the gradients
     //
@@ -486,7 +493,15 @@ fn main(
     );
     // ∂L/∂Pw[1, 3]
     position_3d_grad +=
-        position_2d_grad * position_2d_to_position_3d_in_view_grad * view_rotation;
+        position_2d_grad * position_2d_to_position_3d_in_view_grad *
+        view_transform_rotation;
+
+    // Computing the norm of 2D positions gradient
+
+    let position_2d_grad_norm = length(
+        position_2d_grad *
+        vec2<f32>(arguments.image_size_x_half, arguments.image_size_y_half)
+    );
 
     // Specifying the results
 
@@ -509,8 +524,14 @@ fn main(
         array_from_vec3_f32(color_sh_grad[14]),
         array_from_vec3_f32(color_sh_grad[15]),
     );
+    // [P]
+    positions_2d_grad_norm[index] = position_2d_grad_norm;
     // [P, 3]
     positions_3d_grad[index] = array_from_vec3_f32(position_3d_grad);
+    // [P, 4]
+    rotations_grad[index] = rotation_grad;
+    // [P, 3]
+    scalings_grad[index] = array_from_vec3_f32(scaling_grad);
 }
 
 fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {

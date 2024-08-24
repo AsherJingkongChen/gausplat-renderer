@@ -34,6 +34,7 @@ var<storage, read> tile_point_ranges: array<vec2<u32>>;
 // [I_Y, I_X] (0.0 ~ 1.0)
 @group(0) @binding(9)
 var<storage, read> transmittances: array<f32>;
+
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
 var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;

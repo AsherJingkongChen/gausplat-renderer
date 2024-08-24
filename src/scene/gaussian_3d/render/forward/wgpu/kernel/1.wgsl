@@ -7,9 +7,9 @@ struct Arguments {
     image_size_x: u32,
     // I_Y
     image_size_y: u32,
-    // I_X * 0.5 - 0.5
+    // I_X / 2
     image_size_half_x: f32,
-    // I_Y * 0.5 - 0.5
+    // I_Y / 2
     image_size_half_y: f32,
     // P
     point_count: u32,
@@ -49,6 +49,7 @@ var<storage, read> view_position: vec3<f32>;
 // [3 (+ 1), 4]
 @group(0) @binding(6)
 var<storage, read> view_transform: ViewTransform;
+
 // [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)
 var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
@@ -67,23 +68,38 @@ var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
 // [P, 2]
 @group(0) @binding(12)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
-// [P]
+// [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> radii: array<u32>;
-// [P]
+var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
+// [P, 2]
 @group(0) @binding(14)
+var<storage, read_write> positions_3d_in_normalized_clamped: array<vec2<f32>>;
+// [P]
+@group(0) @binding(15)
+var<storage, read_write> radii: array<u32>;
+// [P, 3 (+ 1), 3]
+@group(0) @binding(16)
+var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
+// [P, 3 (+ 1), 3]
+@group(0) @binding(17)
+var<storage, read_write> rotation_scalings: array<mat3x3<f32>>;
+// [P]
+@group(0) @binding(18)
 var<storage, read_write> tile_touched_counts: array<u32>;
 // [P, 2]
-@group(0) @binding(15)
+@group(0) @binding(19)
 var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 // [P, 2]
-@group(0) @binding(16)
+@group(0) @binding(20)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
+// [P, 2, 3]
+@group(0) @binding(21)
+var<storage, read_write> transforms_2d: array<mat3x2<f32>>;
 // [P, 3 (+ 1)]
-@group(0) @binding(17)
+@group(0) @binding(22)
 var<storage, read_write> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
-@group(0) @binding(18)
+@group(0) @binding(23)
 var<storage, read_write> view_offsets: array<vec3<f32>>;
 
 const EPSILON: f32 = 1.1920929e-7;
@@ -153,15 +169,13 @@ fn main(
     // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
     //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
 
+    let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
     let position_3d_in_normalized = position_3d_in_view.xy / depth;
-    let position_3d_in_clip = position_3d_in_normalized * vec2<f32>(
-        arguments.focal_length_x,
-        arguments.focal_length_y,
-    );
+    let position_3d_in_clip = position_3d_in_normalized * focal_length;
     let position_2d = position_3d_in_clip + vec2<f32>(
         arguments.image_size_half_x,
         arguments.image_size_half_y,
-    );
+    ) - 0.5;
 
     // Converting the quaternion to rotation matrix
     // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
@@ -210,10 +224,7 @@ fn main(
     //
     // Pv.x and Pv.y are the clamped
 
-    let focal_length_normalized = vec2<f32>(
-        arguments.focal_length_x,
-        arguments.focal_length_y,
-    ) / depth;
+    let focal_length_normalized = focal_length / depth;
     let position_3d_in_normalized_clamped = clamp(
         position_3d_in_normalized,
         vec2<f32>(-arguments.view_bound_x, -arguments.view_bound_y),
@@ -234,9 +245,8 @@ fn main(
     // Σ'^-1[2, 2] (Symmetric) <= Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
-
+    let covariance_2d_det_inv = select(1.0 / covariance_2d_det, 0.0, covariance_2d_det == 0.0);
     let covariance_2d_01_n = -covariance_2d[0][1];
-    let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det == 0.0);
     let conic = covariance_2d_det_inv * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,
         covariance_2d_01_n, covariance_2d[0][0],
@@ -381,14 +391,24 @@ fn main(
     is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
     // [P, 2]
     positions_2d[index] = position_2d;
+    // [P, 2]
+    positions_3d_in_normalized[index] = position_3d_in_normalized;
+    // [P, 2]
+    positions_3d_in_normalized_clamped[index] = position_3d_in_normalized_clamped;
     // [P]
     radii[index] = u32(radius);
+    // [P, 3 (+ 1), 3]
+    rotations_matrix[index] = rotation_matrix;
+    // [P, 3 (+ 1), 3]
+    rotation_scalings[index] = rotation_scaling;
     // [P]
     tile_touched_counts[index] = tile_touched_count;
     // [P, 2]
     tiles_touched_max[index] = tile_touched_max;
     // [P, 2]
     tiles_touched_min[index] = tile_touched_min;
+    // [P, 2, 3]
+    transforms_2d[index] = transform_2d;
     // [P, 3 (+ 1)]
     view_directions[index] = view_direction;
     // [P, 3 (+ 1)]

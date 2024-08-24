@@ -22,6 +22,7 @@ var<storage, read> tiles_touched_max: array<vec2<u32>>;
 // [P, 2]
 @group(0) @binding(5)
 var<storage, read> tiles_touched_min: array<vec2<u32>>;
+
 // [T, 3] ([tile_index, depth, point_index])
 @group(0) @binding(6)
 var<storage, read_write> point_keys_and_indexes: array<array<u32, 3>>;
