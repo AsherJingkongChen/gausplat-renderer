@@ -19,7 +19,7 @@ use rayon::{
 };
 
 pub fn render_gaussian_3d_scene(
-    scene: &Gaussian3dScene<Wgpu>,
+    input: forward::RendererInput<Wgpu>,
     view: &sparse_view::View,
     options: &RendererOptions,
 ) -> forward::RendererOutput<Wgpu> {
@@ -57,7 +57,7 @@ pub fn render_gaussian_3d_scene(
         (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     // ([P, 16, 3], P)
     let (client, colors_sh, device, point_count) = {
-        let c = into_contiguous(scene.colors_sh().into_primitive());
+        let c = into_contiguous(input.colors_sh);
         (c.client, c.handle, c.device, c.shape.dims[0])
     };
 
@@ -84,15 +84,13 @@ pub fn render_gaussian_3d_scene(
     }));
 
     // [P, 3]
-    let positions_3d =
-        into_contiguous(scene.positions().into_primitive()).handle;
+    let positions_3d = into_contiguous(input.positions).handle;
     // [P, 1]
-    let opacities_3d =
-        into_contiguous(scene.opacities().into_primitive()).handle;
+    let opacities_3d = into_contiguous(input.opacities).handle;
     // [P, 4]
-    let rotations = into_contiguous(scene.rotations().into_primitive()).handle;
+    let rotations = into_contiguous(input.rotations).handle;
     // [P, 3]
-    let scalings = into_contiguous(scene.scalings().into_primitive()).handle;
+    let scalings = into_contiguous(input.scalings).handle;
     // [3]
     let view_position =
         client.create(bytes_of(&view.view_position.map(|c| c as f32)));
@@ -362,7 +360,7 @@ pub fn render_gaussian_3d_scene(
             [image_size_y, image_size_x, 3].into(),
             colors_rgb_2d,
         ),
-        state: forward::RendererOutputState {
+        state: forward::RendererState {
             // [P, 3 (+ 1)]
             colors_rgb_3d: FloatTensor::<Wgpu, 2>::new(
                 client.to_owned(),

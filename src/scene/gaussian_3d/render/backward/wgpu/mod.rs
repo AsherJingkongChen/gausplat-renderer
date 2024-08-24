@@ -12,8 +12,8 @@ use burn::{
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut, from_bytes};
 
 pub fn render_gaussian_3d_scene(
-    state: forward::RendererOutputState<Wgpu>,
     grad: FloatTensor<Wgpu, 3>,
+    state: forward::RendererState<Wgpu>,
     view: &sparse_view::View,
     options: &RendererOptions,
 ) -> backward::RendererOutput<Wgpu> {
