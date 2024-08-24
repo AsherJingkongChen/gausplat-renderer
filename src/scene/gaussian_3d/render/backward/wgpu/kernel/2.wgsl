@@ -79,7 +79,7 @@ var<storage, read_write> positions_2d_grad_norm: array<f32>;
 // [P, 3]
 @group(0) @binding(22)
 var<storage, read_write> positions_3d_grad: array<array<f32, 3>>;
-// [P, 4] (x, y, z, w)
+// [P, 4]
 @group(0) @binding(23)
 var<storage, read_write> rotations_grad: array<vec4<f32>>;
 // [P, 3]

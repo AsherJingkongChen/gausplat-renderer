@@ -16,7 +16,7 @@ var<storage, read> colors_rgb_2d_grad: array<array<f32, 3>>;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
 @group(0) @binding(3)
 var<storage, read> colors_rgb_3d: array<vec3<f32>>;
-// [P] (0.0 ~ 1.0)
+// [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(4)
 var<storage, read> opacities_3d: array<f32>;
 // [T] (0 ~ P)
@@ -41,7 +41,7 @@ var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
 var<storage, read_write> conics_grad: array<atomic<f32>>;
-// [P]
+// [P, 1]
 @group(0) @binding(12)
 var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
 // [P, 2]
@@ -52,7 +52,7 @@ var<storage, read_write> positions_2d_grad: array<atomic<f32>>;
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
 // [T_X * T_Y, 2, 2]
 var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
-// [T_X * T_Y]
+// [T_X * T_Y, 1]
 var<workgroup> batch_opacities_3d: array<f32, BATCH_SIZE>;
 // [T_X * T_Y]
 var<workgroup> batch_point_indexes: array<u32, BATCH_SIZE>;

@@ -8,7 +8,7 @@ use burn::{
     backend::wgpu::{
         into_contiguous, Kernel, SourceKernel, WorkGroup, WorkgroupSize,
     },
-    tensor::ops::{FloatTensor, IntTensor},
+    tensor::ops::IntTensor,
 };
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use kernel::*;
@@ -26,9 +26,9 @@ pub fn render_gaussian_3d_scene(
     // Specifying the parameters
 
     let colors_sh_degree_max = options.colors_sh_degree_max;
-    let filter_low_pass = FILTER_LOW_PASS as f32;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
+    let filter_low_pass = FILTER_LOW_PASS as f32;
     // I_X
     let image_size_x = view.image_width as usize;
     // I_Y
@@ -55,11 +55,10 @@ pub fn render_gaussian_3d_scene(
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     let view_bound_y =
         (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
-
     // ([P, 16, 3], P)
     let (client, colors_sh, device, point_count) = {
-        let p = into_contiguous(scene.colors_sh().into_primitive());
-        (p.client, p.handle, p.device, p.shape.dims[0])
+        let c = into_contiguous(scene.colors_sh().into_primitive());
+        (c.client, c.handle, c.device, c.shape.dims[0])
     };
 
     // Performing the forward pass #1
@@ -355,7 +354,7 @@ pub fn render_gaussian_3d_scene(
 
     // Specifying the results
 
-    let output = RendererOutput {
+    forward::RendererOutput {
         // [I_Y, I_X, 3]
         colors_rgb_2d: FloatTensor::<Wgpu, 3>::new(
             client.to_owned(),
@@ -363,175 +362,175 @@ pub fn render_gaussian_3d_scene(
             [image_size_y, image_size_x, 3].into(),
             colors_rgb_2d,
         ),
-        // [P, 3 (+ 1)]
-        colors_rgb_3d: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1].into(),
-            colors_rgb_3d,
-        ),
-        // [P, 16, 3]
-        colors_sh: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 16, 3].into(),
-            colors_sh,
-        ),
-        // [P, 2, 2]
-        conics: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 2, 2].into(),
-            conics,
-        ),
-        // [P, 3 (+ 1), 3]
-        covariances_3d: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1, 3].into(),
-            covariances_3d,
-        ),
-        // [P]
-        depths: FloatTensor::<Wgpu, 1>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count].into(),
-            depths,
-        ),
-        // [P, 3 (+ 1)]
-        is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1].into(),
-            is_colors_rgb_3d_clamped,
-        ),
-        // [P, 1]
-        opacities_3d: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 1].into(),
-            opacities_3d,
-        ),
-        // [T]
-        point_indexes: IntTensor::<Wgpu, 1>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [tile_touched_count].into(),
-            point_indexes,
-        ),
-        // [I_Y, I_X]
-        point_rendered_counts: IntTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [image_size_y, image_size_x].into(),
-            point_rendered_counts,
-        ),
-        // [P, 2]
-        positions_2d: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 2].into(),
-            positions_2d,
-        ),
-        // [P, 3]
-        positions_3d: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3].into(),
-            positions_3d,
-        ),
-        // [P, 2]
-        positions_3d_in_normalized: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 2].into(),
-            positions_3d_in_normalized,
-        ),
-        // [P, 2]
-        positions_3d_in_normalized_clamped: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 2].into(),
-            positions_3d_in_normalized_clamped,
-        ),
-        // [P]
-        radii: IntTensor::<Wgpu, 1>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count].into(),
-            radii,
-        ),
-        // [P, 4]
-        rotations: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 4].into(),
-            rotations,
-        ),
-        // [P, 3 (+ 1), 3]
-        rotations_matrix: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1, 3].into(),
-            rotations_matrix,
-        ),
-        // [P, 3 (+ 1), 3]
-        rotation_scalings: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1, 3].into(),
-            rotation_scalings,
-        ),
-        // [P, 3]
-        scalings: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3].into(),
-            scalings,
-        ),
-        // [I_Y / T_Y, I_X / T_X, 2]
-        tile_point_ranges: IntTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [tile_count, 2].into(),
-            tile_point_ranges,
-        ),
-        // [P, 2, 3]
-        transforms_2d: FloatTensor::<Wgpu, 3>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 2, 3].into(),
-            transforms_2d,
-        ),
-        // [I_Y, I_X]
-        transmittances: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [image_size_y, image_size_x].into(),
-            transmittances,
-        ),
-        // [P, 3 (+ 1)]
-        view_directions: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1].into(),
-            view_directions,
-        ),
-        // [P, 3 (+ 1)]
-        view_offsets: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [point_count, 3 + 1].into(),
-            view_offsets,
-        ),
-        // [3 (+ 1), 4]
-        view_transform: FloatTensor::<Wgpu, 2>::new(
-            client.to_owned(),
-            device.to_owned(),
-            [3 + 1, 4].into(),
-            view_transform,
-        ),
-    };
-
-    output
+        state: forward::RendererOutputState {
+            // [P, 3 (+ 1)]
+            colors_rgb_3d: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1].into(),
+                colors_rgb_3d,
+            ),
+            // [P, 16, 3]
+            colors_sh: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 16, 3].into(),
+                colors_sh,
+            ),
+            // [P, 2, 2]
+            conics: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 2, 2].into(),
+                conics,
+            ),
+            // [P, 3 (+ 1), 3]
+            covariances_3d: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1, 3].into(),
+                covariances_3d,
+            ),
+            // [P]
+            depths: FloatTensor::<Wgpu, 1>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count].into(),
+                depths,
+            ),
+            // [P, 3 (+ 1)]
+            is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1].into(),
+                is_colors_rgb_3d_clamped,
+            ),
+            // [P, 1]
+            opacities_3d: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 1].into(),
+                opacities_3d,
+            ),
+            // [T]
+            point_indexes: IntTensor::<Wgpu, 1>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [tile_touched_count].into(),
+                point_indexes,
+            ),
+            // [I_Y, I_X]
+            point_rendered_counts: IntTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [image_size_y, image_size_x].into(),
+                point_rendered_counts,
+            ),
+            // [P, 2]
+            positions_2d: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 2].into(),
+                positions_2d,
+            ),
+            // [P, 3]
+            positions_3d: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3].into(),
+                positions_3d,
+            ),
+            // [P, 2]
+            positions_3d_in_normalized: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 2].into(),
+                positions_3d_in_normalized,
+            ),
+            // [P, 2]
+            positions_3d_in_normalized_clamped: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 2].into(),
+                positions_3d_in_normalized_clamped,
+            ),
+            // [P]
+            radii: IntTensor::<Wgpu, 1>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count].into(),
+                radii,
+            ),
+            // [P, 4]
+            rotations: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 4].into(),
+                rotations,
+            ),
+            // [P, 3 (+ 1), 3]
+            rotations_matrix: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1, 3].into(),
+                rotations_matrix,
+            ),
+            // [P, 3 (+ 1), 3]
+            rotation_scalings: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1, 3].into(),
+                rotation_scalings,
+            ),
+            // [P, 3]
+            scalings: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3].into(),
+                scalings,
+            ),
+            // [I_Y / T_Y, I_X / T_X, 2]
+            tile_point_ranges: IntTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [tile_count, 2].into(),
+                tile_point_ranges,
+            ),
+            // [P, 2, 3]
+            transforms_2d: FloatTensor::<Wgpu, 3>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 2, 3].into(),
+                transforms_2d,
+            ),
+            // [I_Y, I_X]
+            transmittances: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [image_size_y, image_size_x].into(),
+                transmittances,
+            ),
+            // [P, 3 (+ 1)]
+            view_directions: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1].into(),
+                view_directions,
+            ),
+            // [P, 3 (+ 1)]
+            view_offsets: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [point_count, 3 + 1].into(),
+                view_offsets,
+            ),
+            // [3 (+ 1), 4]
+            view_transform: FloatTensor::<Wgpu, 2>::new(
+                client.to_owned(),
+                device.to_owned(),
+                [3 + 1, 4].into(),
+                view_transform,
+            ),
+        },
+    }
 }

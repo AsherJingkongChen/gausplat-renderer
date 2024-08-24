@@ -13,7 +13,7 @@ var<storage, read> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(2)
 var<storage, read> conics: array<mat2x2<f32>>;
-// [P] (0.0 ~ 1.0)
+// [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(3)
 var<storage, read> opacities_3d: array<f32>;
 // [T] (0 ~ P)
@@ -40,7 +40,7 @@ var<storage, read_write> transmittances: array<f32>;
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
 // [T_X * T_Y, 2, 2]
 var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
-// [T_X * T_Y]
+// [T_X * T_Y, 1]
 var<workgroup> batch_opacities_3d: array<f32, BATCH_SIZE>;
 // [T_X * T_Y, 2]
 var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;

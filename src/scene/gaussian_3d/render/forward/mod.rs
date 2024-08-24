@@ -6,6 +6,11 @@ pub use super::*;
 pub struct RendererOutput<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: B::FloatTensorPrimitive<3>,
+    pub state: RendererOutputState<B>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RendererOutputState<B: Backend> {
     /// `[P, 3 (+ 1)]`
     pub colors_rgb_3d: B::FloatTensorPrimitive<2>,
     /// `[P, 16, 3]`
