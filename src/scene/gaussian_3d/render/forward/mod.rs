@@ -16,22 +16,10 @@ pub struct RendererOutput<B: Backend> {
     pub covariances_3d: B::FloatTensorPrimitive<3>,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive<1>,
-    pub focal_length_x: f32,
-    pub focal_length_y: f32,
-    /// `I_X`
-    pub image_size_x: u32,
-    /// `I_Y`
-    pub image_size_y: u32,
-    /// `I_X / 2`
-    pub image_size_half_x: f32,
-    /// `I_Y / 2`
-    pub image_size_half_y: f32,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
-    /// `P`
-    pub point_count: u32,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`

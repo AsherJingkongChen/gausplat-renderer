@@ -26,21 +26,21 @@ pub fn render_gaussian_3d_scene(
     // Specifying the parameters
 
     let colors_sh_degree_max = options.colors_sh_degree_max;
+    let filter_low_pass = FILTER_LOW_PASS as f32;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
-    let filter_low_pass = FILTER_LOW_PASS as f32;
     // I_X
     let image_size_x = view.image_width as usize;
     // I_Y
     let image_size_y = view.image_height as usize;
-    // I_X / 2.0
-    let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
-    // I_Y / 2.0
-    let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
     let focal_length_x =
         (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     let focal_length_y =
         (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
+    // I_X / 2.0
+    let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
+    // I_Y / 2.0
+    let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
     // T_X
     let tile_size_x = GROUP_SIZE_X;
     // T_Y
@@ -398,16 +398,6 @@ pub fn render_gaussian_3d_scene(
             [point_count].into(),
             depths,
         ),
-        focal_length_x,
-        focal_length_y,
-        // I_X
-        image_size_x: image_size_x as u32,
-        // I_Y
-        image_size_y: image_size_y as u32,
-        // I_X / 2
-        image_size_half_x,
-        // I_Y / 2
-        image_size_half_y,
         // [P, 3 (+ 1)]
         is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
             client.to_owned(),
@@ -422,8 +412,6 @@ pub fn render_gaussian_3d_scene(
             [point_count, 1].into(),
             opacities_3d,
         ),
-        // P
-        point_count: point_count as u32,
         // [T]
         point_indexes: IntTensor::<Wgpu, 1>::new(
             client.to_owned(),

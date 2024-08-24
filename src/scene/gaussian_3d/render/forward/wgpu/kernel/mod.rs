@@ -65,16 +65,19 @@ impl KernelSource for Kernel1WgslSource {
         SourceTemplate::new(include_str!("./1.wgsl"))
     }
 }
+
 impl KernelSource for Kernel3WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./3.wgsl"))
     }
 }
+
 impl KernelSource for Kernel5WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./5.wgsl"))
     }
 }
+
 impl KernelSource for Kernel6WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./6.wgsl"))

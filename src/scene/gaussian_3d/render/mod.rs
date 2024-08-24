@@ -6,6 +6,7 @@ pub use burn::{backend::autodiff::Autodiff, config::Config};
 pub use gausplat_importer::scene::sparse_view;
 
 use burn::backend::wgpu;
+use gausplat_importer::scene::sparse_view::view;
 
 pub type Wgpu =
     wgpu::JitBackend<wgpu::WgpuRuntime<wgpu::AutoGraphicsApi, f32, i32>>;
@@ -13,6 +14,7 @@ pub type Wgpu =
 pub trait Gaussian3dRenderer<B: Backend> {
     fn backward(
         output: forward::RendererOutput<B>,
+        view: &sparse_view::View,
         options: &RendererOptions,
     ) -> backward::RendererOutput<B>;
 
@@ -156,9 +158,10 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn backward(
         output: forward::RendererOutput<Wgpu>,
+        view: &sparse_view::View,
         options: &RendererOptions,
     ) -> backward::RendererOutput<Wgpu> {
-        backward::wgpu::render_gaussian_3d_scene(output, options)
+        backward::wgpu::render_gaussian_3d_scene(output, view, options)
     }
 
     fn forward(
@@ -173,9 +176,10 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn backward(
         output: forward::RendererOutput<Wgpu>,
+        view: &sparse_view::View,
         options: &RendererOptions,
     ) -> backward::RendererOutput<Wgpu> {
-        backward::wgpu::render_gaussian_3d_scene(output, options)
+        backward::wgpu::render_gaussian_3d_scene(output, view, options)
     }
 
     fn forward(
