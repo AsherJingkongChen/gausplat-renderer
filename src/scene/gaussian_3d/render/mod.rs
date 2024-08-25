@@ -3,27 +3,30 @@ pub mod forward;
 
 pub use super::*;
 pub use burn::{
-    backend::autodiff::Autodiff, config::Config, tensor::ops::FloatTensor,
+    backend::autodiff::{checkpoint::strategy::CheckpointStrategy, Autodiff},
+    config::Config,
+    tensor::ops::FloatTensor,
 };
 pub use gausplat_importer::scene::sparse_view;
 
-use burn::{backend::wgpu, tensor::Int};
+use burn::{
+    backend::{autodiff::checkpoint::strategy::NoCheckpointing, wgpu},
+    tensor::Int,
+};
 
 pub type Wgpu =
     wgpu::JitBackend<wgpu::WgpuRuntime<wgpu::AutoGraphicsApi, f32, i32>>;
 
 pub trait Gaussian3dRenderer<B: Backend> {
     fn backward(
+        state: backward::RendererInput<B>,
         grad: FloatTensor<B, 3>,
-        state: forward::RendererState<B>,
-        view: &sparse_view::View,
-        options: &RendererOptions,
     ) -> backward::RendererOutput<B>;
 
     fn forward(
         input: forward::RendererInput<B>,
         view: &sparse_view::View,
-        options: &RendererOptions,
+        options: RendererOptions,
     ) -> forward::RendererOutput<B>;
 }
 
@@ -42,22 +45,25 @@ pub struct RenderOutput<B: Backend> {
 }
 
 #[derive(Clone, Debug)]
-pub struct RenderOutputAutodiff<AB: AutodiffBackend> {
+pub struct RenderOutputAutodiff<
+    B: Backend,
+    C: CheckpointStrategy = NoCheckpointing,
+> {
     /// `[I_Y, I_X, 3]`
-    pub colors_rgb_2d: Tensor<AB, 3>,
+    pub colors_rgb_2d: Tensor<Autodiff<B, C>, 3>,
     /// `[P]`
-    pub depths: Tensor<AB::InnerBackend, 1>,
+    pub depths: Tensor<B, 1>,
     // /// `[P]`
-    // pub positions_2d_grad_norm: Tensor<AB::InnerBackend, 1>,
+    // pub positions_2d_grad_norm: Tensor<B, 1>,
     /// `[P]`
-    pub radii: Tensor<AB::InnerBackend, 1, Int>,
+    pub radii: Tensor<B, 1, Int>,
 }
 
 impl Gaussian3dScene<Wgpu> {
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: &RendererOptions,
+        options: RendererOptions,
     ) -> RenderOutput<Wgpu> {
         let input = forward::RendererInput {
             colors_sh: self.colors_sh().into_primitive(),
@@ -82,16 +88,15 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: &RendererOptions,
-    ) -> RenderOutputAutodiff<Autodiff<Wgpu>> {
+        options: RendererOptions,
+    ) -> RenderOutputAutodiff<Wgpu> {
         use burn::backend::autodiff::{
-            checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
+            checkpoint::base::Checkpointer,
             grads::Gradients,
             ops::{Backward, Ops, OpsKind},
         };
 
-        type AB = Autodiff<Wgpu>;
-        type B = <AB as AutodiffBackend>::InnerBackend;
+        type B = Wgpu;
 
         #[derive(Debug)]
         struct BackwardOps;
@@ -110,7 +115,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
             scalings: scalings.primitive,
         };
 
-        let output = Self::forward(input, view, options);
+        let output = Gaussian3dScene::<B>::forward(input, view, options);
 
         let nodes = [
             colors_sh.node,
@@ -136,7 +141,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
         );
 
         impl Backward<B, 3, 5> for BackwardOps {
-            type State = forward::RendererState<B>;
+            type State = backward::RendererInput<B>;
 
             fn backward(
                 self,
@@ -144,15 +149,45 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 grads: &mut Gradients,
                 checkpointer: &mut Checkpointer,
             ) {
-                let grad =
-                    Tensor::<B, 3>::new(grads.consume::<B, 3>(&ops.node));
-                println!("grad.dims: {:?}", grad.dims());
-                println!("grad.max: {:?}", grad.to_owned().max().into_scalar());
-                println!(
-                    "grad.mean: {:?}",
-                    grad.to_owned().mean().into_scalar()
-                );
-                println!("grad.min: {:?}", grad.to_owned().min().into_scalar());
+                if let [Some(colors_sh_node), Some(opacities_node), Some(positions_node), Some(rotations_node), Some(scalings_node)] =
+                    ops.parents
+                {
+                    let grad = grads.consume::<B, 3>(&ops.node);
+                    {
+                        let grad = Tensor::<B, 3>::new(grad.to_owned());
+                        println!("grad.dims: {:?}", grad.dims());
+                        println!(
+                            "grad.max: {:?}",
+                            grad.to_owned().max().into_scalar()
+                        );
+                        println!(
+                            "grad.mean: {:?}",
+                            grad.to_owned().mean().into_scalar()
+                        );
+                        println!(
+                            "grad.min: {:?}",
+                            grad.to_owned().min().into_scalar()
+                        );
+                    }
+
+                    let state = ops.state;
+                    let output = Gaussian3dScene::<B>::backward(state, grad);
+                    // grads.register::<B, 1>;
+
+                    let colors_sh_grad = Tensor::<B, 3>::new(output.colors_sh_grad);
+                    let opacities_grad = Tensor::<B, 2>::new(output.opacities_grad);
+                    let positions_2d_grad_norm = Tensor::<B, 1>::new(output.positions_2d_grad_norm);
+                    let positions_grad = Tensor::<B, 2>::new(output.positions_grad);
+                    let rotations_grad = Tensor::<B, 2>::new(output.rotations_grad);
+                    let scalings_grad = Tensor::<B, 2>::new(output.scalings_grad);
+
+                    println!("colors_sh_grad: {}", colors_sh_grad.mean_dim(0));
+                    println!("opacities_grad: {}", opacities_grad.mean_dim(0));
+                    println!("positions_2d_grad_norm: {}", positions_2d_grad_norm.mean_dim(0));
+                    println!("positions_grad: {}", positions_grad.mean_dim(0));
+                    println!("rotations_grad: {}", rotations_grad.mean_dim(0));
+                    println!("scalings_grad: {}", scalings_grad.mean_dim(0));
+                }
             }
         }
 
@@ -166,37 +201,16 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
 
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn backward(
+        state: backward::RendererInput<Wgpu>,
         grad: FloatTensor<Wgpu, 3>,
-        state: forward::RendererState<Wgpu>,
-        view: &sparse_view::View,
-        options: &RendererOptions,
     ) -> backward::RendererOutput<Wgpu> {
-        backward::wgpu::render_gaussian_3d_scene(grad, state, view, options)
+        backward::wgpu::render_gaussian_3d_scene(state, grad)
     }
 
     fn forward(
         input: forward::RendererInput<Wgpu>,
         view: &sparse_view::View,
-        options: &RendererOptions,
-    ) -> forward::RendererOutput<Wgpu> {
-        forward::wgpu::render_gaussian_3d_scene(input, view, options)
-    }
-}
-
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
-    fn backward(
-        grad: FloatTensor<Wgpu, 3>,
-        state: forward::RendererState<Wgpu>,
-        view: &sparse_view::View,
-        options: &RendererOptions,
-    ) -> backward::RendererOutput<Wgpu> {
-        backward::wgpu::render_gaussian_3d_scene(grad, state, view, options)
-    }
-
-    fn forward(
-        input: forward::RendererInput<Wgpu>,
-        view: &sparse_view::View,
-        options: &RendererOptions,
+        options: RendererOptions,
     ) -> forward::RendererOutput<Wgpu> {
         forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }

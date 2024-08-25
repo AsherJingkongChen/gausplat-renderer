@@ -21,7 +21,7 @@ use rayon::{
 pub fn render_gaussian_3d_scene(
     input: forward::RendererInput<Wgpu>,
     view: &sparse_view::View,
-    options: &RendererOptions,
+    options: RendererOptions,
 ) -> forward::RendererOutput<Wgpu> {
     // Specifying the parameters
 
@@ -360,7 +360,7 @@ pub fn render_gaussian_3d_scene(
             [image_size_y, image_size_x, 3].into(),
             colors_rgb_2d,
         ),
-        state: forward::RendererState {
+        state: backward::RendererInput {
             // [P, 3 (+ 1)]
             colors_rgb_3d: FloatTensor::<Wgpu, 2>::new(
                 client.to_owned(),
@@ -396,6 +396,16 @@ pub fn render_gaussian_3d_scene(
                 [point_count].into(),
                 depths,
             ),
+            focal_length_x: focal_length_x as f64,
+            focal_length_y: focal_length_y as f64,
+            // I_X
+            image_size_x,
+            // I_Y
+            image_size_y,
+            // I_X / 2.0
+            image_size_half_x: image_size_half_x as f64,
+            // I_Y / 2.0
+            image_size_half_y: image_size_half_y as f64,
             // [P, 3 (+ 1)]
             is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
                 client.to_owned(),
@@ -410,6 +420,9 @@ pub fn render_gaussian_3d_scene(
                 [point_count, 1].into(),
                 opacities_3d,
             ),
+            options,
+            // P
+            point_count,
             // [T]
             point_indexes: IntTensor::<Wgpu, 1>::new(
                 client.to_owned(),
