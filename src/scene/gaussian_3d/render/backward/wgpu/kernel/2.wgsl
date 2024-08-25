@@ -312,7 +312,7 @@ fn main(
     let conic = conics[index];
     let conic_grad = conics_grad[index];
     // ∂L/∂Σ'[2, 2]
-    let covariance_2d_grad = -conic * conic_grad * conic;
+    let covariance_2d_grad = -1.0 * conic * conic_grad * conic;
 
     // Computing the gradients
     //

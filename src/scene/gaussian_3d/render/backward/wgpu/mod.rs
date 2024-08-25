@@ -81,8 +81,8 @@ pub fn render_gaussian_3d_scene(
         .into_primitive()
         .handle;
     // [P, 1]
-    let opacities_3d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 1], &device)
-        .into_primitive();
+    let opacities_3d_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, 1], &device).into_primitive();
     // [P, 2]
     let positions_2d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 2], &device)
         .into_primitive()
@@ -171,17 +171,16 @@ pub fn render_gaussian_3d_scene(
             .into_primitive();
     // [P]
     let positions_2d_grad_norm =
-        Tensor::<Wgpu, 1>::zeros([point_count], &device)
-            .into_primitive();
+        Tensor::<Wgpu, 1>::zeros([point_count], &device).into_primitive();
     // [P, 3]
-    let positions_3d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 3], &device)
-        .into_primitive();
+    let positions_3d_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, 3], &device).into_primitive();
     // [P, 4]
-    let rotations_grad = Tensor::<Wgpu, 2>::zeros([point_count, 4], &device)
-        .into_primitive();
+    let rotations_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, 4], &device).into_primitive();
     // [P, 3]
-    let scalings_grad = Tensor::<Wgpu, 2>::zeros([point_count, 3], &device)
-        .into_primitive();
+    let scalings_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, 3], &device).into_primitive();
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(

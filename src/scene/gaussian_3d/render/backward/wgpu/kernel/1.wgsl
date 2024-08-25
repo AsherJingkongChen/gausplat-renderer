@@ -37,16 +37,16 @@ var<storage, read> transmittances: array<f32>;
 
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
-var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<atomic<i32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
-var<storage, read_write> conics_grad: array<atomic<f32>>;
+var<storage, read_write> conics_grad: array<atomic<i32>>;
 // [P, 1]
 @group(0) @binding(12)
-var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
+var<storage, read_write> opacities_3d_grad: array<atomic<i32>>;
 // [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> positions_2d_grad: array<atomic<f32>>;
+var<storage, read_write> positions_2d_grad: array<atomic<i32>>;
 
 // [T_X * T_Y, 3]
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
@@ -88,7 +88,11 @@ fn main(
     // (0 ~ I_X / T_X, 0 ~ I_Y / T_Y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
-    let color_rgb_2d_grad = colors_rgb_2d_grad[pixel_index];
+    let color_rgb_2d_grad = vec3<f32>(
+        colors_rgb_2d_grad[pixel_index][0],
+        colors_rgb_2d_grad[pixel_index][1],
+        colors_rgb_2d_grad[pixel_index][2],
+    );
     let point_rendered_count = select(0u, point_rendered_counts[pixel_index], is_pixel_valid);
 
     // R
@@ -138,9 +142,9 @@ fn main(
             // Computing the density of the point in the pixel
             // g[1, 1] = d^T[1, 2] * c'^-1[2, 2] * d[2, 1]
 
+            let conic = batch_conics[batch_index];
             let position_2d = batch_positions_2d[batch_index];
             let position_offset = position_2d - position_pixel;
-            let conic = batch_conics[batch_index];
             let density = exp(-0.5 * dot(position_offset * conic, position_offset));
 
             // Skipping if the density is greater than one
@@ -193,19 +197,19 @@ fn main(
             let point_index = batch_point_indexes[batch_index];
 
             // [P, 3 (+ 1)]
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], color_rgb_3d_grad[0]);
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 1], color_rgb_3d_grad[1]);
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 2], color_rgb_3d_grad[2]);
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], bitcast<i32>(color_rgb_3d_grad[0]));
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 1], bitcast<i32>(color_rgb_3d_grad[1]));
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 2], bitcast<i32>(color_rgb_3d_grad[2]));
             // [P, 2, 2]
-            atomicAdd(&conics_grad[4 * point_index + 0], conic_grad[0][0]);
-            atomicAdd(&conics_grad[4 * point_index + 1], conic_grad[0][1]);
-            atomicAdd(&conics_grad[4 * point_index + 2], conic_grad[1][0]);
-            atomicAdd(&conics_grad[4 * point_index + 3], conic_grad[1][1]);
+            atomicAdd(&conics_grad[4 * point_index + 0], bitcast<i32>(conic_grad[0][0]));
+            atomicAdd(&conics_grad[4 * point_index + 1], bitcast<i32>(conic_grad[0][1]));
+            atomicAdd(&conics_grad[4 * point_index + 2], bitcast<i32>(conic_grad[1][0]));
+            atomicAdd(&conics_grad[4 * point_index + 3], bitcast<i32>(conic_grad[1][1]));
             // [P]
-            atomicAdd(&opacities_3d_grad[point_index], opacity_3d_grad);
+            atomicAdd(&opacities_3d_grad[point_index], bitcast<i32>(opacity_3d_grad));
             // [P, 2]
-            atomicAdd(&positions_2d_grad[2 * point_index + 0], position_2d_grad[0]);
-            atomicAdd(&positions_2d_grad[2 * point_index + 1], position_2d_grad[1]);
+            atomicAdd(&positions_2d_grad[2 * point_index + 0], bitcast<i32>(position_2d_grad[0]));
+            atomicAdd(&positions_2d_grad[2 * point_index + 1], bitcast<i32>(position_2d_grad[1]));
         }
 
         tile_point_count -= batch_point_count;

@@ -132,9 +132,9 @@ fn main(
             // Computing the density of the point in the pixel
             // g[1, 1] = d^T[1, 2] * c'^-1[2, 2] * d[2, 1]
 
+            let conic = batch_conics[batch_index];
             let position_2d = batch_positions_2d[batch_index];
             let position_offset = position_2d - position_pixel;
-            let conic = batch_conics[batch_index];
             let density = exp(-0.5 * dot(position_offset * conic, position_offset));
 
             // Skipping if the density is greater than one
