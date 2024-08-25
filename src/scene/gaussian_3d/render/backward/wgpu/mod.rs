@@ -72,21 +72,13 @@ pub fn render_gaussian_3d_scene(
     // [I_Y, I_X] (0.0 ~ 1.0)
     let transmittances = state.transmittances.handle;
     // [P, 3 (+ 1)]
-    let colors_rgb_3d_grad =
-        Tensor::<Wgpu, 2>::zeros([point_count, 3 + 1], &device)
-            .into_primitive()
-            .handle;
+    let colors_rgb_3d_grad = client.create(&vec![0; point_count * (3 + 1) * 4]);
     // [P, 2, 2]
-    let conics_grad = Tensor::<Wgpu, 3>::zeros([point_count, 2, 2], &device)
-        .into_primitive()
-        .handle;
+    let conics_grad = client.create(&vec![0; point_count * 2 * 2 * 4]);
     // [P, 1]
-    let opacities_3d_grad =
-        Tensor::<Wgpu, 2>::zeros([point_count, 1], &device).into_primitive();
+    let opacities_3d_grad = client.create(&vec![0; point_count * 1 * 4]);
     // [P, 2]
-    let positions_2d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 2], &device)
-        .into_primitive()
-        .handle;
+    let positions_2d_grad = client.create(&vec![0; point_count * 2 * 4]);
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -115,7 +107,7 @@ pub fn render_gaussian_3d_scene(
             &transmittances,
             &colors_rgb_3d_grad,
             &conics_grad,
-            &opacities_3d_grad.handle,
+            &opacities_3d_grad,
             &positions_2d_grad,
         ],
     );
@@ -166,21 +158,15 @@ pub fn render_gaussian_3d_scene(
     // [3 (+ 1), 3]
     let view_transform_rotation = state.view_transform.handle;
     // [P, 16, 3]
-    let colors_sh_grad =
-        Tensor::<Wgpu, 3>::zeros([point_count, 16, 3], &device)
-            .into_primitive();
+    let colors_sh_grad = client.create(&vec![0; point_count * 16 * 3 * 4]);
     // [P]
-    let positions_2d_grad_norm =
-        Tensor::<Wgpu, 1>::zeros([point_count], &device).into_primitive();
+    let positions_2d_grad_norm = client.create(&vec![0; point_count * 4]);
     // [P, 3]
-    let positions_3d_grad =
-        Tensor::<Wgpu, 2>::zeros([point_count, 3], &device).into_primitive();
+    let positions_3d_grad = client.create(&vec![0; point_count * 3 * 4]);
     // [P, 4]
-    let rotations_grad =
-        Tensor::<Wgpu, 2>::zeros([point_count, 4], &device).into_primitive();
+    let rotations_grad = client.create(&vec![0; point_count * 4 * 4]);
     // [P, 3]
-    let scalings_grad =
-        Tensor::<Wgpu, 2>::zeros([point_count, 3], &device).into_primitive();
+    let scalings_grad = client.create(&vec![0; point_count * 3 * 4]);
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -217,23 +203,59 @@ pub fn render_gaussian_3d_scene(
             &view_directions,
             &view_offsets,
             &view_transform_rotation,
-            &colors_sh_grad.handle,
-            &positions_2d_grad_norm.handle,
-            &positions_3d_grad.handle,
-            &rotations_grad.handle,
-            &scalings_grad.handle,
+            &colors_sh_grad,
+            &positions_2d_grad_norm,
+            &positions_3d_grad,
+            &rotations_grad,
+            &scalings_grad,
         ],
     );
 
-    client.sync();
+    // client.sync();
     println!("backward pass #2: {:?}", duration.elapsed());
 
     backward::RendererOutput {
-        colors_sh_grad,
-        opacities_grad: opacities_3d_grad,
-        positions_grad: positions_3d_grad,
-        positions_2d_grad_norm,
-        rotations_grad,
-        scalings_grad,
+        // [P, 16, 3]
+        colors_sh_grad: FloatTensor::<Wgpu, 3>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 16, 3].into(),
+            colors_sh_grad,
+        ),
+        // [P, 1]
+        opacities_grad: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 1].into(),
+            opacities_3d_grad,
+        ),
+        // [P, 3]
+        positions_grad: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3].into(),
+            positions_3d_grad,
+        ),
+        // [P]
+        positions_2d_grad_norm: FloatTensor::<Wgpu, 1>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count].into(),
+            positions_2d_grad_norm,
+        ),
+        // [P, 4]
+        rotations_grad: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 4].into(),
+            rotations_grad,
+        ),
+        // [P, 3]
+        scalings_grad: FloatTensor::<Wgpu, 2>::new(
+            client.to_owned(),
+            device.to_owned(),
+            [point_count, 3].into(),
+            scalings_grad,
+        ),
     }
 }

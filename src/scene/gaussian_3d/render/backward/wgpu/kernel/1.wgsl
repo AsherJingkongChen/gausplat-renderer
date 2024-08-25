@@ -37,16 +37,16 @@ var<storage, read> transmittances: array<f32>;
 
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
-var<storage, read_write> colors_rgb_3d_grad: array<atomic<i32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
-var<storage, read_write> conics_grad: array<atomic<i32>>;
+var<storage, read_write> conics_grad: array<mat2x2<f32>>;
 // [P, 1]
 @group(0) @binding(12)
-var<storage, read_write> opacities_3d_grad: array<atomic<i32>>;
+var<storage, read_write> opacities_3d_grad: array<f32>;
 // [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> positions_2d_grad: array<atomic<i32>>;
+var<storage, read_write> positions_2d_grad: array<vec2<f32>>;
 
 // [T_X * T_Y, 3]
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
@@ -197,19 +197,13 @@ fn main(
             let point_index = batch_point_indexes[batch_index];
 
             // [P, 3 (+ 1)]
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], bitcast<i32>(color_rgb_3d_grad[0]));
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 1], bitcast<i32>(color_rgb_3d_grad[1]));
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 2], bitcast<i32>(color_rgb_3d_grad[2]));
+            colors_rgb_3d_grad[point_index] += color_rgb_3d_grad;
             // [P, 2, 2]
-            atomicAdd(&conics_grad[4 * point_index + 0], bitcast<i32>(conic_grad[0][0]));
-            atomicAdd(&conics_grad[4 * point_index + 1], bitcast<i32>(conic_grad[0][1]));
-            atomicAdd(&conics_grad[4 * point_index + 2], bitcast<i32>(conic_grad[1][0]));
-            atomicAdd(&conics_grad[4 * point_index + 3], bitcast<i32>(conic_grad[1][1]));
-            // [P]
-            atomicAdd(&opacities_3d_grad[point_index], bitcast<i32>(opacity_3d_grad));
+            conics_grad[point_index] += conic_grad;
+            // [P, 1]
+            opacities_3d_grad[point_index] += opacity_3d_grad;
             // [P, 2]
-            atomicAdd(&positions_2d_grad[2 * point_index + 0], bitcast<i32>(position_2d_grad[0]));
-            atomicAdd(&positions_2d_grad[2 * point_index + 1], bitcast<i32>(position_2d_grad[1]));
+            positions_2d_grad[point_index] += position_2d_grad;
         }
 
         tile_point_count -= batch_point_count;

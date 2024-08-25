@@ -73,9 +73,7 @@ impl Gaussian3dScene<Wgpu> {
 
         let colors_rgb_2d = Tensor::new(output.colors_rgb_2d);
 
-        RenderOutput {
-            colors_rgb_2d,
-        }
+        RenderOutput { colors_rgb_2d }
     }
 }
 
@@ -117,11 +115,7 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
 
         let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(
-            match BackwardOps
-                .prepare::<C>(nodes)
-                .compute_bound()
-                .stateful()
-            {
+            match BackwardOps.prepare::<C>(nodes).compute_bound().stateful() {
                 OpsKind::Tracked(prep) => {
                     prep.finish(output.state, output.colors_rgb_2d)
                 },
@@ -162,54 +156,60 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                 let state = ops.state;
                 let output = Gaussian3dScene::backward(state, grad);
 
+                let colors_sh_grad =
+                    Tensor::<Wgpu, 3>::new(output.colors_sh_grad.to_owned());
+                let opacities_grad =
+                    Tensor::<Wgpu, 2>::new(output.opacities_grad.to_owned());
+                let positions_2d_grad_norm = Tensor::<Wgpu, 1>::new(
+                    output.positions_2d_grad_norm.to_owned(),
+                );
+                let positions_grad =
+                    Tensor::<Wgpu, 2>::new(output.positions_grad.to_owned());
+                let rotations_grad =
+                    Tensor::<Wgpu, 2>::new(output.rotations_grad.to_owned());
+                let scalings_grad =
+                    Tensor::<Wgpu, 2>::new(output.scalings_grad.to_owned());
+
+                println!(
+                    "colors_sh_grad: {:?}",
+                    colors_sh_grad.to_owned().mean_dim(0).to_data().value
+                );
+                println!(
+                    "opacities_grad: {:?}",
+                    opacities_grad.to_owned().mean_dim(0).to_data().value
+                );
+                println!(
+                    "positions_2d_grad_norm: {:?}",
+                    positions_2d_grad_norm.mean_dim(0).to_data().value
+                );
+                println!(
+                    "positions_grad: {:?}",
+                    positions_grad.to_owned().mean_dim(0).to_data().value
+                );
+                println!(
+                    "rotations_grad: {:?}",
+                    rotations_grad.to_owned().mean_dim(0).to_data().value
+                );
+                println!(
+                    "scalings_grad: {:?}",
+                    scalings_grad.to_owned().mean_dim(0).to_data().value
+                );
+
                 if let Some(node) = &ops.parents[0] {
-                    grads.register::<Wgpu, 3>(
-                        node.id,
-                        output.colors_sh_grad.to_owned(),
-                    );
+                    grads.register::<Wgpu, 3>(node.id, output.colors_sh_grad);
                 }
                 if let Some(node) = &ops.parents[1] {
-                    grads.register::<Wgpu, 2>(
-                        node.id,
-                        output.opacities_grad.to_owned(),
-                    );
+                    grads.register::<Wgpu, 2>(node.id, output.opacities_grad);
                 }
                 if let Some(node) = &ops.parents[2] {
-                    grads.register::<Wgpu, 2>(
-                        node.id,
-                        output.positions_grad.to_owned(),
-                    );
+                    grads.register::<Wgpu, 2>(node.id, output.positions_grad);
                 }
                 if let Some(node) = &ops.parents[3] {
-                    grads.register::<Wgpu, 2>(
-                        node.id,
-                        output.rotations_grad.to_owned(),
-                    );
+                    grads.register::<Wgpu, 2>(node.id, output.rotations_grad);
                 }
                 if let Some(node) = &ops.parents[4] {
-                    grads.register::<Wgpu, 2>(
-                        node.id,
-                        output.scalings_grad.to_owned(),
-                    );
+                    grads.register::<Wgpu, 2>(node.id, output.scalings_grad);
                 }
-
-                let colors_sh_grad = Tensor::<Wgpu, 3>::new(output.colors_sh_grad);
-                let opacities_grad = Tensor::<Wgpu, 2>::new(output.opacities_grad);
-                let positions_2d_grad_norm =
-                    Tensor::<Wgpu, 1>::new(output.positions_2d_grad_norm);
-                let positions_grad = Tensor::<Wgpu, 2>::new(output.positions_grad);
-                let rotations_grad = Tensor::<Wgpu, 2>::new(output.rotations_grad);
-                let scalings_grad = Tensor::<Wgpu, 2>::new(output.scalings_grad);
-
-                println!("colors_sh_grad: {}", colors_sh_grad.mean_dim(0));
-                println!("opacities_grad: {}", opacities_grad.mean_dim(0));
-                println!(
-                    "positions_2d_grad_norm: {}",
-                    positions_2d_grad_norm.mean_dim(0)
-                );
-                println!("positions_grad: {}", positions_grad.mean_dim(0));
-                println!("rotations_grad: {}", rotations_grad.mean_dim(0));
-                println!("scalings_grad: {}", scalings_grad.mean_dim(0));
             }
         }
 

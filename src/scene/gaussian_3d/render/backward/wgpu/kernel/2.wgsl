@@ -123,7 +123,7 @@ fn main(
 
     // (0 ~ P)
     let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
-    if index >= arguments.point_count || radii[index] != 0u {
+    if index >= arguments.point_count || radii[index] == 0u {
         return;
     }
 
