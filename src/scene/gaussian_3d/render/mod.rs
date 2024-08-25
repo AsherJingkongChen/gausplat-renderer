@@ -147,47 +147,62 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 self,
                 ops: Ops<Self::State, 5>,
                 grads: &mut Gradients,
-                checkpointer: &mut Checkpointer,
+                _checkpointer: &mut Checkpointer,
             ) {
-                if let [Some(colors_sh_node), Some(opacities_node), Some(positions_node), Some(rotations_node), Some(scalings_node)] =
-                    ops.parents
+                let grad = grads.consume::<B, 3>(&ops.node);
                 {
-                    let grad = grads.consume::<B, 3>(&ops.node);
-                    {
-                        let grad = Tensor::<B, 3>::new(grad.to_owned());
-                        println!("grad.dims: {:?}", grad.dims());
-                        println!(
-                            "grad.max: {:?}",
-                            grad.to_owned().max().into_scalar()
-                        );
-                        println!(
-                            "grad.mean: {:?}",
-                            grad.to_owned().mean().into_scalar()
-                        );
-                        println!(
-                            "grad.min: {:?}",
-                            grad.to_owned().min().into_scalar()
-                        );
-                    }
-
-                    let state = ops.state;
-                    let output = Gaussian3dScene::<B>::backward(state, grad);
-                    // grads.register::<B, 1>;
-
-                    let colors_sh_grad = Tensor::<B, 3>::new(output.colors_sh_grad);
-                    let opacities_grad = Tensor::<B, 2>::new(output.opacities_grad);
-                    let positions_2d_grad_norm = Tensor::<B, 1>::new(output.positions_2d_grad_norm);
-                    let positions_grad = Tensor::<B, 2>::new(output.positions_grad);
-                    let rotations_grad = Tensor::<B, 2>::new(output.rotations_grad);
-                    let scalings_grad = Tensor::<B, 2>::new(output.scalings_grad);
-
-                    println!("colors_sh_grad: {}", colors_sh_grad.mean_dim(0));
-                    println!("opacities_grad: {}", opacities_grad.mean_dim(0));
-                    println!("positions_2d_grad_norm: {}", positions_2d_grad_norm.mean_dim(0));
-                    println!("positions_grad: {}", positions_grad.mean_dim(0));
-                    println!("rotations_grad: {}", rotations_grad.mean_dim(0));
-                    println!("scalings_grad: {}", scalings_grad.mean_dim(0));
+                    let grad = Tensor::<B, 3>::new(grad.to_owned());
+                    println!("grad.dims: {:?}", grad.dims());
+                    println!(
+                        "grad.max: {:?}",
+                        grad.to_owned().max().into_scalar()
+                    );
+                    println!(
+                        "grad.mean: {:?}",
+                        grad.to_owned().mean().into_scalar()
+                    );
+                    println!(
+                        "grad.min: {:?}",
+                        grad.to_owned().min().into_scalar()
+                    );
                 }
+
+                let state = ops.state;
+                let output = Gaussian3dScene::<B>::backward(state, grad);
+
+                if let Some(node) = &ops.parents[0] {
+                    grads.register::<B, 3>(node.id, output.colors_sh_grad.to_owned());
+                }
+                if let Some(node) = &ops.parents[1] {
+                    grads.register::<B, 2>(node.id, output.opacities_grad.to_owned());
+                }
+                if let Some(node) = &ops.parents[2] {
+                    grads.register::<B, 2>(node.id, output.positions_grad.to_owned());
+                }
+                if let Some(node) = &ops.parents[3] {
+                    grads.register::<B, 2>(node.id, output.rotations_grad.to_owned());
+                }
+                if let Some(node) = &ops.parents[4] {
+                    grads.register::<B, 2>(node.id, output.scalings_grad.to_owned());
+                }
+
+                let colors_sh_grad = Tensor::<B, 3>::new(output.colors_sh_grad);
+                let opacities_grad = Tensor::<B, 2>::new(output.opacities_grad);
+                let positions_2d_grad_norm =
+                    Tensor::<B, 1>::new(output.positions_2d_grad_norm);
+                let positions_grad = Tensor::<B, 2>::new(output.positions_grad);
+                let rotations_grad = Tensor::<B, 2>::new(output.rotations_grad);
+                let scalings_grad = Tensor::<B, 2>::new(output.scalings_grad);
+
+                println!("colors_sh_grad: {}", colors_sh_grad.mean_dim(0));
+                println!("opacities_grad: {}", opacities_grad.mean_dim(0));
+                println!(
+                    "positions_2d_grad_norm: {}",
+                    positions_2d_grad_norm.mean_dim(0)
+                );
+                println!("positions_grad: {}", positions_grad.mean_dim(0));
+                println!("rotations_grad: {}", rotations_grad.mean_dim(0));
+                println!("scalings_grad: {}", scalings_grad.mean_dim(0));
             }
         }
 
