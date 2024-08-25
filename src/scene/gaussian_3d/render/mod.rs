@@ -68,6 +68,7 @@ impl Gaussian3dScene<Wgpu> {
             rotations: self.rotations().into_primitive(),
             scalings: self.scalings().into_primitive(),
         };
+
         let output = Self::forward(input, view, options);
 
         let colors_rgb_2d = Tensor::new(output.colors_rgb_2d);
@@ -78,19 +79,17 @@ impl Gaussian3dScene<Wgpu> {
     }
 }
 
-impl Gaussian3dScene<Autodiff<Wgpu>> {
+impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
     pub fn render(
         &self,
         view: &sparse_view::View,
         options: RendererOptions,
-    ) -> RenderOutputAutodiff<Wgpu> {
+    ) -> RenderOutputAutodiff<Wgpu, C> {
         use burn::backend::autodiff::{
             checkpoint::base::Checkpointer,
             grads::Gradients,
             ops::{Backward, Ops, OpsKind},
         };
-
-        type B = Wgpu;
 
         let colors_sh = self.colors_sh().into_primitive();
         let opacities = self.opacities().into_primitive();
@@ -106,7 +105,7 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
             scalings: scalings.primitive,
         };
 
-        let output = Gaussian3dScene::<B>::forward(input, view, options);
+        let output = Gaussian3dScene::forward(input, view, options);
 
         let nodes = [
             colors_sh.node,
@@ -116,10 +115,10 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
             scalings.node,
         ];
 
-        let radii = Tensor::<B, 1, Int>::new(output.state.radii.to_owned());
+        let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(
             match BackwardOps
-                .prepare::<NoCheckpointing>(nodes)
+                .prepare::<C>(nodes)
                 .compute_bound()
                 .stateful()
             {
@@ -133,8 +132,8 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
         #[derive(Debug)]
         struct BackwardOps;
 
-        impl Backward<B, 3, 5> for BackwardOps {
-            type State = backward::RendererInput<B>;
+        impl Backward<Wgpu, 3, 5> for BackwardOps {
+            type State = backward::RendererInput<Wgpu>;
 
             fn backward(
                 self,
@@ -142,9 +141,9 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 grads: &mut Gradients,
                 _checkpointer: &mut Checkpointer,
             ) {
-                let grad = grads.consume::<B, 3>(&ops.node);
+                let grad = grads.consume::<Wgpu, 3>(&ops.node);
                 {
-                    let grad = Tensor::<B, 3>::new(grad.to_owned());
+                    let grad = Tensor::<Wgpu, 3>::new(grad.to_owned());
                     println!("grad.dims: {:?}", grad.dims());
                     println!(
                         "grad.max: {:?}",
@@ -161,31 +160,46 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 }
 
                 let state = ops.state;
-                let output = Gaussian3dScene::<B>::backward(state, grad);
+                let output = Gaussian3dScene::backward(state, grad);
 
                 if let Some(node) = &ops.parents[0] {
-                    grads.register::<B, 3>(node.id, output.colors_sh_grad.to_owned());
+                    grads.register::<Wgpu, 3>(
+                        node.id,
+                        output.colors_sh_grad.to_owned(),
+                    );
                 }
                 if let Some(node) = &ops.parents[1] {
-                    grads.register::<B, 2>(node.id, output.opacities_grad.to_owned());
+                    grads.register::<Wgpu, 2>(
+                        node.id,
+                        output.opacities_grad.to_owned(),
+                    );
                 }
                 if let Some(node) = &ops.parents[2] {
-                    grads.register::<B, 2>(node.id, output.positions_grad.to_owned());
+                    grads.register::<Wgpu, 2>(
+                        node.id,
+                        output.positions_grad.to_owned(),
+                    );
                 }
                 if let Some(node) = &ops.parents[3] {
-                    grads.register::<B, 2>(node.id, output.rotations_grad.to_owned());
+                    grads.register::<Wgpu, 2>(
+                        node.id,
+                        output.rotations_grad.to_owned(),
+                    );
                 }
                 if let Some(node) = &ops.parents[4] {
-                    grads.register::<B, 2>(node.id, output.scalings_grad.to_owned());
+                    grads.register::<Wgpu, 2>(
+                        node.id,
+                        output.scalings_grad.to_owned(),
+                    );
                 }
 
-                let colors_sh_grad = Tensor::<B, 3>::new(output.colors_sh_grad);
-                let opacities_grad = Tensor::<B, 2>::new(output.opacities_grad);
+                let colors_sh_grad = Tensor::<Wgpu, 3>::new(output.colors_sh_grad);
+                let opacities_grad = Tensor::<Wgpu, 2>::new(output.opacities_grad);
                 let positions_2d_grad_norm =
-                    Tensor::<B, 1>::new(output.positions_2d_grad_norm);
-                let positions_grad = Tensor::<B, 2>::new(output.positions_grad);
-                let rotations_grad = Tensor::<B, 2>::new(output.rotations_grad);
-                let scalings_grad = Tensor::<B, 2>::new(output.scalings_grad);
+                    Tensor::<Wgpu, 1>::new(output.positions_2d_grad_norm);
+                let positions_grad = Tensor::<Wgpu, 2>::new(output.positions_grad);
+                let rotations_grad = Tensor::<Wgpu, 2>::new(output.rotations_grad);
+                let scalings_grad = Tensor::<Wgpu, 2>::new(output.scalings_grad);
 
                 println!("colors_sh_grad: {}", colors_sh_grad.mean_dim(0));
                 println!("opacities_grad: {}", opacities_grad.mean_dim(0));
