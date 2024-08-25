@@ -402,10 +402,6 @@ pub fn render_gaussian_3d_scene(
             image_size_x,
             // I_Y
             image_size_y,
-            // I_X / 2.0
-            image_size_half_x: image_size_half_x as f64,
-            // I_Y / 2.0
-            image_size_half_y: image_size_half_y as f64,
             // [P, 3 (+ 1)]
             is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
                 client.to_owned(),
@@ -421,8 +417,6 @@ pub fn render_gaussian_3d_scene(
                 opacities_3d,
             ),
             options,
-            // P
-            point_count,
             // [T]
             point_indexes: IntTensor::<Wgpu, 1>::new(
                 client.to_owned(),

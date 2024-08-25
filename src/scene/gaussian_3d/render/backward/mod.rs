@@ -20,17 +20,11 @@ pub struct RendererInput<B: Backend> {
     pub image_size_x: usize,
     /// `I_Y`
     pub image_size_y: usize,
-    /// `I_X / 2.0`
-    pub image_size_half_x: f64,
-    /// `I_Y / 2.0`
-    pub image_size_half_y: f64,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
     pub options: RendererOptions,
-    /// `P`
-    pub point_count: usize,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`

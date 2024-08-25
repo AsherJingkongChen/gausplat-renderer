@@ -40,8 +40,6 @@ pub struct RendererOptions {
 pub struct RenderOutput<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
-    /// `[P]`
-    pub depths: Tensor<B, 1>,
 }
 
 #[derive(Clone, Debug)]
@@ -51,8 +49,6 @@ pub struct RenderOutputAutodiff<
 > {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<Autodiff<B, C>, 3>,
-    /// `[P]`
-    pub depths: Tensor<B, 1>,
     // /// `[P]`
     // pub positions_2d_grad_norm: Tensor<B, 1>,
     /// `[P]`
@@ -75,11 +71,9 @@ impl Gaussian3dScene<Wgpu> {
         let output = Self::forward(input, view, options);
 
         let colors_rgb_2d = Tensor::new(output.colors_rgb_2d);
-        let depths = Tensor::new(output.state.depths);
 
         RenderOutput {
             colors_rgb_2d,
-            depths,
         }
     }
 }
@@ -97,9 +91,6 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
         };
 
         type B = Wgpu;
-
-        #[derive(Debug)]
-        struct BackwardOps;
 
         let colors_sh = self.colors_sh().into_primitive();
         let opacities = self.opacities().into_primitive();
@@ -125,7 +116,6 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
             scalings.node,
         ];
 
-        let depths = Tensor::new(output.state.depths.to_owned());
         let radii = Tensor::<B, 1, Int>::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(
             match BackwardOps
@@ -139,6 +129,9 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
                 OpsKind::UnTracked(prep) => prep.finish(output.colors_rgb_2d),
             },
         );
+
+        #[derive(Debug)]
+        struct BackwardOps;
 
         impl Backward<B, 3, 5> for BackwardOps {
             type State = backward::RendererInput<B>;
@@ -208,7 +201,6 @@ impl Gaussian3dScene<Autodiff<Wgpu>> {
 
         RenderOutputAutodiff {
             colors_rgb_2d,
-            depths,
             radii,
         }
     }
