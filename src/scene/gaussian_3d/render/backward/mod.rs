@@ -21,7 +21,7 @@ pub struct RendererInput<B: Backend> {
     /// `I_Y`
     pub image_size_y: usize,
     /// `[P, 3 (+ 1)]`
-    pub is_colors_rgb_3d_clamped: B::FloatTensorPrimitive<2>,
+    pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
     pub options: RendererOptions,

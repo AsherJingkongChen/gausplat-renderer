@@ -3,19 +3,9 @@ mod kernel;
 pub use super::*;
 
 use crate::consts::render::*;
-use burn::{
-    backend::wgpu::{
-        into_contiguous, Kernel, SourceKernel, WorkGroup, WorkgroupSize,
-    },
-    tensor::ops::IntTensor,
-};
-use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
-use gausplat_importer::scene::source::colmap::image;
+use burn::backend::wgpu::{Kernel, SourceKernel, WorkGroup, WorkgroupSize};
+use bytemuck::bytes_of;
 use kernel::*;
-use rayon::{
-    iter::{IntoParallelIterator, ParallelIterator},
-    slice::ParallelSliceMut,
-};
 
 pub fn render_gaussian_3d_scene(
     state: backward::RendererInput<Wgpu>,
@@ -72,13 +62,22 @@ pub fn render_gaussian_3d_scene(
     // [I_Y, I_X] (0.0 ~ 1.0)
     let transmittances = state.transmittances.handle;
     // [P, 3 (+ 1)]
-    let colors_rgb_3d_grad = client.create(&vec![0; point_count * (3 + 1) * 4]);
+    let colors_rgb_3d_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, (3 + 1)], &device)
+            .into_primitive()
+            .handle;
     // [P, 2, 2]
-    let conics_grad = client.create(&vec![0; point_count * 2 * 2 * 4]);
+    let conics_grad = Tensor::<Wgpu, 3>::zeros([point_count, 2, 2], &device)
+        .into_primitive()
+        .handle;
     // [P, 1]
-    let opacities_3d_grad = client.create(&vec![0; point_count * 1 * 4]);
+    let opacities_3d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 1], &device)
+        .into_primitive()
+        .handle;
     // [P, 2]
-    let positions_2d_grad = client.create(&vec![0; point_count * 2 * 4]);
+    let positions_2d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 2], &device)
+        .into_primitive()
+        .handle;
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -113,7 +112,7 @@ pub fn render_gaussian_3d_scene(
     );
 
     client.sync();
-    println!("backward pass #1: {:?}", duration.elapsed());
+    println!("Duration (Backward 1): {:?}", duration.elapsed());
     duration = std::time::Instant::now();
 
     // Performing the backward pass #2
@@ -133,7 +132,7 @@ pub fn render_gaussian_3d_scene(
     // [P]
     let depths = state.depths.handle;
     // [P, 3 (+ 1)] (0.0 ~ 1.0)
-    let is_colors_rgb_3d_clamped = state.is_colors_rgb_3d_clamped.handle;
+    let is_colors_rgb_3d_not_clamped = state.is_colors_rgb_3d_not_clamped.handle;
     // [P, 2]
     let positions_3d_in_normalized = state.positions_3d_in_normalized.handle;
     // [P, 2]
@@ -158,15 +157,27 @@ pub fn render_gaussian_3d_scene(
     // [3 (+ 1), 3]
     let view_transform_rotation = state.view_transform.handle;
     // [P, 16, 3]
-    let colors_sh_grad = client.create(&vec![0; point_count * 16 * 3 * 4]);
+    let colors_sh_grad =
+        Tensor::<Wgpu, 3>::zeros([point_count, 16, 3], &device)
+            .into_primitive()
+            .handle;
     // [P]
-    let positions_2d_grad_norm = client.create(&vec![0; point_count * 4]);
+    let positions_2d_grad_norm =
+        Tensor::<Wgpu, 1>::zeros([point_count], &device)
+            .into_primitive()
+            .handle;
     // [P, 3]
-    let positions_3d_grad = client.create(&vec![0; point_count * 3 * 4]);
+    let positions_3d_grad = Tensor::<Wgpu, 2>::zeros([point_count, 3], &device)
+        .into_primitive()
+        .handle;
     // [P, 4]
-    let rotations_grad = client.create(&vec![0; point_count * 4 * 4]);
+    let rotations_grad = Tensor::<Wgpu, 2>::zeros([point_count, 4], &device)
+        .into_primitive()
+        .handle;
     // [P, 3]
-    let scalings_grad = client.create(&vec![0; point_count * 3 * 4]);
+    let scalings_grad = Tensor::<Wgpu, 2>::zeros([point_count, 3], &device)
+        .into_primitive()
+        .handle;
 
     client.execute(
         Kernel::Custom(Box::new(SourceKernel::new(
@@ -190,7 +201,7 @@ pub fn render_gaussian_3d_scene(
             &conics_grad,
             &covariances_3d,
             &depths,
-            &is_colors_rgb_3d_clamped,
+            &is_colors_rgb_3d_not_clamped,
             &positions_2d_grad,
             &positions_3d_in_normalized,
             &positions_3d_in_normalized_clamped,
@@ -212,7 +223,7 @@ pub fn render_gaussian_3d_scene(
     );
 
     // client.sync();
-    println!("backward pass #2: {:?}", duration.elapsed());
+    println!("Duration (Backward 2): {:?}", duration.elapsed());
 
     backward::RendererOutput {
         // [P, 16, 3]

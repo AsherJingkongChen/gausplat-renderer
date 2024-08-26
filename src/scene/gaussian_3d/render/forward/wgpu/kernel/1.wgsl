@@ -64,7 +64,7 @@ var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
 var<storage, read_write> depths: array<f32>;
 // [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(11)
-var<storage, read_write> is_colors_rgb_3d_clamped: array<vec3<f32>>;
+var<storage, read_write> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
 // [P, 2]
 @group(0) @binding(12)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
@@ -374,7 +374,7 @@ fn main(
 
     color_rgb_3d += 0.5;
 
-    let is_color_rgb_3d_clamped = vec3<f32>(color_rgb_3d < vec3<f32>());
+    let is_color_rgb_3d_not_clamped = vec3<f32>(color_rgb_3d >= vec3<f32>());
     color_rgb_3d = max(color_rgb_3d, vec3<f32>());
 
     // Specifying the results
@@ -388,7 +388,7 @@ fn main(
     // [P]
     depths[index] = depth;
     // [P, 3 (+ 1)]
-    is_colors_rgb_3d_clamped[index] = is_color_rgb_3d_clamped;
+    is_colors_rgb_3d_not_clamped[index] = is_color_rgb_3d_not_clamped;
     // [P, 2]
     positions_2d[index] = position_2d;
     // [P, 2]

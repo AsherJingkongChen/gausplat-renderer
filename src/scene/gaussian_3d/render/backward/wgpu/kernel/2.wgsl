@@ -30,9 +30,9 @@ var<storage, read> covariances_3d: array<mat3x3<f32>>;
 // [P]
 @group(0) @binding(6)
 var<storage, read> depths: array<f32>;
-// [P, 3 (+ 1)] (0.0 ~ 1.0)
+// [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)
-var<storage, read> is_colors_rgb_3d_clamped: array<vec3<f32>>;
+var<storage, read> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
 // [P, 2]
 @group(0) @binding(8)
 var<storage, read> positions_2d_grad: array<vec2<f32>>;
@@ -181,7 +181,7 @@ fn main(
     );
 
     // ∂L/∂C_rgb[1, 3]
-    let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_clamped[index];
+    let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_not_clamped[index];
     // ∂L/∂C_sh[16, 3]
     var color_sh_grad = array<vec3<f32>, 16>();
     // ∂C_rgb/∂Dv[3, 3]
@@ -356,8 +356,8 @@ fn main(
     let position_3d_in_normalized = positions_3d_in_normalized[index];
     // (Pv.x / Pv.z, Pv.y / Pv.z)
     let position_3d_in_normalized_clamped = positions_3d_in_normalized_clamped[index];
-    let is_position_3d_in_normalized_clamped = vec2<f32>(
-        position_3d_in_normalized != position_3d_in_normalized_clamped
+    let is_position_3d_in_normalized_not_clamped = vec2<f32>(
+        position_3d_in_normalized == position_3d_in_normalized_clamped
     );
     let focal_length_normalized = vec2<f32>(
         arguments.focal_length_x,
@@ -370,8 +370,8 @@ fn main(
         focal_length_normalized2 * projection_affine_grad[2];
     // ∂L/∂Pv[3]
     let position_3d_in_view_grad = vec3<f32>(
-        - is_position_3d_in_normalized_clamped.x * focal_length_normalized2_projection_affine_grad_2.x,
-        - is_position_3d_in_normalized_clamped.y * focal_length_normalized2_projection_affine_grad_2.y,
+        - is_position_3d_in_normalized_not_clamped.x * focal_length_normalized2_projection_affine_grad_2.x,
+        - is_position_3d_in_normalized_not_clamped.y * focal_length_normalized2_projection_affine_grad_2.y,
         - focal_length_normalized2.x * projection_affine_grad[0][0]
         - focal_length_normalized2.y * projection_affine_grad[1][1]
         + 2 * dot(position_3d_in_normalized_clamped, focal_length_normalized2_projection_affine_grad_2),

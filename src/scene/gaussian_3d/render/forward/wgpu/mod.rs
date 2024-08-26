@@ -106,7 +106,7 @@ pub fn render_gaussian_3d_scene(
     // [P]
     let depths = client.empty(point_count * 4);
     // [P, 3 (+ 1)]
-    let is_colors_rgb_3d_clamped = client.empty(point_count * (3 + 1) * 4);
+    let is_colors_rgb_3d_not_clamped = client.empty(point_count * (3 + 1) * 4);
     // [P, 2]
     let positions_2d = client.empty(point_count * 2 * 4);
     // [P, 2]
@@ -158,7 +158,7 @@ pub fn render_gaussian_3d_scene(
             &conics,
             &covariances_3d,
             &depths,
-            &is_colors_rgb_3d_clamped,
+            &is_colors_rgb_3d_not_clamped,
             &positions_2d,
             &positions_3d_in_normalized,
             &positions_3d_in_normalized_clamped,
@@ -403,11 +403,11 @@ pub fn render_gaussian_3d_scene(
             // I_Y
             image_size_y,
             // [P, 3 (+ 1)]
-            is_colors_rgb_3d_clamped: FloatTensor::<Wgpu, 2>::new(
+            is_colors_rgb_3d_not_clamped: FloatTensor::<Wgpu, 2>::new(
                 client.to_owned(),
                 device.to_owned(),
                 [point_count, 3 + 1].into(),
-                is_colors_rgb_3d_clamped,
+                is_colors_rgb_3d_not_clamped,
             ),
             // [P, 1]
             opacities_3d: FloatTensor::<Wgpu, 2>::new(
