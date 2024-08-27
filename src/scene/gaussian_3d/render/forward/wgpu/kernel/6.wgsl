@@ -130,7 +130,7 @@ fn main(
             point_rendered_state++;
 
             // Computing the density of the point in the pixel
-            // g[1, 1] = d^T[1, 2] * c'^-1[2, 2] * d[2, 1]
+            // σ = e^(-0.5 * D^t[1, 2] * Σ'^-1[2, 2] * D[2, 1])
 
             let conic = batch_conics[batch_index];
             let position_2d = batch_positions_2d[batch_index];
@@ -144,6 +144,7 @@ fn main(
             }
 
             // Computing the 2D opacity of the point in the pixel
+            // α' = α * σ
 
             let opacity_3d = batch_opacities_3d[batch_index];
             let opacity_2d = min(opacity_3d * density, OPACITY_2D_MAX);
@@ -155,6 +156,7 @@ fn main(
             }
 
             // Computing the transmittance
+            // T[n] = T[n-1] * (1 - α')
 
             let transmittance = transmittance_state * (1.0 - opacity_2d);
 

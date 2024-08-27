@@ -245,7 +245,7 @@ fn main(
     // Σ'^-1[2, 2] (Symmetric) <= Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
-    let covariance_2d_det_inv = select(1.0 / covariance_2d_det, 0.0, covariance_2d_det == 0.0);
+    let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det != 0.0);
     let covariance_2d_01_n = -covariance_2d[0][1];
     let conic = covariance_2d_det_inv * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,

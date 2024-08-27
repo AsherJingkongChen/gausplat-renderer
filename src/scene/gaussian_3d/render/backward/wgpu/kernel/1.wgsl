@@ -196,6 +196,7 @@ fn main(
 
             let point_index = batch_point_indexes[batch_index];
 
+            storageBarrier();
             // [P, 3 (+ 1)]
             colors_rgb_3d_grad[point_index] += color_rgb_3d_grad;
             // [P, 2, 2]
@@ -204,6 +205,8 @@ fn main(
             opacities_3d_grad[point_index] += opacity_3d_grad;
             // [P, 2]
             positions_2d_grad[point_index] += position_2d_grad;
+            storageBarrier();
+
         }
 
         tile_point_count -= batch_point_count;

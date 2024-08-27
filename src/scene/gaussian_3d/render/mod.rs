@@ -171,28 +171,34 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                     Tensor::<Wgpu, 2>::new(output.scalings_grad.to_owned());
 
                 println!(
-                    "colors_sh_grad: {:?}",
-                    colors_sh_grad.to_owned().mean_dim(0).to_data().value
+                    "colors_sh_grad: {:?} {:?}",
+                    colors_sh_grad.to_owned().mean_dim(0).to_data().value,
+                    colors_sh_grad.to_owned().var(0).to_data().value
                 );
                 println!(
-                    "opacities_grad: {:?}",
-                    opacities_grad.to_owned().mean_dim(0).to_data().value
+                    "opacities_grad: {:?} {:?}",
+                    opacities_grad.to_owned().mean_dim(0).to_data().value,
+                    opacities_grad.to_owned().var(0).to_data().value
                 );
                 println!(
-                    "positions_2d_grad_norm: {:?}",
-                    positions_2d_grad_norm.mean_dim(0).to_data().value
+                    "positions_2d_grad_norm: {:?} {:?}",
+                    positions_2d_grad_norm.to_owned().mean_dim(0).to_data().value,
+                    positions_2d_grad_norm.to_owned().var(0).to_data().value
                 );
                 println!(
-                    "positions_grad: {:?}",
-                    positions_grad.to_owned().mean_dim(0).to_data().value
+                    "positions_grad: {:?} {:?}",
+                    positions_grad.to_owned().mean_dim(0).to_data().value,
+                    positions_grad.to_owned().var(0).to_data().value
                 );
                 println!(
-                    "rotations_grad: {:?}",
-                    rotations_grad.to_owned().mean_dim(0).to_data().value
+                    "rotations_grad: {:?} {:?}",
+                    rotations_grad.to_owned().mean_dim(0).to_data().value,
+                    rotations_grad.to_owned().var(0).to_data().value
                 );
                 println!(
-                    "scalings_grad: {:?}",
-                    scalings_grad.to_owned().mean_dim(0).to_data().value
+                    "scalings_grad: {:?} {:?}",
+                    scalings_grad.to_owned().mean_dim(0).to_data().value,
+                    scalings_grad.to_owned().var(0).to_data().value
                 );
 
                 if let Some(node) = &ops.parents[0] {
