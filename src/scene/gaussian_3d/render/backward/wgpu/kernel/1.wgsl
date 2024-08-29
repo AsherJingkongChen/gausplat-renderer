@@ -6,34 +6,34 @@ struct Arguments {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(1)
-var<storage, read> conics: array<mat2x2<f32>>;
+var<storage, read_write> conics: array<mat2x2<f32>>;
 // [I_Y, I_X, 3]
 @group(0) @binding(2)
-var<storage, read> colors_rgb_2d_grad: array<array<f32, 3>>;
+var<storage, read_write> colors_rgb_2d_grad: array<array<f32, 3>>;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
 @group(0) @binding(3)
-var<storage, read> colors_rgb_3d: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 // [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(4)
-var<storage, read> opacities_3d: array<f32>;
+var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
 @group(0) @binding(5)
-var<storage, read> point_indexes: array<u32>;
+var<storage, read_write> point_indexes: array<u32>;
 // [I_Y, I_X]
 @group(0) @binding(6)
-var<storage, read> point_rendered_counts: array<u32>;
+var<storage, read_write> point_rendered_counts: array<u32>;
 // [P, 2]
 @group(0) @binding(7)
-var<storage, read> positions_2d: array<vec2<f32>>;
+var<storage, read_write> positions_2d: array<vec2<f32>>;
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(8)
-var<storage, read> tile_point_ranges: array<vec2<u32>>;
+var<storage, read_write> tile_point_ranges: array<vec2<u32>>;
 // [I_Y, I_X] (0.0 ~ 1.0)
 @group(0) @binding(9)
-var<storage, read> transmittances: array<f32>;
+var<storage, read_write> transmittances: array<f32>;
 
 // [P, 3 (+ 1)]
 @group(0) @binding(10)

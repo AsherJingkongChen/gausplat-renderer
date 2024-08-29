@@ -11,64 +11,64 @@ struct Arguments {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [P, 3 (+ 1)]
 @group(0) @binding(1)
-var<storage, read> colors_rgb_3d_grad: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<vec3<f32>>;
 // [P, 16, 3]
 @group(0) @binding(2)
-var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
+var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(3)
-var<storage, read> conics: array<mat2x2<f32>>;
+var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(4)
-var<storage, read> conics_grad: array<mat2x2<f32>>;
+var<storage, read_write> conics_grad: array<mat2x2<f32>>;
 // [P, 3 (+ 1), 3] (Symmetric)
 @group(0) @binding(5)
-var<storage, read> covariances_3d: array<mat3x3<f32>>;
+var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
 // [P]
 @group(0) @binding(6)
-var<storage, read> depths: array<f32>;
+var<storage, read_write> depths: array<f32>;
 // [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)
-var<storage, read> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
+var<storage, read_write> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
 // [P, 2]
 @group(0) @binding(8)
-var<storage, read> positions_2d_grad: array<vec2<f32>>;
+var<storage, read_write> positions_2d_grad: array<vec2<f32>>;
 // [P, 2]
 @group(0) @binding(9)
-var<storage, read> positions_3d_in_normalized: array<vec2<f32>>;
+var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
 // [P, 2]
 @group(0) @binding(10)
-var<storage, read> positions_3d_in_normalized_clamped: array<vec2<f32>>;
+var<storage, read_write> positions_3d_in_normalized_clamped: array<vec2<f32>>;
 // [P]
 @group(0) @binding(11)
-var<storage, read> radii: array<u32>;
+var<storage, read_write> radii: array<u32>;
 // [P, 4] (x, y, z, w) (Normalized)
 @group(0) @binding(12)
-var<storage, read> rotations: array<vec4<f32>>;
+var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3 (+ 1), 3]
 @group(0) @binding(13)
-var<storage, read> rotations_matrix: array<mat3x3<f32>>;
+var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
 // [P, 3 (+ 1), 3]
 @group(0) @binding(14)
-var<storage, read> rotation_scalings: array<mat3x3<f32>>;
+var<storage, read_write> rotation_scalings: array<mat3x3<f32>>;
 // [P, 3]
 @group(0) @binding(15)
-var<storage, read> scalings: array<array<f32, 3>>;
+var<storage, read_write> scalings: array<array<f32, 3>>;
 // [P, 2, 3]
 @group(0) @binding(16)
-var<storage, read> transforms_2d: array<mat3x2<f32>>;
+var<storage, read_write> transforms_2d: array<mat3x2<f32>>;
 // [P, 3 (+ 1)] (Normalized)
 @group(0) @binding(17)
-var<storage, read> view_directions: array<vec3<f32>>;
+var<storage, read_write> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
 @group(0) @binding(18)
-var<storage, read> view_offsets: array<vec3<f32>>;
+var<storage, read_write> view_offsets: array<vec3<f32>>;
 // [3 (+ 1), 3]
 @group(0) @binding(19)
-var<storage, read> view_transform_rotation: mat3x3<f32>;
+var<storage, read_write> view_transform_rotation: mat3x3<f32>;
 
 // [P, 16, 3]
 @group(0) @binding(20)

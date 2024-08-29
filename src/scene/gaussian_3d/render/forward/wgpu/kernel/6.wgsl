@@ -6,25 +6,25 @@ struct Arguments {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
 @group(0) @binding(1)
-var<storage, read> colors_rgb_3d: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(2)
-var<storage, read> conics: array<mat2x2<f32>>;
+var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(3)
-var<storage, read> opacities_3d: array<f32>;
+var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
 @group(0) @binding(4)
-var<storage, read> point_indexes: array<u32>;
+var<storage, read_write> point_indexes: array<u32>;
 // [P, 2]
 @group(0) @binding(5)
-var<storage, read> positions_2d: array<vec2<f32>>;
+var<storage, read_write> positions_2d: array<vec2<f32>>;
 // [I_Y / T_Y, I_X / T_X, 2]
 @group(0) @binding(6)
-var<storage, read> tile_point_ranges: array<vec2<u32>>;
+var<storage, read_write> tile_point_ranges: array<vec2<u32>>;
 
 // [I_Y, I_X, 3] (0.0 ~ 1.0)
 @group(0) @binding(7)

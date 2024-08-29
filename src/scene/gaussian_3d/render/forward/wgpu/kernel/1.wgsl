@@ -30,25 +30,25 @@ struct ViewTransform {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [P, 16, 3]
 @group(0) @binding(1)
-var<storage, read> colors_sh: array<array<array<f32, 3>, 16>>;
+var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
 // [P, 3]
 @group(0) @binding(2)
-var<storage, read> positions_3d: array<array<f32, 3>>;
+var<storage, read_write> positions_3d: array<array<f32, 3>>;
 // [P, 4] (x, y, z, w) (Normalized)
 @group(0) @binding(3)
-var<storage, read> rotations: array<vec4<f32>>;
+var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3]
 @group(0) @binding(4)
-var<storage, read> scalings: array<array<f32, 3>>;
+var<storage, read_write> scalings: array<array<f32, 3>>;
 // [3]
 @group(0) @binding(5)
-var<storage, read> view_position: vec3<f32>;
+var<storage, read_write> view_position: vec3<f32>;
 // [3 (+ 1), 4]
 @group(0) @binding(6)
-var<storage, read> view_transform: ViewTransform;
+var<storage, read_write> view_transform: ViewTransform;
 
 // [P, 3 (+ 1)] (0.0, 1.0)
 @group(0) @binding(7)

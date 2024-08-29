@@ -11,22 +11,22 @@ struct PointInfo {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [P] (0.2 ~ )
 @group(0) @binding(1)
-var<storage, read> depths: array<f32>;
+var<storage, read_write> depths: array<f32>;
 // [P]
 @group(0) @binding(2)
-var<storage, read> radii: array<u32>;
+var<storage, read_write> radii: array<u32>;
 // [P]
 @group(0) @binding(3)
-var<storage, read> tile_touched_offsets: array<u32>;
+var<storage, read_write> tile_touched_offsets: array<u32>;
 // [P, 2]
 @group(0) @binding(4)
-var<storage, read> tiles_touched_max: array<vec2<u32>>;
+var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 // [P, 2]
 @group(0) @binding(5)
-var<storage, read> tiles_touched_min: array<vec2<u32>>;
+var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 
 // [T, 3]
 @group(0) @binding(6)

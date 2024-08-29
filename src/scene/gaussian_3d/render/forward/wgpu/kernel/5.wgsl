@@ -4,10 +4,10 @@ struct Arguments {
 }
 
 @group(0) @binding(0)
-var<storage, read> arguments: Arguments;
+var<storage, read_write> arguments: Arguments;
 // [T] (0 ~ (I_X / T_X) * (I_Y / T_Y))
 @group(0) @binding(1)
-var<storage, read> point_tile_indexes: array<u32>;
+var<storage, read_write> point_tile_indexes: array<u32>;
 
 // [(I_X / T_X) * (I_Y / T_Y), 2]
 @group(0) @binding(2)
