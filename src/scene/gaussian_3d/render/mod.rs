@@ -178,32 +178,32 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                 );
 
                 println!(
-                    "colors_sh_grad: {:?} {:?}",
+                    "colors_sh_grad: {} {}",
                     colors_sh_grad.to_owned().mean_dim(0).to_data(),
                     colors_sh_grad.to_owned().var(0).to_data()
                 );
                 println!(
-                    "opacities_grad: {:?} {:?}",
+                    "opacities_grad: {} {}",
                     opacities_grad.to_owned().mean_dim(0).to_data(),
                     opacities_grad.to_owned().var(0).to_data()
                 );
                 println!(
-                    "positions_2d_grad_norm: {:?} {:?}",
+                    "positions_2d_grad_norm: {} {}",
                     positions_2d_grad_norm.to_owned().mean_dim(0).to_data(),
                     positions_2d_grad_norm.to_owned().var(0).to_data()
                 );
                 println!(
-                    "positions_grad: {:?} {:?}",
+                    "positions_grad: {} {}",
                     positions_grad.to_owned().mean_dim(0).to_data(),
                     positions_grad.to_owned().var(0).to_data()
                 );
                 println!(
-                    "rotations_grad: {:?} {:?}",
+                    "rotations_grad: {} {}",
                     rotations_grad.to_owned().mean_dim(0).to_data(),
                     rotations_grad.to_owned().var(0).to_data()
                 );
                 println!(
-                    "scalings_grad: {:?} {:?}",
+                    "scalings_grad: {} {}",
                     scalings_grad.to_owned().mean_dim(0).to_data(),
                     scalings_grad.to_owned().var(0).to_data()
                 );

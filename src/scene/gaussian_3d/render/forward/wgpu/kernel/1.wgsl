@@ -144,11 +144,6 @@ fn main(
         return;
     }
 
-    // Initializing the results
-
-    radii[index] = u32();
-    tile_touched_counts[index] = u32();
-
     // Transforming the 3D position from world space to view space
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
 

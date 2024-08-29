@@ -86,7 +86,7 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    client.sync(cubecl::client::SyncType::Wait);
+    // client.sync(cubecl::client::SyncType::Wait);
     println!("Duration (Backward 1): {:?}", duration.elapsed());
     duration = std::time::Instant::now();
 
@@ -160,7 +160,7 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    client.sync(cubecl::client::SyncType::Wait);
+    // client.sync(cubecl::client::SyncType::Wait);
     println!("Duration (Backward 2): {:?}", duration.elapsed());
 
     backward::RendererOutput {
