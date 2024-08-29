@@ -37,16 +37,16 @@ var<storage, read> transmittances: array<f32>;
 
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
-var<storage, read_write> colors_rgb_3d_grad: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<atomic<u32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
-var<storage, read_write> conics_grad: array<mat2x2<f32>>;
+var<storage, read_write> conics_grad: array<atomic<u32>>;
 // [P, 1]
 @group(0) @binding(12)
-var<storage, read_write> opacities_3d_grad: array<f32>;
+var<storage, read_write> opacities_3d_grad: array<atomic<u32>>;
 // [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> positions_2d_grad: array<vec2<f32>>;
+var<storage, read_write> positions_2d_grad: array<atomic<u32>>;
 
 // [T_X * T_Y, 3]
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
@@ -196,17 +196,120 @@ fn main(
 
             let point_index = batch_point_indexes[batch_index];
 
-            storageBarrier();
             // [P, 3 (+ 1)]
-            colors_rgb_3d_grad[point_index] += color_rgb_3d_grad;
+            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 0]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &colors_rgb_3d_grad[4 * point_index + 0],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[0]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 1]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &colors_rgb_3d_grad[4 * point_index + 1],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[1]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 2]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &colors_rgb_3d_grad[4 * point_index + 2],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[2]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
             // [P, 2, 2]
-            conics_grad[point_index] += conic_grad;
+            for (var expected = atomicLoad(&conics_grad[4 * point_index + 0]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &conics_grad[4 * point_index + 0],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[0][0]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&conics_grad[4 * point_index + 1]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &conics_grad[4 * point_index + 1],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[0][1]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&conics_grad[4 * point_index + 2]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &conics_grad[4 * point_index + 2],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[1][0]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&conics_grad[4 * point_index + 3]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &conics_grad[4 * point_index + 3],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[1][1]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
             // [P, 1]
-            opacities_3d_grad[point_index] += opacity_3d_grad;
+            for (var expected = atomicLoad(&opacities_3d_grad[point_index]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &opacities_3d_grad[point_index],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + opacity_3d_grad),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
             // [P, 2]
-            positions_2d_grad[point_index] += position_2d_grad;
-            storageBarrier();
-
+            for (var expected = atomicLoad(&positions_2d_grad[2 * point_index + 0]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &positions_2d_grad[2 * point_index + 0],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + position_2d_grad[0]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
+            for (var expected = atomicLoad(&positions_2d_grad[2 * point_index + 1]);;) {
+                let tested = atomicCompareExchangeWeak(
+                    &positions_2d_grad[2 * point_index + 1],
+                    expected,
+                    bitcast<u32>(bitcast<f32>(expected) + position_2d_grad[1]),
+                );
+                if tested.exchanged {
+                    break;
+                }
+                expected = tested.old_value;
+            }
         }
 
         tile_point_count -= batch_point_count;
