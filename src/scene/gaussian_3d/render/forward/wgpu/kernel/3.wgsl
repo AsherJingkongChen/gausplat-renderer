@@ -4,6 +4,11 @@ struct Arguments {
     // I_X / T_X
     tile_count_x: u32,
 }
+struct PointInfo {
+    tile_index: u32,
+    depth: f32,
+    point_index: u32,
+}
 
 @group(0) @binding(0)
 var<storage, read> arguments: Arguments;
@@ -23,9 +28,9 @@ var<storage, read> tiles_touched_max: array<vec2<u32>>;
 @group(0) @binding(5)
 var<storage, read> tiles_touched_min: array<vec2<u32>>;
 
-// [T, 3] ([tile_index, depth, point_index])
+// [T, 3]
 @group(0) @binding(6)
-var<storage, read_write> point_keys_and_indexes: array<array<u32, 3>>;
+var<storage, read_write> point_infos: array<PointInfo>;
 
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
@@ -60,9 +65,8 @@ fn main(
     for (var tile_y = tile_touched_min.y; tile_y < tile_touched_max.y; tile_y++) {
         for (var tile_x = tile_touched_min.x; tile_x < tile_touched_max.x; tile_x++) {
             let tile_index = tile_y * arguments.tile_count_x + tile_x;
-            let depth = bitcast<u32>(depths[index]);
-            let key = vec2<u32>(tile_index, depth);
-            point_keys_and_indexes[offset] = array<u32, 3>(tile_index, depth, index);
+            let depth = depths[index];
+            point_infos[offset] = PointInfo(tile_index, depth, index);
             offset++;
         }
     }

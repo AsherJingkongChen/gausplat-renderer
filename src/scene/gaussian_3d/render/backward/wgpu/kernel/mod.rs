@@ -31,10 +31,18 @@ impl KernelSource for Kernel1WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./1.wgsl"))
     }
+    
+    fn id(&self) -> cubecl::KernelId {
+        cubecl::KernelId::new::<Self>()
+    }
 }
 
 impl KernelSource for Kernel2WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./2.wgsl"))
+    }
+
+    fn id(&self) -> cubecl::KernelId {
+        cubecl::KernelId::new::<Self>()
     }
 }

@@ -4,7 +4,7 @@ pub mod render;
 
 pub use burn::{
     module::{Module, Param},
-    tensor::{backend::Backend, Data, Tensor},
+    tensor::{backend::Backend, Tensor, TensorData},
 };
 pub use config::*;
 

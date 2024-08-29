@@ -60,11 +60,7 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
             move |device, is_require_grad| {
                 let mut colors_sh = Tensor::zeros([point_count, 16, 3], device);
                 let colors_rgb = Tensor::from_data(
-                    Data::new(
-                        colors_rgb.to_owned(),
-                        [point_count, 1, 3].into(),
-                    )
-                    .convert(),
+                    TensorData::new(colors_rgb.to_owned(), [point_count, 1, 3]),
                     device,
                 );
 
@@ -100,8 +96,7 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
             Default::default(),
             move |device, is_require_grad| {
                 Self::make_positions(Tensor::from_data(
-                    Data::new(positions.to_owned(), [point_count, 3].into())
-                        .convert(),
+                    TensorData::new(positions.to_owned(), [point_count, 3]),
                     device,
                 ))
                 .set_require_grad(is_require_grad)
@@ -115,11 +110,10 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
             Default::default(),
             move |device, is_require_grad| {
                 Self::make_rotations(Tensor::from_data(
-                    Data::new(
+                    TensorData::new(
                         [0.0, 0.0, 0.0, 1.0].repeat(point_count),
-                        [point_count, 4].into(),
-                    )
-                    .convert(),
+                        [point_count, 4],
+                    ),
                     device,
                 ))
                 .set_require_grad(is_require_grad)
@@ -145,13 +139,13 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
 
                 Self::make_scalings(
                     Tensor::from_data(
-                        Data::new(samples, [point_count, 1].into()).convert(),
+                        TensorData::new(samples, [point_count, 1]),
                         device,
                     )
                     .div_scalar(sample_max)
                     .sqrt()
                     .clamp_min(f32::EPSILON)
-                    .repeat(1, 3),
+                    .repeat_dim(1, 3),
                 )
                 .set_require_grad(is_require_grad)
             },

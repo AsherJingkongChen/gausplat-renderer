@@ -2,12 +2,12 @@ use bytemuck::{Pod, Zeroable};
 
 #[repr(C, packed(4))]
 #[derive(Clone, Copy, Debug, Eq, Pod, Zeroable)]
-pub struct PointKeyAndIndex {
+pub struct PointInfo {
     pub key: [u32; 2],
     pub index: u32,
 }
 
-impl PointKeyAndIndex {
+impl PointInfo {
     #[inline]
     pub fn key(&self) -> u64 {
         (self.key[0] as u64) << 32 | (self.key[1] as u64)
@@ -19,7 +19,7 @@ impl PointKeyAndIndex {
     }
 }
 
-impl Ord for PointKeyAndIndex {
+impl Ord for PointInfo {
     #[inline]
     fn cmp(
         &self,
@@ -29,7 +29,7 @@ impl Ord for PointKeyAndIndex {
     }
 }
 
-impl PartialEq for PointKeyAndIndex {
+impl PartialEq for PointInfo {
     #[inline]
     fn eq(
         &self,
@@ -39,7 +39,7 @@ impl PartialEq for PointKeyAndIndex {
     }
 }
 
-impl PartialOrd for PointKeyAndIndex {
+impl PartialOrd for PointInfo {
     #[inline]
     fn partial_cmp(
         &self,
