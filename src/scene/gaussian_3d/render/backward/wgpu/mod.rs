@@ -132,7 +132,8 @@ pub fn render_gaussian_3d_scene(
     // [P]
     let depths = state.depths.handle;
     // [P, 3 (+ 1)] (0.0 ~ 1.0)
-    let is_colors_rgb_3d_not_clamped = state.is_colors_rgb_3d_not_clamped.handle;
+    let is_colors_rgb_3d_not_clamped =
+        state.is_colors_rgb_3d_not_clamped.handle;
     // [P, 2]
     let positions_3d_in_normalized = state.positions_3d_in_normalized.handle;
     // [P, 2]

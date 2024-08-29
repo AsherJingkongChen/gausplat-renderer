@@ -182,7 +182,11 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                 );
                 println!(
                     "positions_2d_grad_norm: {:?} {:?}",
-                    positions_2d_grad_norm.to_owned().mean_dim(0).to_data().value,
+                    positions_2d_grad_norm
+                        .to_owned()
+                        .mean_dim(0)
+                        .to_data()
+                        .value,
                     positions_2d_grad_norm.to_owned().var(0).to_data().value
                 );
                 println!(

@@ -14,7 +14,7 @@ use std::fmt;
 pub struct Gaussian3dScene<B: Backend> {
     /// `[P, 16, 3]`
     pub colors_sh: Param<Tensor<B, 3>>,
-    /// `[P]`
+    /// `[P, 1]`
     pub opacities: Param<Tensor<B, 2>>,
     /// `[P, 3]`
     pub positions: Param<Tensor<B, 2>>,

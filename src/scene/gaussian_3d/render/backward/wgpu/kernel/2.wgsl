@@ -449,14 +449,14 @@ fn main(
     //                  [-Q.y, Q.x, 0  ]] * 2
 
     let quaternion = rotations[index];
+    let q_w = quaternion.w;
     let q_x = quaternion.x;
     let q_y = quaternion.y;
     let q_z = quaternion.z;
-    let q_w = quaternion.w;
+    let q_w_n = -q_w;
     let q_x_2_n = -2.0 * q_x;
     let q_y_2_n = -2.0 * q_y;
     let q_z_2_n = -2.0 * q_z;
-    let q_w_n = -q_w;
 
     // ∂L/∂Q[4]
     let rotation_grad = 2.0 * vec4<f32>(

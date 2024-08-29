@@ -9,10 +9,14 @@ lazy_static! {
     /// ## Example
     /// ```rust
     /// use gausplat_renderer::consts::spherical_harmonics::SH_C;
+    ///
+    /// let degree = 0;
+    /// let order = 0;
+    /// assert_eq!(SH_C[degree][degree + order], 0.28209479177387814);
+    ///
     /// let degree = 3;
     /// let order = 2;
-    /// let sh_c_p3_p2 = SH_C[degree][degree + order];
-    /// assert_eq!(sh_c_p3_p2, 1.445305721320277);
+    /// assert_eq!(SH_C[degree][degree + order], 1.445305721320277);
     ///
     /// ```
     pub static ref SH_C: Vec<Vec<f64>> = vec![

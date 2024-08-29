@@ -82,7 +82,6 @@ pub fn render_gaussian_3d_scene(
         view_bound_x,
         view_bound_y,
     }));
-
     // [P, 3]
     let positions_3d = into_contiguous(input.positions).handle;
     // [P, 1]
