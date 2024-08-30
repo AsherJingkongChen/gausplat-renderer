@@ -3,7 +3,7 @@ mod point;
 
 pub use super::*;
 
-use crate::consts::render::*;
+use crate::consts::gaussian_3d::*;
 use burn::backend::wgpu::{into_contiguous, SourceKernel};
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use kernel::*;

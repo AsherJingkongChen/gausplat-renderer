@@ -177,6 +177,8 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                     TensorPrimitive::Float(output.scalings_grad.to_owned()),
                 );
 
+                Wgpu::sync(&scalings_grad.device(), cubecl::client::SyncType::Flush);
+
                 println!(
                     "colors_sh_grad: {} {}",
                     colors_sh_grad.to_owned().mean_dim(0).to_data(),
