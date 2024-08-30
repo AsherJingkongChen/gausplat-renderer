@@ -14,10 +14,10 @@ use rayon::{
 };
 
 pub fn render_gaussian_3d_scene(
-    input: forward::RendererInput<Wgpu>,
+    input: forward::RenderInput<Wgpu>,
     view: &sparse_view::View,
-    options: RendererOptions,
-) -> forward::RendererOutput<Wgpu> {
+    options: RenderOptions,
+) -> forward::RenderOutput<Wgpu> {
     // Specifying the parameters
 
     let colors_sh_degree_max = options.colors_sh_degree_max;
@@ -398,9 +398,9 @@ pub fn render_gaussian_3d_scene(
 
     // Specifying the results
 
-    forward::RendererOutput {
+    forward::RenderOutput {
         colors_rgb_2d,
-        state: backward::RendererInput {
+        state: backward::RenderInput {
             colors_rgb_3d,
             colors_sh,
             conics,

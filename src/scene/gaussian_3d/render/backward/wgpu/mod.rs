@@ -8,10 +8,10 @@ use bytemuck::bytes_of;
 use kernel::*;
 
 pub fn render_gaussian_3d_scene(
-    state: backward::RendererInput<Wgpu>,
+    state: backward::RenderInput<Wgpu>,
     // [I_Y, I_X, 3]
     colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
-) -> backward::RendererOutput<Wgpu> {
+) -> backward::RenderOutput<Wgpu> {
     let mut duration = std::time::Instant::now();
 
     let client = &state.colors_sh.client;
@@ -163,7 +163,7 @@ pub fn render_gaussian_3d_scene(
     // client.sync(cubecl::client::SyncType::Wait);
     println!("Duration (Backward 2): {:?}", duration.elapsed());
 
-    backward::RendererOutput {
+    backward::RenderOutput {
         colors_sh_grad,
         opacities_grad: opacities_3d_grad,
         positions_grad: positions_3d_grad,

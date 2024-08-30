@@ -3,7 +3,7 @@ pub(super) mod wgpu;
 pub use super::*;
 
 #[derive(Clone, Debug)]
-pub struct RendererInput<B: Backend> {
+pub struct RenderInput<B: Backend> {
     /// `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive<3>,
     /// `[P, 1]`
@@ -17,8 +17,8 @@ pub struct RendererInput<B: Backend> {
 }
 
 #[derive(Clone, Debug)]
-pub struct RendererOutput<B: Backend> {
+pub struct RenderOutput<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: B::FloatTensorPrimitive<3>,
-    pub state: backward::RendererInput<B>,
+    pub state: backward::RenderInput<B>,
 }

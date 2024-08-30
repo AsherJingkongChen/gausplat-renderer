@@ -3,33 +3,24 @@ pub mod forward;
 
 pub use super::*;
 pub use burn::{
-    backend::autodiff::{checkpoint::strategy::CheckpointStrategy, Autodiff},
+    backend::{
+        autodiff::{checkpoint, Autodiff},
+        wgpu::WgpuDevice,
+    },
     config::Config,
 };
 pub use gausplat_importer::scene::sparse_view;
 
 use burn::{
-    backend::{autodiff::checkpoint::strategy::NoCheckpointing, wgpu},
+    backend::wgpu,
     tensor::{Int, TensorPrimitive},
 };
 
 pub type Wgpu = wgpu::JitBackend<wgpu::WgpuRuntime, f32, i32>;
 
-pub trait Gaussian3dRenderer<B: Backend> {
-    fn backward(
-        state: backward::RendererInput<B>,
-        colors_rgb_2d_grad: B::FloatTensorPrimitive<3>,
-    ) -> backward::RendererOutput<B>;
-
-    fn forward(
-        input: forward::RendererInput<B>,
-        view: &sparse_view::View,
-        options: RendererOptions,
-    ) -> forward::RendererOutput<B>;
-}
-
 #[derive(Config, Copy, Debug)]
-pub struct RendererOptions {
+pub struct RenderOptions {
+    #[config(default = "3")]
     /// It should be no more than `3`
     pub colors_sh_degree_max: u32,
 }
@@ -43,7 +34,7 @@ pub struct RenderOutput<B: Backend> {
 #[derive(Clone, Debug)]
 pub struct RenderOutputAutodiff<
     B: Backend,
-    C: CheckpointStrategy = NoCheckpointing,
+    C: checkpoint::strategy::CheckpointStrategy = checkpoint::strategy::NoCheckpointing,
 > {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<Autodiff<B, C>, 3>,
@@ -57,9 +48,9 @@ impl Gaussian3dScene<Wgpu> {
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: RendererOptions,
+        options: RenderOptions,
     ) -> RenderOutput<Wgpu> {
-        let input = forward::RendererInput {
+        let input = forward::RenderInput {
             colors_sh: self.colors_sh().into_primitive().tensor(),
             opacities: self.opacities().into_primitive().tensor(),
             positions: self.positions().into_primitive().tensor(),
@@ -67,7 +58,8 @@ impl Gaussian3dScene<Wgpu> {
             scalings: self.scalings().into_primitive().tensor(),
         };
 
-        let output = Self::forward(input, view, options);
+        let output =
+            forward::wgpu::render_gaussian_3d_scene(input, view, options);
 
         let colors_rgb_2d =
             Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
@@ -76,11 +68,13 @@ impl Gaussian3dScene<Wgpu> {
     }
 }
 
-impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
+impl<C: checkpoint::strategy::CheckpointStrategy>
+    Gaussian3dScene<Autodiff<Wgpu, C>>
+{
     pub fn render(
         &self,
         view: &sparse_view::View,
-        options: RendererOptions,
+        options: RenderOptions,
     ) -> RenderOutputAutodiff<Wgpu, C> {
         use burn::backend::autodiff::{
             checkpoint::base::Checkpointer,
@@ -94,7 +88,7 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
         let rotations = self.rotations().into_primitive().tensor();
         let scalings = self.scalings().into_primitive().tensor();
 
-        let input = forward::RendererInput {
+        let input = forward::RenderInput {
             colors_sh: colors_sh.primitive,
             opacities: opacities.primitive,
             positions: positions.primitive,
@@ -102,7 +96,8 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
             scalings: scalings.primitive,
         };
 
-        let output = Gaussian3dScene::forward(input, view, options);
+        let output =
+            forward::wgpu::render_gaussian_3d_scene(input, view, options);
 
         let nodes = [
             colors_sh.node,
@@ -126,7 +121,7 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
         struct BackwardOps;
 
         impl Backward<Wgpu, 3, 5> for BackwardOps {
-            type State = backward::RendererInput<Wgpu>;
+            type State = backward::RenderInput<Wgpu>;
 
             fn backward(
                 self,
@@ -135,11 +130,16 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                 _checkpointer: &mut Checkpointer,
             ) {
                 let colors_rgb_2d_grad = grads.consume::<Wgpu, 3>(&ops.node);
+
+                #[cfg(debug_assertions)]
                 {
-                    let colors_rgb_2d_grad = Tensor::<Wgpu, 3>::new(TensorPrimitive::Float(
-                        colors_rgb_2d_grad.to_owned(),
-                    ));
-                    println!("colors_rgb_2d_grad.dims: {:?}", colors_rgb_2d_grad.dims());
+                    let colors_rgb_2d_grad = Tensor::<Wgpu, 3>::new(
+                        TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
+                    );
+                    println!(
+                        "colors_rgb_2d_grad.dims: {:?}",
+                        colors_rgb_2d_grad.dims()
+                    );
                     println!(
                         "colors_rgb_2d_grad.max: {:?}",
                         colors_rgb_2d_grad.to_owned().max().into_scalar()
@@ -154,61 +154,73 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
                     );
                 }
 
-                let state = ops.state;
-                let output = Gaussian3dScene::backward(state, colors_rgb_2d_grad);
-
-                let colors_sh_grad = Tensor::<Wgpu, 3>::new(
-                    TensorPrimitive::Float(output.colors_sh_grad.to_owned()),
-                );
-                let opacities_grad = Tensor::<Wgpu, 2>::new(
-                    TensorPrimitive::Float(output.opacities_grad.to_owned()),
-                );
-                let positions_2d_grad_norm =
-                    Tensor::<Wgpu, 1>::new(TensorPrimitive::Float(
-                        output.positions_2d_grad_norm.to_owned(),
-                    ));
-                let positions_grad = Tensor::<Wgpu, 2>::new(
-                    TensorPrimitive::Float(output.positions_grad.to_owned()),
-                );
-                let rotations_grad = Tensor::<Wgpu, 2>::new(
-                    TensorPrimitive::Float(output.rotations_grad.to_owned()),
-                );
-                let scalings_grad = Tensor::<Wgpu, 2>::new(
-                    TensorPrimitive::Float(output.scalings_grad.to_owned()),
+                let output = backward::wgpu::render_gaussian_3d_scene(
+                    ops.state,
+                    colors_rgb_2d_grad,
                 );
 
-                Wgpu::sync(&scalings_grad.device(), cubecl::client::SyncType::Flush);
+                #[cfg(debug_assertions)]
+                {
+                    let colors_sh_grad =
+                        Tensor::<Wgpu, 3>::new(TensorPrimitive::Float(
+                            output.colors_sh_grad.to_owned(),
+                        ));
+                    let opacities_grad =
+                        Tensor::<Wgpu, 2>::new(TensorPrimitive::Float(
+                            output.opacities_grad.to_owned(),
+                        ));
+                    let positions_2d_grad_norm =
+                        Tensor::<Wgpu, 1>::new(TensorPrimitive::Float(
+                            output.positions_2d_grad_norm.to_owned(),
+                        ));
+                    let positions_grad =
+                        Tensor::<Wgpu, 2>::new(TensorPrimitive::Float(
+                            output.positions_grad.to_owned(),
+                        ));
+                    let rotations_grad =
+                        Tensor::<Wgpu, 2>::new(TensorPrimitive::Float(
+                            output.rotations_grad.to_owned(),
+                        ));
+                    let scalings_grad = Tensor::<Wgpu, 2>::new(
+                        TensorPrimitive::Float(output.scalings_grad.to_owned()),
+                    );
 
-                println!(
-                    "colors_sh_grad: {} {}",
-                    colors_sh_grad.to_owned().mean_dim(0).to_data(),
-                    colors_sh_grad.to_owned().var(0).to_data()
-                );
-                println!(
-                    "opacities_grad: {} {}",
-                    opacities_grad.to_owned().mean_dim(0).to_data(),
-                    opacities_grad.to_owned().var(0).to_data()
-                );
-                println!(
-                    "positions_2d_grad_norm: {} {}",
-                    positions_2d_grad_norm.to_owned().mean_dim(0).to_data(),
-                    positions_2d_grad_norm.to_owned().var(0).to_data()
-                );
-                println!(
-                    "positions_grad: {} {}",
-                    positions_grad.to_owned().mean_dim(0).to_data(),
-                    positions_grad.to_owned().var(0).to_data()
-                );
-                println!(
-                    "rotations_grad: {} {}",
-                    rotations_grad.to_owned().mean_dim(0).to_data(),
-                    rotations_grad.to_owned().var(0).to_data()
-                );
-                println!(
-                    "scalings_grad: {} {}",
-                    scalings_grad.to_owned().mean_dim(0).to_data(),
-                    scalings_grad.to_owned().var(0).to_data()
-                );
+                    Wgpu::sync(
+                        &scalings_grad.device(),
+                        cubecl::client::SyncType::Flush,
+                    );
+
+                    println!(
+                        "colors_sh_grad: {} {}",
+                        colors_sh_grad.to_owned().mean_dim(0).to_data(),
+                        colors_sh_grad.to_owned().var(0).to_data()
+                    );
+                    println!(
+                        "opacities_grad: {} {}",
+                        opacities_grad.to_owned().mean_dim(0).to_data(),
+                        opacities_grad.to_owned().var(0).to_data()
+                    );
+                    println!(
+                        "positions_2d_grad_norm: {} {}",
+                        positions_2d_grad_norm.to_owned().mean_dim(0).to_data(),
+                        positions_2d_grad_norm.to_owned().var(0).to_data()
+                    );
+                    println!(
+                        "positions_grad: {} {}",
+                        positions_grad.to_owned().mean_dim(0).to_data(),
+                        positions_grad.to_owned().var(0).to_data()
+                    );
+                    println!(
+                        "rotations_grad: {} {}",
+                        rotations_grad.to_owned().mean_dim(0).to_data(),
+                        rotations_grad.to_owned().var(0).to_data()
+                    );
+                    println!(
+                        "scalings_grad: {} {}",
+                        scalings_grad.to_owned().mean_dim(0).to_data(),
+                        scalings_grad.to_owned().var(0).to_data()
+                    );
+                }
 
                 if let Some(node) = &ops.parents[0] {
                     grads.register::<Wgpu, 3>(node.id, output.colors_sh_grad);
@@ -235,28 +247,9 @@ impl<C: CheckpointStrategy> Gaussian3dScene<Autodiff<Wgpu, C>> {
     }
 }
 
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
-    fn backward(
-        state: backward::RendererInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
-    ) -> backward::RendererOutput<Wgpu> {
-        backward::wgpu::render_gaussian_3d_scene(state, colors_rgb_2d_grad)
-    }
-
-    fn forward(
-        input: forward::RendererInput<Wgpu>,
-        view: &sparse_view::View,
-        options: RendererOptions,
-    ) -> forward::RendererOutput<Wgpu> {
-        forward::wgpu::render_gaussian_3d_scene(input, view, options)
-    }
-}
-
-impl Default for RendererOptions {
+impl Default for RenderOptions {
     fn default() -> Self {
-        Self {
-            colors_sh_degree_max: 3,
-        }
+        Self::new()
     }
 }
 

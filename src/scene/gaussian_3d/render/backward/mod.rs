@@ -3,7 +3,7 @@ pub(super) mod wgpu;
 pub use super::*;
 
 #[derive(Clone, Debug)]
-pub struct RendererInput<B: Backend> {
+pub struct RenderInput<B: Backend> {
     /// `[P, 3 (+ 1)]`
     pub colors_rgb_3d: B::FloatTensorPrimitive<2>,
     /// `[P, 16, 3]`
@@ -24,7 +24,7 @@ pub struct RendererInput<B: Backend> {
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
-    pub options: RendererOptions,
+    pub options: RenderOptions,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`
@@ -62,7 +62,7 @@ pub struct RendererInput<B: Backend> {
 }
 
 #[derive(Clone, Debug)]
-pub struct RendererOutput<B: Backend> {
+pub struct RenderOutput<B: Backend> {
     /// `[P, 16, 3]`
     pub colors_sh_grad: B::FloatTensorPrimitive<3>,
     /// `[P, 1]`
