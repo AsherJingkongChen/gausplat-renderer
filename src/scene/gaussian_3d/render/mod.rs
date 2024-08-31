@@ -15,21 +15,19 @@ use burn::{
 };
 use std::{fmt, marker};
 
-pub trait Gaussian3dRenderer:
+pub trait Gaussian3dRenderer<B: Backend>:
     'static + Sized + fmt::Debug + marker::Send
 {
-    type Backend: Backend;
-
     fn render_forward(
-        input: forward::RenderInput<Self::Backend>,
+        input: forward::RenderInput<B>,
         view: &sparse_view::View,
         options: RenderOptions,
-    ) -> forward::RenderOutput<Self::Backend>;
+    ) -> forward::RenderOutput<B>;
 
     fn render_backward(
-        state: backward::RenderInput<Self::Backend>,
-        colors_rgb_2d_grad: <Self::Backend as Backend>::FloatTensorPrimitive<3>,
-    ) -> backward::RenderOutput<Self::Backend>;
+        state: backward::RenderInput<B>,
+        colors_rgb_2d_grad: B::FloatTensorPrimitive<3>,
+    ) -> backward::RenderOutput<B>;
 }
 
 #[derive(Config, Copy, Debug)]
@@ -56,13 +54,14 @@ pub struct RenderOutputAutodiff<B: Backend> {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct Gaussian3dRendererBackward<R: Gaussian3dRenderer> {
+struct Gaussian3dRendererBackward<B: Backend, R: Gaussian3dRenderer<B>> {
+    _b: marker::PhantomData<B>,
     _r: marker::PhantomData<R>,
 }
 
 impl<B: Backend> Gaussian3dScene<B>
 where
-    Self: Gaussian3dRenderer<Backend = B>,
+    Self: Gaussian3dRenderer<B>,
 {
     pub fn render(
         &self,
@@ -88,7 +87,7 @@ where
 
 impl<B: Backend> Gaussian3dScene<Autodiff<B>>
 where
-    Self: Gaussian3dRenderer<Backend = B>,
+    Self: Gaussian3dRenderer<B>,
 {
     pub fn render(
         &self,
@@ -121,7 +120,7 @@ where
 
         let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
-            match Gaussian3dRendererBackward::<Self>::default()
+            match Gaussian3dRendererBackward::<B, Self>::default()
                 .prepare::<NoCheckpointing>(nodes)
                 .compute_bound()
                 .stateful()
@@ -140,10 +139,10 @@ where
     }
 }
 
-impl<R: Gaussian3dRenderer> Backward<R::Backend, 3, 5>
-    for Gaussian3dRendererBackward<R>
+impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
+    for Gaussian3dRendererBackward<B, R>
 {
-    type State = backward::RenderInput<R::Backend>;
+    type State = backward::RenderInput<B>;
 
     fn backward(
         self,
@@ -151,11 +150,11 @@ impl<R: Gaussian3dRenderer> Backward<R::Backend, 3, 5>
         grads: &mut Gradients,
         _checkpointer: &mut Checkpointer,
     ) {
-        let colors_rgb_2d_grad = grads.consume::<R::Backend, 3>(&ops.node);
+        let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 
         #[cfg(debug_assertions)]
         {
-            let colors_rgb_2d_grad = Tensor::<R::Backend, 3>::new(
+            let colors_rgb_2d_grad = Tensor::<B, 3>::new(
                 TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
             );
             println!(
@@ -180,27 +179,27 @@ impl<R: Gaussian3dRenderer> Backward<R::Backend, 3, 5>
 
         #[cfg(debug_assertions)]
         {
-            let colors_sh_grad = Tensor::<R::Backend, 3>::new(
+            let colors_sh_grad = Tensor::<B, 3>::new(
                 TensorPrimitive::Float(output.colors_sh_grad.to_owned()),
             );
-            let opacities_grad = Tensor::<R::Backend, 2>::new(
+            let opacities_grad = Tensor::<B, 2>::new(
                 TensorPrimitive::Float(output.opacities_grad.to_owned()),
             );
             let positions_2d_grad_norm =
-                Tensor::<R::Backend, 1>::new(TensorPrimitive::Float(
+                Tensor::<B, 1>::new(TensorPrimitive::Float(
                     output.positions_2d_grad_norm.to_owned(),
                 ));
-            let positions_grad = Tensor::<R::Backend, 2>::new(
+            let positions_grad = Tensor::<B, 2>::new(
                 TensorPrimitive::Float(output.positions_grad.to_owned()),
             );
-            let rotations_grad = Tensor::<R::Backend, 2>::new(
+            let rotations_grad = Tensor::<B, 2>::new(
                 TensorPrimitive::Float(output.rotations_grad.to_owned()),
             );
-            let scalings_grad = Tensor::<R::Backend, 2>::new(
+            let scalings_grad = Tensor::<B, 2>::new(
                 TensorPrimitive::Float(output.scalings_grad.to_owned()),
             );
 
-            R::Backend::sync(
+            B::sync(
                 &scalings_grad.device(),
                 cubecl::client::SyncType::Wait,
             );
@@ -238,19 +237,19 @@ impl<R: Gaussian3dRenderer> Backward<R::Backend, 3, 5>
         }
 
         if let Some(node) = &ops.parents[0] {
-            grads.register::<R::Backend, 3>(node.id, output.colors_sh_grad);
+            grads.register::<B, 3>(node.id, output.colors_sh_grad);
         }
         if let Some(node) = &ops.parents[1] {
-            grads.register::<R::Backend, 2>(node.id, output.opacities_grad);
+            grads.register::<B, 2>(node.id, output.opacities_grad);
         }
         if let Some(node) = &ops.parents[2] {
-            grads.register::<R::Backend, 2>(node.id, output.positions_grad);
+            grads.register::<B, 2>(node.id, output.positions_grad);
         }
         if let Some(node) = &ops.parents[3] {
-            grads.register::<R::Backend, 2>(node.id, output.rotations_grad);
+            grads.register::<B, 2>(node.id, output.rotations_grad);
         }
         if let Some(node) = &ops.parents[4] {
-            grads.register::<R::Backend, 2>(node.id, output.scalings_grad);
+            grads.register::<B, 2>(node.id, output.scalings_grad);
         }
     }
 }

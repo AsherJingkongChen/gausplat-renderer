@@ -8,7 +8,7 @@ lazy_static! {
     ///
     /// ## Example
     /// ```rust
-    /// use gausplat_renderer::consts::spherical_harmonics::SH_C;
+    /// use gausplat_renderer::preset::spherical_harmonics::SH_C;
     ///
     /// assert_eq!(SH_C[0][0], 0.28209479177387814);
     ///

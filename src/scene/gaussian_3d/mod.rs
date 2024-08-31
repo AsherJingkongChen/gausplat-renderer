@@ -26,21 +26,19 @@ pub struct Gaussian3dScene<B: Backend> {
     pub scalings: Param<Tensor<B, 2>>,
 }
 
-impl render::Gaussian3dRenderer for Gaussian3dScene<Wgpu> {
-    type Backend = Wgpu;
-
+impl render::Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn render_forward(
-        input: render::forward::RenderInput<Self::Backend>,
+        input: render::forward::RenderInput<Wgpu>,
         view: &sparse_view::View,
         options: render::RenderOptions,
-    ) -> render::forward::RenderOutput<Self::Backend> {
+    ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Self::Backend>,
-        colors_rgb_2d_grad: <Self::Backend as Backend>::FloatTensorPrimitive<3>,
-    ) -> render::backward::RenderOutput<Self::Backend> {
+        state: render::backward::RenderInput<Wgpu>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+    ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,
             colors_rgb_2d_grad,
@@ -48,21 +46,19 @@ impl render::Gaussian3dRenderer for Gaussian3dScene<Wgpu> {
     }
 }
 
-impl render::Gaussian3dRenderer for Gaussian3dScene<Autodiff<Wgpu>> {
-    type Backend = Wgpu;
-
+impl render::Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn render_forward(
-        input: render::forward::RenderInput<Self::Backend>,
+        input: render::forward::RenderInput<Wgpu>,
         view: &sparse_view::View,
         options: render::RenderOptions,
-    ) -> render::forward::RenderOutput<Self::Backend> {
+    ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Self::Backend>,
-        colors_rgb_2d_grad: <Self::Backend as Backend>::FloatTensorPrimitive<3>,
-    ) -> render::backward::RenderOutput<Self::Backend> {
+        state: render::backward::RenderInput<Wgpu>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+    ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,
             colors_rgb_2d_grad,
