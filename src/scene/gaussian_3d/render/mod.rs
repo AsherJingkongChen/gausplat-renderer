@@ -150,6 +150,17 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         grads: &mut Gradients,
         _checkpointer: &mut Checkpointer,
     ) {
+        #[cfg(debug_assertions)]
+        use std::collections::HashMap;
+
+        #[cfg(debug_assertions)]
+        {
+            log::debug!(
+                target: "gausplat_renderer::scene",
+                "Gaussian3dRendererBackward::backward",
+            );
+        }
+
         let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 
         #[cfg(debug_assertions)]
@@ -157,21 +168,19 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             let colors_rgb_2d_grad = Tensor::<B, 3>::new(
                 TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
             );
-            println!(
-                "colors_rgb_2d_grad.dims: {:?}",
-                colors_rgb_2d_grad.dims()
-            );
-            println!(
-                "colors_rgb_2d_grad.max: {:?}",
-                colors_rgb_2d_grad.to_owned().max().into_scalar()
-            );
-            println!(
-                "colors_rgb_2d_grad.mean: {:?}",
-                colors_rgb_2d_grad.to_owned().mean().into_scalar()
-            );
-            println!(
-                "colors_rgb_2d_grad.min: {:?}",
-                colors_rgb_2d_grad.to_owned().min().into_scalar()
+
+            let gradient_means = HashMap::from([(
+                "colors_rgb_2d_grad.mean",
+                colors_rgb_2d_grad
+                    .mean_dim(0)
+                    .mean_dim(1)
+                    .into_data()
+                    .to_vec::<f32>()
+                    .unwrap(),
+            )]);
+            log::debug!(
+                target: "gausplat_renderer::scene",
+                "Gaussian3dRendererBackward::backward > gradient means {gradient_means:#?}",
             );
         }
 
@@ -179,60 +188,80 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
 
         #[cfg(debug_assertions)]
         {
-            let colors_sh_grad = Tensor::<B, 3>::new(
-                TensorPrimitive::Float(output.colors_sh_grad.to_owned()),
-            );
-            let opacities_grad = Tensor::<B, 2>::new(
-                TensorPrimitive::Float(output.opacities_grad.to_owned()),
-            );
+            let colors_sh_grad = Tensor::<B, 3>::new(TensorPrimitive::Float(
+                output.colors_sh_grad.to_owned(),
+            ));
+            let opacities_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
+                output.opacities_grad.to_owned(),
+            ));
+            let positions_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
+                output.positions_grad.to_owned(),
+            ));
             let positions_2d_grad_norm =
                 Tensor::<B, 1>::new(TensorPrimitive::Float(
                     output.positions_2d_grad_norm.to_owned(),
                 ));
-            let positions_grad = Tensor::<B, 2>::new(
-                TensorPrimitive::Float(output.positions_grad.to_owned()),
-            );
-            let rotations_grad = Tensor::<B, 2>::new(
-                TensorPrimitive::Float(output.rotations_grad.to_owned()),
-            );
-            let scalings_grad = Tensor::<B, 2>::new(
-                TensorPrimitive::Float(output.scalings_grad.to_owned()),
-            );
+            let rotations_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
+                output.rotations_grad.to_owned(),
+            ));
+            let scalings_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
+                output.scalings_grad.to_owned(),
+            ));
 
-            B::sync(
-                &scalings_grad.device(),
-                cubecl::client::SyncType::Wait,
-            );
-
-            println!(
-                "colors_sh_grad: {} {}",
-                colors_sh_grad.to_owned().mean_dim(0).to_data(),
-                colors_sh_grad.to_owned().var(0).to_data()
-            );
-            println!(
-                "opacities_grad: {} {}",
-                opacities_grad.to_owned().mean_dim(0).to_data(),
-                opacities_grad.to_owned().var(0).to_data()
-            );
-            println!(
-                "positions_2d_grad_norm: {} {}",
-                positions_2d_grad_norm.to_owned().mean_dim(0).to_data(),
-                positions_2d_grad_norm.to_owned().var(0).to_data()
-            );
-            println!(
-                "positions_grad: {} {}",
-                positions_grad.to_owned().mean_dim(0).to_data(),
-                positions_grad.to_owned().var(0).to_data()
-            );
-            println!(
-                "rotations_grad: {} {}",
-                rotations_grad.to_owned().mean_dim(0).to_data(),
-                rotations_grad.to_owned().var(0).to_data()
-            );
-            println!(
-                "scalings_grad: {} {}",
-                scalings_grad.to_owned().mean_dim(0).to_data(),
-                scalings_grad.to_owned().var(0).to_data()
+            let gradient_means = HashMap::from([
+                (
+                    "colors_sh_grad.mean",
+                    colors_sh_grad
+                        .mean_dim(0)
+                        .mean_dim(1)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+                (
+                    "opacities_grad.mean",
+                    opacities_grad
+                        .mean_dim(0)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+                (
+                    "positions_grad.mean",
+                    positions_grad
+                        .mean_dim(0)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+                (
+                    "positions_2d_grad_norm.mean",
+                    positions_2d_grad_norm
+                        .mean_dim(0)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+                (
+                    "rotations_grad.mean",
+                    rotations_grad
+                        .mean_dim(0)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+                (
+                    "scalings_grad.mean",
+                    scalings_grad
+                        .mean_dim(0)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                ),
+            ]);
+            log::debug!(
+                target: "gausplat_renderer::scene",
+                "Gaussian3dRendererBackward::backward > gradient means {gradient_means:#?}",
             );
         }
 

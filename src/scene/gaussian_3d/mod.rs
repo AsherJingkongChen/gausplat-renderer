@@ -8,6 +8,7 @@ pub use burn::{
     tensor::{backend::Backend, Tensor, TensorData},
 };
 pub use config::*;
+pub use render::Gaussian3dRenderer;
 
 use backend::*;
 use std::fmt;
@@ -26,7 +27,7 @@ pub struct Gaussian3dScene<B: Backend> {
     pub scalings: Param<Tensor<B, 2>>,
 }
 
-impl render::Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
+impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &sparse_view::View,
@@ -46,7 +47,7 @@ impl render::Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     }
 }
 
-impl render::Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
+impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &sparse_view::View,

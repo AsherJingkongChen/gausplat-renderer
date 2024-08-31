@@ -13,7 +13,12 @@ pub fn render_gaussian_3d_scene(
     // [I_Y, I_X, 3]
     colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
 ) -> backward::RenderOutput<Wgpu> {
-    let mut duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_backward",
+        );
+    }
 
     let client = &state.colors_sh.client;
     let colors_sh_degree_max = state.options.colors_sh_degree_max;
@@ -87,9 +92,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Backward 1): {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_backward > 1",
+        );
+    }
 
     // Performing the backward pass #2
 
@@ -161,8 +170,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Backward 2): {:?}", duration.elapsed());
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_backward > 2",
+        );
+    }
 
     backward::RenderOutput {
         colors_sh_grad,

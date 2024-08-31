@@ -69,8 +69,16 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
                     (colors_rgb - 0.5) / SH_C[0][0],
                 );
 
-                Self::make_colors_sh(colors_sh)
-                    .set_require_grad(is_require_grad)
+                colors_sh = Self::make_colors_sh(colors_sh)
+                    .set_require_grad(is_require_grad);
+
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > colors_sh",
+                );
+
+                colors_sh
             },
             device.to_owned(),
             true,
@@ -80,12 +88,20 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
         let opacities = Param::uninitialized(
             Default::default(),
             move |device, is_require_grad| {
-                Self::make_opacities(Tensor::full(
+                let opacities = Self::make_opacities(Tensor::full(
                     [point_count, 1],
                     0.1,
                     device,
                 ))
-                .set_require_grad(is_require_grad)
+                .set_require_grad(is_require_grad);
+
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > opacities",
+                );
+
+                opacities
             },
             device.to_owned(),
             true,
@@ -95,11 +111,19 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
         let positions = Param::uninitialized(
             Default::default(),
             move |device, is_require_grad| {
-                Self::make_positions(Tensor::from_data(
+                let positions = Self::make_positions(Tensor::from_data(
                     TensorData::new(positions.to_owned(), [point_count, 3]),
                     device,
                 ))
-                .set_require_grad(is_require_grad)
+                .set_require_grad(is_require_grad);
+
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > positions",
+                );
+
+                positions
             },
             device.to_owned(),
             true,
@@ -109,14 +133,22 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
         let rotations = Param::uninitialized(
             Default::default(),
             move |device, is_require_grad| {
-                Self::make_rotations(Tensor::from_data(
+                let rotations = Self::make_rotations(Tensor::from_data(
                     TensorData::new(
                         [0.0, 0.0, 0.0, 1.0].repeat(point_count),
                         [point_count, 4],
                     ),
                     device,
                 ))
-                .set_require_grad(is_require_grad)
+                .set_require_grad(is_require_grad);
+
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > rotations",
+                );
+
+                rotations
             },
             device.to_owned(),
             true,
@@ -137,7 +169,7 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
                     })
                     .collect();
 
-                Self::make_scalings(
+                let scalings = Self::make_scalings(
                     Tensor::from_data(
                         TensorData::new(samples, [point_count, 1]),
                         device,
@@ -147,7 +179,15 @@ impl<B: Backend> From<Gaussian3dSceneConfig<B>> for Gaussian3dScene<B> {
                     .clamp_min(f32::EPSILON)
                     .repeat_dim(1, 3),
                 )
-                .set_require_grad(is_require_grad)
+                .set_require_grad(is_require_grad);
+
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > scalings",
+                );
+
+                scalings
             },
             device,
             true,

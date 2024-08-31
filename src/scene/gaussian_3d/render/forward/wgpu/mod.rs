@@ -21,6 +21,13 @@ pub fn render_gaussian_3d_scene(
 ) -> forward::RenderOutput<Wgpu> {
     // Specifying the parameters
 
+    #[cfg(debug_assertions)] {
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward",
+        );
+    }
+
     let colors_sh_degree_max = options.colors_sh_degree_max;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
@@ -59,8 +66,6 @@ pub fn render_gaussian_3d_scene(
     let point_count = colors_sh.shape.dims[0];
 
     // Performing the forward pass #1
-
-    let mut duration = std::time::Instant::now();
 
     let arguments = client.create(bytes_of(&Kernel1Arguments {
         colors_sh_degree_max,
@@ -199,9 +204,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Forward 1): {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 1",
+        );
+    }
 
     // Performing the forward pass #2
 
@@ -229,9 +238,13 @@ pub fn render_gaussian_3d_scene(
         )
     };
 
-    println!("tile_touched_count (wgsl): {:?}", tile_touched_count);
-    println!("Duration (Forward 2): {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 2",
+        );
+    }
 
     // Performing the forward pass #3
 
@@ -268,9 +281,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Forward 3): {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 3",
+        );
+    }
 
     // Performing the forward pass #4
 
@@ -287,8 +304,13 @@ pub fn render_gaussian_3d_scene(
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
 
-    println!("Duration (Forward 4): {:?}", duration.elapsed());
-    duration = std::time::Instant::now();
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 4",
+        );
+    }
 
     // Performing the forward pass #5
 
@@ -345,8 +367,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Forward 5): {:?}", duration.elapsed());
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 5",
+        );
+    }
 
     // Performing the forward pass #6
 
@@ -394,8 +421,17 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // client.sync(cubecl::client::SyncType::Wait);
-    println!("Duration (Forward 6): {:?}", duration.elapsed());
+    #[cfg(debug_assertions)] {
+        client.sync(cubecl::client::SyncType::Wait);
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > 6",
+        );
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > tile_touched_count ({tile_touched_count})",
+        );
+    }
 
     // Specifying the results
 
