@@ -1,4 +1,4 @@
-pub(super) mod wgpu;
+pub mod wgpu;
 
 pub use super::*;
 
