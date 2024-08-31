@@ -2,6 +2,7 @@ pub mod config;
 pub mod property;
 pub mod render;
 
+pub use crate::preset::backend;
 pub use burn::{
     module::{Module, Param},
     tensor::{backend::Backend, Tensor, TensorData},

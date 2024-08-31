@@ -2,7 +2,8 @@ mod kernel;
 
 pub use super::*;
 
-use crate::consts::gaussian_3d::*;
+use crate::preset::render::*;
+use backend::Wgpu;
 use burn::backend::wgpu::SourceKernel;
 use bytemuck::bytes_of;
 use kernel::*;

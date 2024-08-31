@@ -1,7 +1,7 @@
 pub use super::*;
 pub use gausplat_importer::scene::sparse_view;
 
-use crate::consts::spherical_harmonics::SH_C;
+use crate::preset::spherical_harmonics::*;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_distr::Distribution;
 use std::fmt;
