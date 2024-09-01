@@ -13,7 +13,8 @@ pub fn render_gaussian_3d_scene(
     // [I_Y, I_X, 3]
     colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
 ) -> backward::RenderOutput<Wgpu> {
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         log::debug!(
             target: "gausplat_renderer::scene",
             "Gaussian3dRenderer::<Wgpu>::render_backward",
@@ -92,7 +93,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -170,7 +172,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -181,8 +184,8 @@ pub fn render_gaussian_3d_scene(
     backward::RenderOutput {
         colors_sh_grad,
         opacities_grad: opacities_3d_grad,
-        positions_grad: positions_3d_grad,
         positions_2d_grad_norm,
+        positions_grad: positions_3d_grad,
         rotations_grad,
         scalings_grad,
     }

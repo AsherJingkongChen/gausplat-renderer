@@ -151,7 +151,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         _checkpointer: &mut Checkpointer,
     ) {
         #[cfg(debug_assertions)]
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
 
         #[cfg(debug_assertions)]
         {
@@ -169,7 +169,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
                 TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
             );
 
-            let gradient_means = HashMap::from([(
+            let gradient_means = BTreeMap::from([(
                 "colors_rgb_2d_grad.mean",
                 colors_rgb_2d_grad
                     .mean_dim(0)
@@ -194,13 +194,13 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             let opacities_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
                 output.opacities_grad.to_owned(),
             ));
-            let positions_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.positions_grad.to_owned(),
-            ));
             let positions_2d_grad_norm =
                 Tensor::<B, 1>::new(TensorPrimitive::Float(
                     output.positions_2d_grad_norm.to_owned(),
                 ));
+            let positions_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
+                output.positions_grad.to_owned(),
+            ));
             let rotations_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
                 output.rotations_grad.to_owned(),
             ));
@@ -208,7 +208,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
                 output.scalings_grad.to_owned(),
             ));
 
-            let gradient_means = HashMap::from([
+            let gradient_means = BTreeMap::from([
                 (
                     "colors_sh_grad.mean",
                     colors_sh_grad
@@ -227,16 +227,16 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
                         .unwrap(),
                 ),
                 (
-                    "positions_grad.mean",
-                    positions_grad
+                    "positions_2d_grad_norm.mean",
+                    positions_2d_grad_norm
                         .mean_dim(0)
                         .into_data()
                         .to_vec::<f32>()
                         .unwrap(),
                 ),
                 (
-                    "positions_2d_grad_norm.mean",
-                    positions_2d_grad_norm
+                    "positions_grad.mean",
+                    positions_grad
                         .mean_dim(0)
                         .into_data()
                         .to_vec::<f32>()

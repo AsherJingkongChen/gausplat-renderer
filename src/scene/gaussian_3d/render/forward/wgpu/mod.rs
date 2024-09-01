@@ -21,7 +21,8 @@ pub fn render_gaussian_3d_scene(
 ) -> forward::RenderOutput<Wgpu> {
     // Specifying the parameters
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         log::debug!(
             target: "gausplat_renderer::scene",
             "Gaussian3dRenderer::<Wgpu>::render_forward",
@@ -204,7 +205,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -238,7 +240,8 @@ pub fn render_gaussian_3d_scene(
         )
     };
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -281,7 +284,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -304,7 +308,8 @@ pub fn render_gaussian_3d_scene(
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -367,7 +372,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
@@ -421,7 +427,8 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         client.sync(cubecl::client::SyncType::Wait);
         log::debug!(
             target: "gausplat_renderer::scene",
