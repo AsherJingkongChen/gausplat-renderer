@@ -6,13 +6,12 @@ pub use burn::{
     module::{Module, Param},
     tensor::{backend::Backend, Tensor, TensorData},
 };
-pub use gausplat_importer::scene::data::gaussian_3d::{Point, Points, View};
+pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::Gaussian3dRenderer;
 
-use crate::preset::spherical_harmonics::*;
+use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
 use backend::*;
-use rand::{rngs::StdRng, SeedableRng};
-use rand_distr::Distribution;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt;
 
 #[derive(Module)]
@@ -158,17 +157,18 @@ impl<B: Backend> Gaussian3dScene<B> {
             Default::default(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
-                let samples =
-                    rand_distr::LogNormal::new(0.0, std::f32::consts::E)
-                        .expect("unreachable")
-                        .sample_iter(&mut StdRng::seed_from_u64(0x3D65))
-                        .take(point_count)
-                        .map(|mut sample| {
-                            sample = sample.max(f32::EPSILON);
-                            sample_max = sample_max.max(sample);
-                            sample
-                        })
-                        .collect();
+                let samples = StdRng::seed_from_u64(SEED)
+                    .sample_iter(
+                        rand_distr::LogNormal::new(0.0, std::f32::consts::E)
+                            .expect("unreachable"),
+                    )
+                    .take(point_count)
+                    .map(|mut sample| {
+                        sample = sample.max(f32::EPSILON);
+                        sample_max = sample_max.max(sample);
+                        sample
+                    })
+                    .collect();
 
                 let scalings = Self::make_scalings(
                     Tensor::from_data(
