@@ -6,7 +6,7 @@ pub use burn::{
     module::{Module, Param},
     tensor::{backend::Backend, Tensor, TensorData},
 };
-pub use gausplat_importer::scene::sparse_view;
+pub use gausplat_importer::scene::data::gaussian_3d::{Point, Points, View};
 pub use render::Gaussian3dRenderer;
 
 use crate::preset::spherical_harmonics::*;
@@ -32,7 +32,7 @@ pub struct Gaussian3dScene<B: Backend> {
 impl<B: Backend> Gaussian3dScene<B> {
     pub fn init(
         device: &B::Device,
-        priors: sparse_view::Points,
+        priors: Points,
     ) -> Self {
         // P
         let point_count = priors.len();
@@ -71,7 +71,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > colors_sh",
+                    "Gaussian3dScene::init > colors_sh",
                 );
 
                 colors_sh
@@ -94,7 +94,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > opacities",
+                    "Gaussian3dScene::init > opacities",
                 );
 
                 opacities
@@ -116,7 +116,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > positions",
+                    "Gaussian3dScene::init > positions",
                 );
 
                 positions
@@ -141,7 +141,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > rotations",
+                    "Gaussian3dScene::init > rotations",
                 );
 
                 rotations
@@ -182,7 +182,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::from(Gaussian3dSceneConfig) > scalings",
+                    "Gaussian3dScene::init > scalings",
                 );
 
                 scalings
@@ -204,7 +204,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
-        view: &sparse_view::View,
+        view: &View,
         options: render::RenderOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
@@ -224,7 +224,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
-        view: &sparse_view::View,
+        view: &View,
         options: render::RenderOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
@@ -271,11 +271,11 @@ mod tests {
 
         let device = Default::default();
         let priors = vec![
-            sparse_view::Point {
+            Point {
                 color_rgb: [1.0, 0.5, 0.0],
                 position: [0.0, -0.5, 0.2],
             },
-            sparse_view::Point {
+            Point {
                 color_rgb: [0.5, 1.0, 0.2],
                 position: [1.0, 0.0, -0.3],
             },

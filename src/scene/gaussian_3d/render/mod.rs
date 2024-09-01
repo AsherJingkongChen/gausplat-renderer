@@ -3,7 +3,6 @@ pub mod forward;
 
 pub use super::*;
 pub use burn::{config::Config, tensor::Int};
-pub use gausplat_importer::scene::sparse_view;
 
 use burn::{
     backend::autodiff::{
@@ -20,7 +19,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 {
     fn render_forward(
         input: forward::RenderInput<B>,
-        view: &sparse_view::View,
+        view: &View,
         options: RenderOptions,
     ) -> forward::RenderOutput<B>;
 
@@ -65,7 +64,7 @@ where
 {
     pub fn render(
         &self,
-        view: &sparse_view::View,
+        view: &View,
         options: RenderOptions,
     ) -> RenderOutput<B> {
         let input = forward::RenderInput {
@@ -91,7 +90,7 @@ where
 {
     pub fn render(
         &self,
-        view: &sparse_view::View,
+        view: &View,
         options: RenderOptions,
     ) -> RenderOutputAutodiff<B> {
         let colors_sh = self.colors_sh().into_primitive().tensor();
