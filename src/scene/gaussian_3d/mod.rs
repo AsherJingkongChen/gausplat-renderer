@@ -37,18 +37,21 @@ impl<B: Backend> Gaussian3dScene<B> {
         // P
         let point_count = priors.len();
 
-        // ([P, 3], [P, 3])
-        let (colors_rgb, positions) = priors.into_iter().fold(
-            (
-                Vec::with_capacity(point_count * 3),
-                Vec::with_capacity(point_count * 3),
-            ),
-            |(mut colors_rgb, mut positions), point| {
-                colors_rgb.extend(point.color_rgb.map(|c| c as f32));
-                positions.extend(point.position.map(|c| c as f32));
-                (colors_rgb, positions)
-            },
-        );
+        let priors = (priors.to_owned(), priors);
+
+        // [P, 3]
+        let colors_rgb = priors
+            .0
+            .into_iter()
+            .flat_map(|point| point.color_rgb)
+            .collect::<Vec<_>>();
+
+        // [P, 3]
+        let positions = priors
+            .1
+            .into_iter()
+            .flat_map(|point| point.position)
+            .collect::<Vec<_>>();
 
         // [P, 16, 3]
         let colors_sh = Param::uninitialized(
@@ -266,7 +269,7 @@ impl<B: Backend> Default for Gaussian3dScene<B> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn scene_from_config_shapes() {
+    fn init() {
         use super::*;
 
         let device = Default::default();
