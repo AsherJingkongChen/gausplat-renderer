@@ -24,7 +24,7 @@ pub struct RenderInput<B: Backend> {
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
-    pub options: RenderOptions,
+    pub options: Gaussian3dRendererOptions,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`

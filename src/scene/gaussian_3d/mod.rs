@@ -7,7 +7,7 @@ pub use burn::{
     tensor::{backend::Backend, Tensor, TensorData},
 };
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
-pub use render::Gaussian3dRenderer;
+pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
 use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
 use backend::*;
@@ -208,7 +208,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &View,
-        options: render::RenderOptions,
+        options: render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }
@@ -228,7 +228,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &View,
-        options: render::RenderOptions,
+        options: render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }
@@ -261,6 +261,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
 }
 
 impl<B: Backend> Default for Gaussian3dScene<B> {
+    #[inline]
     fn default() -> Self {
         Self::init(&Default::default(), vec![Default::default()])
     }

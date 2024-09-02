@@ -17,7 +17,7 @@ use rayon::{
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
     view: &View,
-    options: RenderOptions,
+    options: Gaussian3dRendererOptions,
 ) -> forward::RenderOutput<Wgpu> {
     // Specifying the parameters
 

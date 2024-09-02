@@ -20,7 +20,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     fn render_forward(
         input: forward::RenderInput<B>,
         view: &View,
-        options: RenderOptions,
+        options: Gaussian3dRendererOptions,
     ) -> forward::RenderOutput<B>;
 
     fn render_backward(
@@ -30,7 +30,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 }
 
 #[derive(Config, Copy, Debug)]
-pub struct RenderOptions {
+pub struct Gaussian3dRendererOptions {
     #[config(default = "3")]
     /// It should be no more than `3`
     pub colors_sh_degree_max: u32,
@@ -65,7 +65,7 @@ where
     pub fn render(
         &self,
         view: &View,
-        options: RenderOptions,
+        options: Gaussian3dRendererOptions,
     ) -> RenderOutput<B> {
         let input = forward::RenderInput {
             colors_sh: self.colors_sh().into_primitive().tensor(),
@@ -91,7 +91,7 @@ where
     pub fn render(
         &self,
         view: &View,
-        options: RenderOptions,
+        options: Gaussian3dRendererOptions,
     ) -> RenderOutputAutodiff<B> {
         let colors_sh = self.colors_sh().into_primitive().tensor();
         let opacities = self.opacities().into_primitive().tensor();
@@ -179,7 +179,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             )]);
             log::debug!(
                 target: "gausplat_renderer::scene",
-                "Gaussian3dRendererBackward::backward > gradient means {gradient_means:#?}",
+                "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
             );
         }
 
@@ -260,7 +260,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             ]);
             log::debug!(
                 target: "gausplat_renderer::scene",
-                "Gaussian3dRendererBackward::backward > gradient means {gradient_means:#?}",
+                "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
             );
         }
 
@@ -282,7 +282,8 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
     }
 }
 
-impl Default for RenderOptions {
+impl Default for Gaussian3dRendererOptions {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
