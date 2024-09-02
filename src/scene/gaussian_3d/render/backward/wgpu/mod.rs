@@ -22,7 +22,7 @@ pub fn render_gaussian_3d_scene(
     }
 
     let client = &state.colors_sh.client;
-    let colors_sh_degree_max = state.options.colors_sh_degree_max;
+    let colors_sh_degree_max = state.colors_sh_degree_max;
     let device = &state.colors_sh.device;
     let focal_length_x = state.focal_length_x as f32;
     let focal_length_y = state.focal_length_y as f32;

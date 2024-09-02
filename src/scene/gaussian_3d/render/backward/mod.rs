@@ -8,6 +8,7 @@ pub struct RenderInput<B: Backend> {
     pub colors_rgb_3d: B::FloatTensorPrimitive<2>,
     /// `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive<3>,
+    pub colors_sh_degree_max: u32,
     /// `[P, 2, 2]`
     pub conics: B::FloatTensorPrimitive<3>,
     /// `[P, 3 (+ 1), 3]`
@@ -24,7 +25,6 @@ pub struct RenderInput<B: Backend> {
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
-    pub options: Gaussian3dRendererOptions,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
     /// `[I_Y, I_X]`

@@ -20,7 +20,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     fn render_forward(
         input: forward::RenderInput<B>,
         view: &View,
-        options: Gaussian3dRendererOptions,
+        options: &Gaussian3dRendererOptions,
     ) -> forward::RenderOutput<B>;
 
     fn render_backward(
@@ -29,7 +29,21 @@ pub trait Gaussian3dRenderer<B: Backend>:
     ) -> backward::RenderOutput<B>;
 }
 
-#[derive(Config, Copy, Debug)]
+/// ## Details
+/// 
+/// The values of `Gaussian3dRendererOptions::default()`:
+/// ```ignore
+/// Gaussian3dRendererOptions {
+///     colors_sh_degree_max: 0,
+/// }
+/// ```
+/// 
+/// The values of `Gaussian3dRendererOptions::new()`:
+/// ```ignore
+/// Gaussian3dRendererOptions {
+///    colors_sh_degree_max: 3,
+/// }
+#[derive(Config, Debug, Default)]
 pub struct Gaussian3dRendererOptions {
     #[config(default = "3")]
     /// It should be no more than `3`
@@ -65,7 +79,7 @@ where
     pub fn render(
         &self,
         view: &View,
-        options: Gaussian3dRendererOptions,
+        options: &Gaussian3dRendererOptions,
     ) -> RenderOutput<B> {
         let input = forward::RenderInput {
             colors_sh: self.colors_sh().into_primitive().tensor(),
@@ -91,7 +105,7 @@ where
     pub fn render(
         &self,
         view: &View,
-        options: Gaussian3dRendererOptions,
+        options: &Gaussian3dRendererOptions,
     ) -> RenderOutputAutodiff<B> {
         let colors_sh = self.colors_sh().into_primitive().tensor();
         let opacities = self.opacities().into_primitive().tensor();
@@ -279,12 +293,5 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         if let Some(node) = &ops.parents[4] {
             grads.register::<B, 2>(node.id, output.scalings_grad);
         }
-    }
-}
-
-impl Default for Gaussian3dRendererOptions {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
     }
 }

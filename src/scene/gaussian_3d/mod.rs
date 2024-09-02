@@ -208,7 +208,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &View,
-        options: render::Gaussian3dRendererOptions,
+        options: &render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }
@@ -228,7 +228,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
     fn render_forward(
         input: render::forward::RenderInput<Wgpu>,
         view: &View,
-        options: render::Gaussian3dRendererOptions,
+        options: &render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
         render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
     }

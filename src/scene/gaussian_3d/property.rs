@@ -6,8 +6,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 16, 3]`
     pub fn colors_sh(&self) -> Tensor<B, 3> {
-        let colors_sh = self.colors_sh.val();
-        colors_sh
+        self.colors_sh.val()
     }
 
     /// Making for [Gaussian3dScene::colors_sh]
@@ -69,8 +68,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 3]`
     pub fn positions(&self) -> Tensor<B, 2> {
-        let positions = self.positions.val();
-        positions
+        self.positions.val()
     }
 
     /// Making for [Gaussian3dScene::positions]

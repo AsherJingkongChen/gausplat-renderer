@@ -17,7 +17,7 @@ use rayon::{
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
     view: &View,
-    options: Gaussian3dRendererOptions,
+    options: &Gaussian3dRendererOptions,
 ) -> forward::RenderOutput<Wgpu> {
     // Specifying the parameters
 
@@ -224,7 +224,7 @@ pub fn render_gaussian_3d_scene(
 
         let mut count = *counts.last().unwrap_or(&0);
         let offsets = counts
-            .into_iter()
+            .iter()
             .scan(0, |state, count| {
                 let offset = *state;
                 *state += count;
@@ -447,6 +447,7 @@ pub fn render_gaussian_3d_scene(
         state: backward::RenderInput {
             colors_rgb_3d,
             colors_sh,
+            colors_sh_degree_max,
             conics,
             covariances_3d,
             depths,
@@ -456,7 +457,6 @@ pub fn render_gaussian_3d_scene(
             image_size_y,
             is_colors_rgb_3d_not_clamped,
             opacities_3d,
-            options,
             point_indexes,
             point_rendered_counts,
             positions_2d,
