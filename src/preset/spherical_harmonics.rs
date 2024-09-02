@@ -1,6 +1,8 @@
 use lazy_static::lazy_static;
 use std::f64::consts::PI;
 
+pub const SH_DEGREE_MAX: u32 = 3;
+
 lazy_static! {
     /// The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
     ///
