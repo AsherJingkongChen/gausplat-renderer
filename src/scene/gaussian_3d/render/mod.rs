@@ -9,6 +9,7 @@ use burn::{
         checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
         grads::Gradients,
         ops::{Backward, Ops, OpsKind},
+        NodeID,
     },
     tensor::TensorPrimitive,
 };
@@ -30,19 +31,20 @@ pub trait Gaussian3dRenderer<B: Backend>:
 }
 
 /// ## Details
-/// 
-/// The values of `Gaussian3dRendererOptions::default()`:
+///
+/// - The value of `Gaussian3dRendererOptions::default()`:
 /// ```ignore
-/// Gaussian3dRendererOptions {
-///     colors_sh_degree_max: 0,
-/// }
+///     Gaussian3dRendererOptions {
+///         colors_sh_degree_max: 0,
+///     }
 /// ```
-/// 
-/// The values of `Gaussian3dRendererOptions::new()`:
+///
+/// - The value of `Gaussian3dRendererOptions::new()`:
 /// ```ignore
-/// Gaussian3dRendererOptions {
-///    colors_sh_degree_max: 3,
-/// }
+///     Gaussian3dRendererOptions {
+///        colors_sh_degree_max: 3,
+///     }
+/// ```
 #[derive(Config, Debug, Default)]
 pub struct Gaussian3dRendererOptions {
     #[config(default = "3")]
@@ -60,8 +62,20 @@ pub struct RenderOutput<B: Backend> {
 pub struct RenderOutputAutodiff<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<Autodiff<B>, 3>,
-    // /// `[P]`
-    // pub positions_2d_grad_norm: Tensor<B, 1>,
+
+    /// The shape of gradient is `[P]`
+    ///
+    /// ## Usage
+    ///
+    /// ```ignore
+    /// use burn::backend::autodiff::grads::Gradients;
+    ///
+    /// let mut grads: Gradients = todo!();
+    /// let positions_2d_grad_norm =
+    ///     positions_2d_grad_norm_ref.grad_remove(&mut grads);
+    /// ```
+    pub positions_2d_grad_norm_ref: Tensor<Autodiff<B>, 1>,
+
     /// `[P]`
     pub radii: Tensor<B, 1, Int>,
 }
@@ -70,6 +84,12 @@ pub struct RenderOutputAutodiff<B: Backend> {
 struct Gaussian3dRendererBackward<B: Backend, R: Gaussian3dRenderer<B>> {
     _b: marker::PhantomData<B>,
     _r: marker::PhantomData<R>,
+}
+
+#[derive(Clone, Debug)]
+struct Gaussian3dRendererBackwardState<B: Backend> {
+    pub inner: backward::RenderInput<B>,
+    pub positions_2d_grad_norm_ref_id: NodeID,
 }
 
 impl<B: Backend> Gaussian3dScene<B>
@@ -107,11 +127,24 @@ where
         view: &View,
         options: &Gaussian3dRendererOptions,
     ) -> RenderOutputAutodiff<B> {
-        let colors_sh = self.colors_sh().into_primitive().tensor();
+        let (colors_sh, device) = {
+            let tensor = self.colors_sh();
+            let device = tensor.device();
+            (tensor.into_primitive().tensor(), device)
+        };
         let opacities = self.opacities().into_primitive().tensor();
         let positions = self.positions().into_primitive().tensor();
         let rotations = self.rotations().into_primitive().tensor();
         let scalings = self.scalings().into_primitive().tensor();
+
+        let positions_2d_grad_norm_ref =
+            Tensor::<Autodiff<B>, 1>::empty([0], &device).require_grad();
+        let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
+            .to_owned()
+            .into_primitive()
+            .tensor()
+            .node
+            .id;
 
         let input = forward::RenderInput {
             colors_sh: colors_sh.primitive,
@@ -123,23 +156,25 @@ where
 
         let output = Self::render_forward(input, view, options);
 
-        let nodes = [
-            colors_sh.node,
-            opacities.node,
-            positions.node,
-            rotations.node,
-            scalings.node,
-        ];
-
         let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
             match Gaussian3dRendererBackward::<B, Self>::default()
-                .prepare::<NoCheckpointing>(nodes)
+                .prepare::<NoCheckpointing>([
+                    colors_sh.node,
+                    opacities.node,
+                    positions.node,
+                    rotations.node,
+                    scalings.node,
+                ])
                 .compute_bound()
                 .stateful()
             {
                 OpsKind::Tracked(prep) => {
-                    prep.finish(output.state, output.colors_rgb_2d)
+                    let state = Gaussian3dRendererBackwardState {
+                        inner: output.state,
+                        positions_2d_grad_norm_ref_id,
+                    };
+                    prep.finish(state, output.colors_rgb_2d)
                 },
                 OpsKind::UnTracked(prep) => prep.finish(output.colors_rgb_2d),
             },
@@ -147,6 +182,7 @@ where
 
         RenderOutputAutodiff {
             colors_rgb_2d,
+            positions_2d_grad_norm_ref,
             radii,
         }
     }
@@ -155,7 +191,7 @@ where
 impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
     for Gaussian3dRendererBackward<B, R>
 {
-    type State = backward::RenderInput<B>;
+    type State = Gaussian3dRendererBackwardState<B>;
 
     fn backward(
         self,
@@ -197,7 +233,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             );
         }
 
-        let output = R::render_backward(ops.state, colors_rgb_2d_grad);
+        let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
 
         #[cfg(debug_assertions)]
         {
@@ -293,5 +329,10 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         if let Some(node) = &ops.parents[4] {
             grads.register::<B, 2>(node.id, output.scalings_grad);
         }
+
+        grads.register::<B, 1>(
+            ops.state.positions_2d_grad_norm_ref_id,
+            output.positions_2d_grad_norm,
+        );
     }
 }
