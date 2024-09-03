@@ -30,22 +30,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     ) -> backward::RenderOutput<B>;
 }
 
-/// ## Details
-///
-/// - The value of `Gaussian3dRendererOptions::default()`:
-/// ```ignore
-///     Gaussian3dRendererOptions {
-///         colors_sh_degree_max: 0,
-///     }
-/// ```
-///
-/// - The value of `Gaussian3dRendererOptions::new()`:
-/// ```ignore
-///     Gaussian3dRendererOptions {
-///        colors_sh_degree_max: 3,
-///     }
-/// ```
-#[derive(Config, Debug, Default)]
+#[derive(Config, Debug)]
 pub struct Gaussian3dRendererOptions {
     #[config(default = "SH_DEGREE_MAX")]
     /// It should be no more than [`SH_DEGREE_MAX`]
@@ -334,5 +319,12 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             ops.state.positions_2d_grad_norm_ref_id,
             output.positions_2d_grad_norm,
         );
+    }
+}
+
+impl Default for Gaussian3dRendererOptions {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
     }
 }
