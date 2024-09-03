@@ -263,7 +263,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
 impl<B: Backend> Default for Gaussian3dScene<B> {
     #[inline]
     fn default() -> Self {
-        Self::init(&Default::default(), vec![Default::default()])
+        Self::init(&Default::default(), vec![Default::default(); 16])
     }
 }
 

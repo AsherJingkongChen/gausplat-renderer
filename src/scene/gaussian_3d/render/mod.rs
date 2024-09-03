@@ -16,7 +16,7 @@ use burn::{
 use std::{fmt, marker};
 
 pub trait Gaussian3dRenderer<B: Backend>:
-    'static + Sized + fmt::Debug + marker::Send
+    'static + Send + Sized + fmt::Debug
 {
     fn render_forward(
         input: forward::RenderInput<B>,
@@ -37,13 +37,13 @@ pub struct Gaussian3dRendererOptions {
     pub colors_sh_degree_max: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RenderOutput<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RenderOutputAutodiff<B: Backend> {
     /// `[I_Y, I_X, 3]`
     pub colors_rgb_2d: Tensor<Autodiff<B>, 3>,
@@ -67,8 +67,7 @@ pub struct RenderOutputAutodiff<B: Backend> {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Gaussian3dRendererBackward<B: Backend, R: Gaussian3dRenderer<B>> {
-    _b: marker::PhantomData<B>,
-    _r: marker::PhantomData<R>,
+    __: marker::PhantomData<(B, R)>,
 }
 
 #[derive(Clone, Debug)]
@@ -123,7 +122,7 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([0], &device).require_grad();
+            Tensor::<Autodiff<B>, 1>::empty([0], &device);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -326,5 +325,36 @@ impl Default for Gaussian3dRendererOptions {
     #[inline]
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<B: Backend> fmt::Debug for RenderOutput<B> {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        f.debug_struct("RenderOutput")
+            .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
+            .finish()
+    }
+}
+
+impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        let radii_dims = self.radii.dims();
+        let point_count = radii_dims[0];
+        let positions_2d_grad_norm_dims = [point_count];
+
+        f.debug_struct("RenderOutput")
+            .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
+            .field(
+                "positions_2d_grad_norm.dims()",
+                &positions_2d_grad_norm_dims,
+            )
+            .field("radii.dims()", &radii_dims)
+            .finish()
     }
 }
