@@ -33,7 +33,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 #[derive(Config, Debug)]
 pub struct Gaussian3dRendererOptions {
     #[config(default = "SH_DEGREE_MAX")]
-    /// It should be no more than [`SH_DEGREE_MAX`]
+    /// It should be no more than [`SH_DEGREE_MAX`].
     pub colors_sh_degree_max: u32,
 }
 
@@ -56,6 +56,7 @@ pub struct RenderOutputAutodiff<B: Backend> {
     /// use burn::backend::autodiff::grads::Gradients;
     ///
     /// let mut grads: Gradients = todo!();
+    /// 
     /// let positions_2d_grad_norm =
     ///     positions_2d_grad_norm_ref.grad_remove(&mut grads);
     /// ```

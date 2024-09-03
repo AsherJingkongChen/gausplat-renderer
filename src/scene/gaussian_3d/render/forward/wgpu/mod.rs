@@ -328,8 +328,9 @@ pub fn render_gaussian_3d_scene(
 
         if !point_tile_indexes.is_empty() {
             let tile_index_first =
-                *point_tile_indexes.first().unwrap() as usize;
-            let tile_index_last = *point_tile_indexes.last().unwrap() as usize;
+                *point_tile_indexes.first().expect("Unreachable") as usize;
+            let tile_index_last =
+                *point_tile_indexes.last().expect("Unreachable") as usize;
             ranges = ranges.slice_assign(
                 [tile_index_first..tile_index_first + 1, 0..1],
                 Tensor::from_data([[0]], device),

@@ -100,7 +100,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         let rotations = self.rotations.val();
         let norms = rotations
             .to_owned()
-            .mul(rotations.to_owned())
+            .powf_scalar(2.0)
             .sum_dim(1)
             .sqrt();
         rotations.div(norms)

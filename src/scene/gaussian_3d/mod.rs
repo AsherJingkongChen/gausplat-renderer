@@ -160,7 +160,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 let samples = StdRng::seed_from_u64(SEED)
                     .sample_iter(
                         rand_distr::LogNormal::new(0.0, std::f32::consts::E)
-                            .expect("unreachable"),
+                            .expect("Unreachable"),
                     )
                     .take(point_count)
                     .map(|mut sample| {
