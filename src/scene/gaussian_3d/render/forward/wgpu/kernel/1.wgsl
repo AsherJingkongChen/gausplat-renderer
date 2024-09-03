@@ -102,7 +102,6 @@ var<storage, read_write> view_directions: array<vec3<f32>>;
 @group(0) @binding(23)
 var<storage, read_write> view_offsets: array<vec3<f32>>;
 
-const EPSILON: f32 = 1.1920929e-7;
 const SH_C_0: array<f32, 1> = array<f32, 1>(
     0.2820948,
 );
@@ -151,7 +150,7 @@ fn main(
     let view_rotation = view_transform.rotation;
     let view_translation = view_transform.translation;
     let position_3d_in_view = view_rotation * position_3d + view_translation;
-    let depth = position_3d_in_view.z + EPSILON;
+    let depth = position_3d_in_view.z;
 
     // Performing viewing-frustum culling
 
