@@ -58,7 +58,7 @@ pub struct RenderInput<B: Backend> {
     /// `[P, 3]`
     pub view_offsets: B::FloatTensorPrimitive<2>,
     /// `[3 (+ 1), 3]`
-    pub view_transform_rotation: B::FloatTensorPrimitive<2>,
+    pub view_rotation: B::FloatTensorPrimitive<2>,
 }
 
 #[derive(Clone, Debug)]

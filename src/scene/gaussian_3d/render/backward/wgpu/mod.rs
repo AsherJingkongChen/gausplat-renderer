@@ -163,7 +163,7 @@ pub fn render_gaussian_3d_scene(
             state.transforms_2d.handle.binding(),
             state.view_directions.handle.binding(),
             state.view_offsets.handle.binding(),
-            state.view_transform_rotation.handle.binding(),
+            state.view_rotation.handle.binding(),
             colors_sh_grad.handle.to_owned().binding(),
             positions_2d_grad_norm.handle.to_owned().binding(),
             positions_3d_grad.handle.to_owned().binding(),

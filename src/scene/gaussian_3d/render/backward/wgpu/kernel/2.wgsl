@@ -68,7 +68,7 @@ var<storage, read_write> view_directions: array<vec3<f32>>;
 var<storage, read_write> view_offsets: array<vec3<f32>>;
 // [3 (+ 1), 3]
 @group(0) @binding(19)
-var<storage, read_write> view_transform_rotation: mat3x3<f32>;
+var<storage, read_write> view_rotation: mat3x3<f32>;
 
 // [P, 16, 3]
 @group(0) @binding(20)
@@ -339,7 +339,7 @@ fn main(
     // ∂L/∂T[2, 3]
     let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
     // ∂L/∂J[2, 3]
-    let projection_affine_grad = transform_2d_grad * transpose(view_transform_rotation);
+    let projection_affine_grad = transform_2d_grad * transpose(view_rotation);
 
     // Computing the gradients
     //
@@ -387,7 +387,7 @@ fn main(
     // ∂L/∂Pw[3, 1] = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
     // (∂L/∂Pw)^t[1, 3] = (∂L/∂Pv)^t[1, 3] * Rv[3, 3]
 
-    position_3d_grad += position_3d_in_view_grad * view_transform_rotation;
+    position_3d_grad += position_3d_in_view_grad * view_rotation;
 
     // Computing the gradients
     //
@@ -494,7 +494,7 @@ fn main(
     // ∂L/∂Pw[1, 3]
     position_3d_grad +=
         position_2d_grad * position_2d_to_position_3d_in_view_grad *
-        view_transform_rotation;
+        view_rotation;
 
     // Computing the norm of 2D positions gradient
 

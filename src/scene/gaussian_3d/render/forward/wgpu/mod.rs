@@ -474,7 +474,7 @@ pub fn render_gaussian_3d_scene(
             transmittances,
             view_directions,
             view_offsets,
-            view_transform_rotation: view_transform,
+            view_rotation: view_transform,
         },
     }
 }
