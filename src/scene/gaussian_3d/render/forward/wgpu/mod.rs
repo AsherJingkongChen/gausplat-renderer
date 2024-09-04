@@ -5,7 +5,10 @@ pub use super::*;
 
 use crate::preset::render::*;
 use backend::Wgpu;
-use burn::backend::wgpu::{into_contiguous, SourceKernel};
+use burn::{
+    backend::wgpu::{into_contiguous, SourceKernel},
+    tensor::Shape,
+};
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use kernel::*;
 use point::*;
@@ -34,9 +37,9 @@ pub fn render_gaussian_3d_scene(
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
     let filter_low_pass = FILTER_LOW_PASS as f32;
     // I_x
-    let image_size_x = view.image_width as usize;
+    let image_size_x = view.image_width;
     // I_y
-    let image_size_y = view.image_height as usize;
+    let image_size_y = view.image_height;
     let focal_length_x =
         (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     let focal_length_y =
@@ -50,11 +53,9 @@ pub fn render_gaussian_3d_scene(
     // T_y
     let tile_size_y = GROUP_SIZE_Y;
     // I_x / T_x
-    let tile_count_x = (image_size_x as u32 + tile_size_x - 1) / tile_size_x;
+    let tile_count_x = (image_size_x + tile_size_x - 1) / tile_size_x;
     // I_y / T_y
-    let tile_count_y = (image_size_y as u32 + tile_size_y - 1) / tile_size_y;
-    // (I_y / T_y) * (I_x / T_x)
-    let tile_count = (tile_count_x * tile_count_y) as usize;
+    let tile_count_y = (image_size_y + tile_size_y - 1) / tile_size_y;
     let view_bound_x =
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     let view_bound_y =
@@ -73,8 +74,8 @@ pub fn render_gaussian_3d_scene(
         filter_low_pass,
         focal_length_x,
         focal_length_y,
-        image_size_x: image_size_x as u32,
-        image_size_y: image_size_y as u32,
+        image_size_x,
+        image_size_y,
         image_size_half_x,
         image_size_half_y,
         point_count: point_count as u32,
@@ -234,9 +235,12 @@ pub fn render_gaussian_3d_scene(
         count += *offsets.last().unwrap_or(&0);
 
         (
-            count as usize,
-            Tensor::<Wgpu, 1, Int>::from_data(offsets.as_slice(), device)
-                .into_primitive(),
+            count,
+            Tensor::<Wgpu, 1, Int>::from_data(
+                TensorData::new(offsets, [point_count]),
+                device,
+            )
+            .into_primitive(),
         )
     };
 
@@ -256,7 +260,7 @@ pub fn render_gaussian_3d_scene(
         tile_count_x,
     }));
     let point_infos =
-        Tensor::<Wgpu, 2, Int>::empty([tile_touched_count, 3], device)
+        Tensor::<Wgpu, 2, Int>::empty([tile_touched_count as usize, 3], device)
             .into_primitive();
 
     client.execute(
@@ -319,35 +323,33 @@ pub fn render_gaussian_3d_scene(
 
     // Performing the forward pass #5
 
-    let arguments = client.create(bytes_of(&Kernel5Arguments {
-        tile_touched_count: tile_touched_count as u32,
-    }));
+    let arguments =
+        client.create(bytes_of(&Kernel5Arguments { tile_touched_count }));
     // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = {
-        let mut ranges = Tensor::<Wgpu, 2, Int>::zeros([tile_count, 2], device);
+        let ranges_shape =
+            Shape::from([tile_count_y as usize, tile_count_x as usize, 2]);
+        let mut ranges = vec![0; ranges_shape.num_elements()]; // Tensor::<Wgpu, 2, Int>::empty([tile_count, 2], device);
 
         if !point_tile_indexes.is_empty() {
             // let tile_index_first =
             //     *point_tile_indexes.first().expect("Unreachable") as usize;
             let tile_index_last =
                 *point_tile_indexes.last().expect("Unreachable") as usize;
-            // ranges = ranges.slice_assign(
-            //     [tile_index_first..tile_index_first + 1, 0..1],
-            //     Tensor::from_data([[0]], device),
-            // );
-            ranges = ranges.slice_assign(
-                [tile_index_last..tile_index_last + 1, 1..2],
-                Tensor::from_data([[tile_touched_count as u32]], device),
-            );
+            // ranges[tile_index_first * 2 + 0] = 0;
+            ranges[tile_index_last * 2 + 1] = tile_touched_count;
         }
 
-        ranges
-            .reshape([tile_count_y as i32, tile_count_x as i32, 2])
-            .into_primitive()
+        Tensor::<Wgpu, 3, Int>::from_data(
+            TensorData::new(ranges, ranges_shape),
+            device,
+        )
+        .into_primitive()
     };
+
     // [T]
     let point_tile_indexes = Tensor::<Wgpu, 1, Int>::from_data(
-        point_tile_indexes.as_slice(),
+        TensorData::new(point_tile_indexes, [tile_touched_count as usize]),
         device,
     )
     .into_primitive();
@@ -362,7 +364,7 @@ pub fn render_gaussian_3d_scene(
             },
         )),
         cubecl::CubeCount::Static(
-            (tile_touched_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
+            (tile_touched_count + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
         ),
@@ -385,24 +387,25 @@ pub fn render_gaussian_3d_scene(
     // Performing the forward pass #6
 
     let arguments = client.create(bytes_of(&Kernel6Arguments {
-        image_size_x: image_size_x as u32,
-        image_size_y: image_size_y as u32,
+        image_size_x,
+        image_size_y,
     }));
     // [T]
-    let point_indexes =
-        Tensor::<Wgpu, 1, Int>::from_data(point_indexes.as_slice(), device)
-            .into_primitive();
+    let point_indexes = Tensor::<Wgpu, 1, Int>::from_data(
+        TensorData::new(point_indexes, [tile_touched_count as usize]),
+        device,
+    )
+    .into_primitive();
+    let image_size = [image_size_y as usize, image_size_x as usize];
     let colors_rgb_2d =
-        Tensor::<Wgpu, 3>::empty([image_size_y, image_size_x, 3], device)
+        Tensor::<Wgpu, 3>::empty([image_size[0], image_size[1], 3], device)
             .into_primitive()
             .tensor();
     let point_rendered_counts =
-        Tensor::<Wgpu, 2, Int>::empty([image_size_y, image_size_x], device)
-            .into_primitive();
-    let transmittances =
-        Tensor::<Wgpu, 2>::empty([image_size_y, image_size_x], device)
-            .into_primitive()
-            .tensor();
+        Tensor::<Wgpu, 2, Int>::empty(image_size, device).into_primitive();
+    let transmittances = Tensor::<Wgpu, 2>::empty(image_size, device)
+        .into_primitive()
+        .tensor();
 
     client.execute(
         Box::new(SourceKernel::new(

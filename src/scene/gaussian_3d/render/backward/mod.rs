@@ -18,9 +18,9 @@ pub struct RenderInput<B: Backend> {
     pub focal_length_x: f64,
     pub focal_length_y: f64,
     /// `I_x`
-    pub image_size_x: usize,
+    pub image_size_x: u32,
     /// `I_y`
-    pub image_size_y: usize,
+    pub image_size_y: u32,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`

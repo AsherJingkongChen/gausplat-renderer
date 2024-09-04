@@ -41,15 +41,15 @@ pub fn render_gaussian_3d_scene(
     // T_y
     let tile_size_y = GROUP_SIZE_Y;
     // I_x / T_x
-    let tile_count_x = (image_size_x as u32 + tile_size_x - 1) / tile_size_x;
+    let tile_count_x = (image_size_x + tile_size_x - 1) / tile_size_x;
     // I_y / T_y
-    let tile_count_y = (image_size_y as u32 + tile_size_y - 1) / tile_size_y;
+    let tile_count_y = (image_size_y + tile_size_y - 1) / tile_size_y;
 
     // Performing the backward pass #1
 
     let arguments = client.create(bytes_of(&Kernel1Arguments {
-        image_size_x: image_size_x as u32,
-        image_size_y: image_size_y as u32,
+        image_size_x,
+        image_size_y,
     }));
     let colors_rgb_3d_grad =
         Tensor::<Wgpu, 2>::zeros([point_count, 3 + 1], device)
