@@ -17,9 +17,9 @@ pub struct RenderInput<B: Backend> {
     pub depths: B::FloatTensorPrimitive<1>,
     pub focal_length_x: f64,
     pub focal_length_y: f64,
-    /// `I_X`
+    /// `I_x`
     pub image_size_x: usize,
-    /// `I_Y`
+    /// `I_y`
     pub image_size_y: usize,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
@@ -27,7 +27,7 @@ pub struct RenderInput<B: Backend> {
     pub opacities_3d: B::FloatTensorPrimitive<2>,
     /// `[T]`
     pub point_indexes: B::IntTensorPrimitive<1>,
-    /// `[I_Y, I_X]`
+    /// `[I_y, I_x]`
     pub point_rendered_counts: B::IntTensorPrimitive<2>,
     /// `[P, 2]`
     pub positions_2d: B::FloatTensorPrimitive<2>,
@@ -47,11 +47,11 @@ pub struct RenderInput<B: Backend> {
     pub rotation_scalings: B::FloatTensorPrimitive<3>,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive<2>,
-    /// `[I_Y / T_Y, I_X / T_X, 2]`
+    /// `[I_y / T_y, I_x / T_x, 2]`
     pub tile_point_ranges: B::IntTensorPrimitive<3>,
     /// `[P, 2, 3]`
     pub transforms_2d: B::FloatTensorPrimitive<3>,
-    /// `[I_Y, I_X]`
+    /// `[I_y, I_x]`
     pub transmittances: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`
     pub view_directions: B::FloatTensorPrimitive<2>,

@@ -5,11 +5,11 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [T] (0 ~ (I_X / T_X) * (I_Y / T_Y))
+// [T] (0 ~ (I_y / T_y) * (I_x / T_x))
 @group(0) @binding(1)
 var<storage, read_write> point_tile_indexes: array<u32>;
 
-// [(I_X / T_X) * (I_Y / T_Y), 2]
+// [(I_y / T_y) * (I_x / T_x), 2]
 @group(0) @binding(2)
 var<storage, read_write> tile_point_ranges: array<u32>;
 

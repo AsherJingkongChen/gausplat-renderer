@@ -33,27 +33,27 @@ pub fn render_gaussian_3d_scene(
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
     let field_of_view_y_half_tan = (view.field_of_view_y / 2.0).tan();
     let filter_low_pass = FILTER_LOW_PASS as f32;
-    // I_X
+    // I_x
     let image_size_x = view.image_width as usize;
-    // I_Y
+    // I_y
     let image_size_y = view.image_height as usize;
     let focal_length_x =
         (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     let focal_length_y =
         (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
-    // I_X / 2.0
+    // I_x / 2.0
     let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
-    // I_Y / 2.0
+    // I_y / 2.0
     let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
-    // T_X
+    // T_x
     let tile_size_x = GROUP_SIZE_X;
-    // T_Y
+    // T_y
     let tile_size_y = GROUP_SIZE_Y;
-    // I_X / T_X
+    // I_x / T_x
     let tile_count_x = (image_size_x as u32 + tile_size_x - 1) / tile_size_x;
-    // I_Y / T_Y
+    // I_y / T_y
     let tile_count_y = (image_size_y as u32 + tile_size_y - 1) / tile_size_y;
-    // (I_X / T_X) * (I_Y / T_Y)
+    // (I_y / T_y) * (I_x / T_x)
     let tile_count = (tile_count_x * tile_count_y) as usize;
     let view_bound_x =
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
@@ -322,19 +322,19 @@ pub fn render_gaussian_3d_scene(
     let arguments = client.create(bytes_of(&Kernel5Arguments {
         tile_touched_count: tile_touched_count as u32,
     }));
-    // [I_Y / T_Y, I_X / T_X, 2]
+    // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = {
         let mut ranges = Tensor::<Wgpu, 2, Int>::zeros([tile_count, 2], device);
 
         if !point_tile_indexes.is_empty() {
-            let tile_index_first =
-                *point_tile_indexes.first().expect("Unreachable") as usize;
+            // let tile_index_first =
+            //     *point_tile_indexes.first().expect("Unreachable") as usize;
             let tile_index_last =
                 *point_tile_indexes.last().expect("Unreachable") as usize;
-            ranges = ranges.slice_assign(
-                [tile_index_first..tile_index_first + 1, 0..1],
-                Tensor::from_data([[0]], device),
-            );
+            // ranges = ranges.slice_assign(
+            //     [tile_index_first..tile_index_first + 1, 0..1],
+            //     Tensor::from_data([[0]], device),
+            // );
             ranges = ranges.slice_assign(
                 [tile_index_last..tile_index_last + 1, 1..2],
                 Tensor::from_data([[tile_touched_count as u32]], device),

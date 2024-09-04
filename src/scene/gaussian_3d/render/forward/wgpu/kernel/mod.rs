@@ -13,23 +13,23 @@ pub struct Kernel1Arguments {
     pub filter_low_pass: f32,
     pub focal_length_x: f32,
     pub focal_length_y: f32,
-    /// `I_X`
+    /// `I_x`
     pub image_size_x: u32,
-    /// `I_Y`
+    /// `I_y`
     pub image_size_y: u32,
-    /// `I_X * 0.5 - 0.5`
+    /// `I_x * 0.5 - 0.5`
     pub image_size_half_x: f32,
-    /// `I_Y * 0.5 - 0.5`
+    /// `I_y * 0.5 - 0.5`
     pub image_size_half_y: f32,
     /// `P`
     pub point_count: u32,
-    /// `I_X / T_X`
+    /// `I_x / T_x`
     pub tile_count_x: u32,
-    /// `I_Y / T_Y`
+    /// `I_y / T_y`
     pub tile_count_y: u32,
-    /// `T_X`
+    /// `T_x`
     pub tile_size_x: u32,
-    /// `T_Y`
+    /// `T_y`
     pub tile_size_y: u32,
     pub view_bound_x: f32,
     pub view_bound_y: f32,
@@ -40,7 +40,7 @@ pub struct Kernel1Arguments {
 pub struct Kernel3Arguments {
     /// `P`
     pub point_count: u32,
-    /// `I_X / T_X`
+    /// `I_x / T_x`
     pub tile_count_x: u32,
 }
 
@@ -54,9 +54,9 @@ pub struct Kernel5Arguments {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Kernel6Arguments {
-    /// `I_X`
+    /// `I_x`
     pub image_size_x: u32,
-    /// `I_Y`
+    /// `I_y`
     pub image_size_y: u32,
 }
 

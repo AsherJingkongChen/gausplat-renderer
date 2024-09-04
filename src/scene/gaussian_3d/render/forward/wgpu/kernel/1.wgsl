@@ -3,23 +3,23 @@ struct Arguments {
     filter_low_pass: f32,
     focal_length_x: f32,
     focal_length_y: f32,
-    // I_X
+    // I_x
     image_size_x: u32,
-    // I_Y
+    // I_y
     image_size_y: u32,
-    // I_X / 2
+    // I_x / 2
     image_size_half_x: f32,
-    // I_Y / 2
+    // I_y / 2
     image_size_half_y: f32,
     // P
     point_count: u32,
-    // I_X / T_X
+    // I_x / T_x
     tile_count_x: u32,
-    // I_Y / T_Y
+    // I_y / T_y
     tile_count_y: u32,
-    // T_X
+    // T_x
     tile_size_x: u32,
-    // T_Y
+    // T_y
     tile_size_y: u32,
     view_bound_x: f32,
     view_bound_y: f32,

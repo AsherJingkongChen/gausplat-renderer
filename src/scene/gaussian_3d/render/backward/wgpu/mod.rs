@@ -10,7 +10,7 @@ use kernel::*;
 
 pub fn render_gaussian_3d_scene(
     state: backward::RenderInput<Wgpu>,
-    // [I_Y, I_X, 3]
+    // [I_y, I_x, 3]
     colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
 ) -> backward::RenderOutput<Wgpu> {
     #[cfg(debug_assertions)]
@@ -26,23 +26,23 @@ pub fn render_gaussian_3d_scene(
     let device = &state.colors_sh.device;
     let focal_length_x = state.focal_length_x as f32;
     let focal_length_y = state.focal_length_y as f32;
-    // I_X
+    // I_x
     let image_size_x = state.image_size_x;
-    // I_Y
+    // I_y
     let image_size_y = state.image_size_y;
-    // I_X / 2.0
+    // I_x / 2.0
     let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
-    // I_Y / 2.0
+    // I_y / 2.0
     let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
     // P
     let point_count = state.colors_sh.shape.dims[0];
-    // T_X
+    // T_x
     let tile_size_x = GROUP_SIZE_X;
-    // T_Y
+    // T_y
     let tile_size_y = GROUP_SIZE_Y;
-    // I_X / T_X
+    // I_x / T_x
     let tile_count_x = (image_size_x as u32 + tile_size_x - 1) / tile_size_x;
-    // I_Y / T_Y
+    // I_y / T_y
     let tile_count_y = (image_size_y as u32 + tile_size_y - 1) / tile_size_y;
 
     // Performing the backward pass #1

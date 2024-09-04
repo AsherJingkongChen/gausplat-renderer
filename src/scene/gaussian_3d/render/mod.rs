@@ -39,13 +39,13 @@ pub struct Gaussian3dRendererOptions {
 
 #[derive(Clone)]
 pub struct RenderOutput<B: Backend> {
-    /// `[I_Y, I_X, 3]`
+    /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
 }
 
 #[derive(Clone)]
 pub struct RenderOutputAutodiff<B: Backend> {
-    /// `[I_Y, I_X, 3]`
+    /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: Tensor<Autodiff<B>, 3>,
 
     /// The shape of gradient is `[P]`
@@ -56,7 +56,7 @@ pub struct RenderOutputAutodiff<B: Backend> {
     /// use burn::backend::autodiff::grads::Gradients;
     ///
     /// let mut grads: Gradients = todo!();
-    /// 
+    ///
     /// let positions_2d_grad_norm =
     ///     positions_2d_grad_norm_ref.grad_remove(&mut grads);
     /// ```
@@ -113,9 +113,9 @@ where
         options: &Gaussian3dRendererOptions,
     ) -> RenderOutputAutodiff<B> {
         let (colors_sh, device) = {
-            let tensor = self.colors_sh();
-            let device = tensor.device();
-            (tensor.into_primitive().tensor(), device)
+            let values = self.colors_sh();
+            let device = values.device();
+            (values.into_primitive().tensor(), device)
         };
         let opacities = self.opacities().into_primitive().tensor();
         let positions = self.positions().into_primitive().tensor();
@@ -206,6 +206,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             let gradient_means = BTreeMap::from([(
                 "colors_rgb_2d_grad.mean",
                 colors_rgb_2d_grad
+                    .to_owned()
                     .mean_dim(0)
                     .mean_dim(1)
                     .into_data()
@@ -216,6 +217,20 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
                 target: "gausplat_renderer::scene",
                 "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
             );
+
+            let nan_count_colors_rgb_2d =
+                colors_rgb_2d_grad.is_nan().int().sum();
+            if nan_count_colors_rgb_2d
+                .to_owned()
+                .greater_elem(100)
+                .into_scalar()
+            {
+                log::warn!(
+                    target: "gausplat_renderer::scene",
+                    "colors_rgb_2d_grad.nans ({})",
+                    nan_count_colors_rgb_2d.into_scalar(),
+                );
+            }
         }
 
         let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);

@@ -7,9 +7,9 @@ pub struct Kernel2WgslSource;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Kernel1Arguments {
-    /// `I_X`
+    /// `I_x`
     pub image_size_x: u32,
-    /// `I_Y`
+    /// `I_y`
     pub image_size_y: u32,
 }
 
@@ -19,9 +19,9 @@ pub struct Kernel2Arguments {
     pub colors_sh_degree_max: u32,
     pub focal_length_x: f32,
     pub focal_length_y: f32,
-    /// `I_X / 2`
+    /// `I_x / 2`
     pub image_size_half_x: f32,
-    /// `I_Y / 2`
+    /// `I_y / 2`
     pub image_size_half_y: f32,
     /// `P`
     pub point_count: u32,

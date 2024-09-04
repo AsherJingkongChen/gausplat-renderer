@@ -18,7 +18,7 @@ pub struct RenderInput<B: Backend> {
 
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
-    /// `[I_Y, I_X, 3]`
+    /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: B::FloatTensorPrimitive<3>,
     pub state: backward::RenderInput<B>,
 }

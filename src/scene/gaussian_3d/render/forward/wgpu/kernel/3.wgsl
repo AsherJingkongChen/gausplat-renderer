@@ -1,7 +1,7 @@
 struct Arguments {
     // P
     point_count: u32,
-    // I_X / T_X
+    // I_x / T_x
     tile_count_x: u32,
 }
 struct PointInfo {
@@ -12,7 +12,7 @@ struct PointInfo {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [P] (0.2 ~ )
+// [P]
 @group(0) @binding(1)
 var<storage, read_write> depths: array<f32>;
 // [P]

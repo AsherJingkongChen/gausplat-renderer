@@ -2,9 +2,9 @@ struct Arguments {
     colors_sh_degree_max: u32,
     focal_length_x: f32,
     focal_length_y: f32,
-    // I_X / 2
+    // I_x / 2
     image_size_half_x: f32,
-    // I_Y / 2
+    // I_y / 2
     image_size_half_y: f32,
     // P
     point_count: u32,
