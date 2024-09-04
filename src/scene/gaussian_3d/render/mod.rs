@@ -123,7 +123,7 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([0], &device);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -154,13 +154,13 @@ where
                 .compute_bound()
                 .stateful()
             {
-                OpsKind::Tracked(prep) => {
-                    let state = Gaussian3dRendererBackwardState {
+                OpsKind::Tracked(prep) => prep.finish(
+                    Gaussian3dRendererBackwardState {
                         inner: output.state,
                         positions_2d_grad_norm_ref_id,
-                    };
-                    prep.finish(state, output.colors_rgb_2d)
-                },
+                    },
+                    output.colors_rgb_2d,
+                ),
                 OpsKind::UnTracked(prep) => prep.finish(output.colors_rgb_2d),
             },
         ));
@@ -349,7 +349,7 @@ impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
         let point_count = radii_dims[0];
         let positions_2d_grad_norm_dims = [point_count];
 
-        f.debug_struct("RenderOutput")
+        f.debug_struct("RenderOutputAutodiff")
             .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
             .field(
                 "positions_2d_grad_norm.dims()",

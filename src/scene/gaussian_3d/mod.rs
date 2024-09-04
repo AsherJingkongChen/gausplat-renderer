@@ -54,7 +54,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 16, 3]
         let colors_sh = Param::uninitialized(
-            Default::default(),
+            "Gaussian3dScene::colors_sh".into(),
             move |device, is_require_grad| {
                 let mut colors_sh = Tensor::zeros([point_count, 16, 3], device);
                 let colors_rgb = Tensor::from_data(
@@ -84,7 +84,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 1]
         let opacities = Param::uninitialized(
-            Default::default(),
+            "Gaussian3dScene::opacities".into(),
             move |device, is_require_grad| {
                 let opacities = Self::make_opacities(Tensor::full(
                     [point_count, 1],
@@ -107,7 +107,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 3]
         let positions = Param::uninitialized(
-            Default::default(),
+            "Gaussian3dScene::positions".into(),
             move |device, is_require_grad| {
                 let positions = Self::make_positions(Tensor::from_data(
                     TensorData::new(positions.to_owned(), [point_count, 3]),
@@ -129,7 +129,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 4] (x, y, z, w)
         let rotations = Param::uninitialized(
-            Default::default(),
+            "Gaussian3dScene::rotations".into(),
             move |device, is_require_grad| {
                 let rotations = Self::make_rotations(Tensor::from_data(
                     TensorData::new(
@@ -154,7 +154,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 3]
         let scalings = Param::uninitialized(
-            Default::default(),
+            "Gaussian3dScene::scalings".into(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
                 let samples = StdRng::seed_from_u64(SEED)
@@ -251,6 +251,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
     ) -> fmt::Result {
         f.debug_struct("Gaussian3dScene")
             .field("devices", &self.devices())
+            .field("parameter_count", &self.num_params())
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
             .field("positions.dims()", &self.positions.dims())
