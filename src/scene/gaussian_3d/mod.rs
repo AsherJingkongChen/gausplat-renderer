@@ -11,8 +11,9 @@ pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
 use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
 use backend::*;
+use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::fmt;
+use std::{fmt, mem::size_of};
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
@@ -202,6 +203,10 @@ impl<B: Backend> Gaussian3dScene<B> {
             scalings,
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.num_params() * size_of::<B::FloatElem>()
+    }
 }
 
 impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
@@ -250,8 +255,9 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         f.debug_struct("Gaussian3dScene")
+            .field("backend", &B::name())
             .field("devices", &self.devices())
-            .field("parameter_count", &self.num_params())
+            .field("size", &format_size(self.size(), BINARY))
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
             .field("positions.dims()", &self.positions.dims())

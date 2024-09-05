@@ -13,6 +13,7 @@ gausplat-importer = {workspace = true}
 burn = {workspace = true, features = ["autodiff", "default", "template", "wgpu"]}
 bytemuck = {workspace = true, features = ["derive"]}
 cubecl = {workspace = true}
+humansize = {workspace = true}
 lazy_static = {workspace = true}
 log = {workspace = true}
 rand = {workspace = true}

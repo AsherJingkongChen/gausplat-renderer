@@ -184,7 +184,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         grads: &mut Gradients,
         _checkpointer: &mut Checkpointer,
     ) {
-        #[cfg(debug_assertions)]
+        // #[cfg(debug_assertions)]
         use std::collections::BTreeMap;
 
         #[cfg(debug_assertions)]
@@ -197,38 +197,34 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
 
         let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 
-        #[cfg(debug_assertions)]
+        // #[cfg(debug_assertions)]
         {
             let colors_rgb_2d_grad = Tensor::<B, 3>::new(
                 TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
             );
 
-            let gradient_means = BTreeMap::from([(
-                "colors_rgb_2d_grad.mean",
-                colors_rgb_2d_grad
-                    .to_owned()
-                    .mean_dim(0)
-                    .mean_dim(1)
-                    .into_data()
-                    .to_vec::<f32>()
-                    .unwrap(),
-            )]);
-            log::debug!(
-                target: "gausplat_renderer::scene",
-                "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
-            );
-
-            let nan_count_colors_rgb_2d =
-                colors_rgb_2d_grad.is_nan().int().sum();
-            if nan_count_colors_rgb_2d
-                .to_owned()
-                .greater_elem(100)
-                .into_scalar()
+            #[cfg(debug_assertions)]
             {
+                let gradient_means = BTreeMap::from([(
+                    "colors_rgb_2d_grad.mean",
+                    colors_rgb_2d_grad
+                        .to_owned()
+                        .mean_dim(0)
+                        .mean_dim(1)
+                        .into_data()
+                        .to_vec::<f32>()
+                        .unwrap(),
+                )]);
+                log::debug!(
+                    target: "gausplat_renderer::scene",
+                    "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
+                );
+            }
+
+            if colors_rgb_2d_grad.contains_nan().into_scalar() {
                 log::warn!(
                     target: "gausplat_renderer::scene",
-                    "colors_rgb_2d_grad.nans ({})",
-                    nan_count_colors_rgb_2d.into_scalar(),
+                    "Gaussian3dRendererBackward::backward > colors_rgb_2d_grad.contains_nan",
                 );
             }
         }
