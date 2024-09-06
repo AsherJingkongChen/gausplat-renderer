@@ -357,8 +357,7 @@ impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         let radii_dims = self.radii.dims();
-        let point_count = radii_dims[0];
-        let positions_2d_grad_norm_dims = [point_count];
+        let positions_2d_grad_norm_dims = &radii_dims;
 
         f.debug_struct("RenderOutputAutodiff")
             .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())

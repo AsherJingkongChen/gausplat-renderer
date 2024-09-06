@@ -65,7 +65,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 colors_sh = colors_sh.slice_assign(
                     [0..point_count, 0..1, 0..3],
-                    (colors_rgb - 0.5) / SH_C[0][0],
+                    (colors_rgb - 0.5) / SH_C.0[0],
                 );
 
                 colors_sh = Self::make_colors_sh(colors_sh)
@@ -279,6 +279,7 @@ mod tests {
     #[test]
     fn init() {
         use super::*;
+        use burn::backend::NdArray;
 
         let device = Default::default();
         let priors = vec![
@@ -292,8 +293,9 @@ mod tests {
             },
         ];
 
-        let scene =
-            Gaussian3dScene::<burn::backend::NdArray>::init(&device, priors);
+        let scene = Gaussian3dScene::<NdArray<f32>>::init(
+            &device, priors,
+        );
 
         let colors_sh = scene.colors_sh();
         assert_eq!(colors_sh.dims(), [2, 16, 3]);
@@ -309,5 +311,8 @@ mod tests {
 
         let scalings = scene.scalings();
         assert_eq!(scalings.dims(), [2, 3]);
+
+        let size = scene.size();
+        assert_eq!(size, (2 * 16 * 3 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
     }
 }

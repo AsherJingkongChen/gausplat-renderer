@@ -1,5 +1,6 @@
-use super::*;
-use burn::tensor::activation;
+pub use super::*;
+
+use burn::tensor::{activation, ElementConversion};
 
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
@@ -25,7 +26,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Making and setting for [`Gaussian3dScene::colors_sh`]
-    pub fn make_and_set_colors_sh(
+    pub fn make_set_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 3>,
     ) -> &mut Self {
@@ -56,7 +57,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Making and setting for [`Gaussian3dScene::opacities`]
-    pub fn make_and_set_opacities(
+    pub fn make_set_opacities(
         &mut self,
         opacities: Tensor<B, 2>,
     ) -> &mut Self {
@@ -86,7 +87,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Making and setting for [`Gaussian3dScene::positions`]
-    pub fn make_and_set_positions(
+    pub fn make_set_positions(
         &mut self,
         positions: Tensor<B, 2>,
     ) -> &mut Self {
@@ -118,7 +119,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Making and setting for [`Gaussian3dScene::rotations`]
-    pub fn make_and_set_rotations(
+    pub fn make_set_rotations(
         &mut self,
         rotations: Tensor<B, 2>,
     ) -> &mut Self {
@@ -148,10 +149,99 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Making and setting for [`Gaussian3dScene::scalings`]
-    pub fn make_and_set_scalings(
+    pub fn make_set_scalings(
         &mut self,
         scalings: Tensor<B, 2>,
     ) -> &mut Self {
         self.set_scalings(Self::make_scalings(scalings))
+    }
+
+    /// Making and dividing [`Gaussian3dScene::scalings`] by scalar
+    pub fn make_divs_scalings(
+        &mut self,
+        scaling: B::FloatElem,
+    ) -> &mut Self {
+        self.set_scalings(
+            self.scalings.val().sub_scalar(scaling.elem::<f64>().ln()),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn make_set_input_equals_to_output() {
+        use super::*;
+        use burn::{backend::NdArray, tensor::Distribution};
+
+        let device = Default::default();
+
+        let input_colors_sh = Tensor::<NdArray<f32>, 3>::random(
+            [10, 16, 3],
+            Distribution::Default,
+            &device,
+        );
+        let input_opacities = Tensor::<NdArray<f32>, 2>::random(
+            [10, 1],
+            Distribution::Default,
+            &device,
+        );
+        let input_positions = Tensor::<NdArray<f32>, 2>::random(
+            [10, 3],
+            Distribution::Default,
+            &device,
+        );
+        let input_scalings = Tensor::<NdArray<f32>, 2>::random(
+            [10, 3],
+            Distribution::Default,
+            &device,
+        );
+
+        let mut scene = Gaussian3dScene::<NdArray<f32>>::default();
+
+        scene
+            .make_set_colors_sh(input_colors_sh.to_owned())
+            .make_set_opacities(input_opacities.to_owned())
+            .make_set_positions(input_positions.to_owned())
+            .make_set_scalings(input_scalings.to_owned());
+
+        input_colors_sh
+            .into_data()
+            .assert_approx_eq(&scene.colors_sh().into_data(), 6);
+        input_opacities
+            .into_data()
+            .assert_approx_eq(&scene.opacities().into_data(), 6);
+        input_positions
+            .into_data()
+            .assert_approx_eq(&scene.positions().into_data(), 6);
+        input_scalings
+            .into_data()
+            .assert_approx_eq(&scene.scalings().into_data(), 6);
+    }
+
+    #[test]
+    fn make_divs_scalings() {
+        use super::*;
+        use burn::{backend::NdArray, tensor::Distribution};
+
+        let device = Default::default();
+
+        let input_scalings = Tensor::<NdArray<f32>, 2>::random(
+            [10, 3],
+            Distribution::Default,
+            &device,
+        );
+        let scaling = 0.25;
+
+        let output_scalings = Gaussian3dScene::<NdArray<f32>>::default()
+            .make_set_scalings(input_scalings.to_owned())
+            .make_divs_scalings(scaling)
+            .scalings();
+
+        let expected_scalings = input_scalings.to_owned().div_scalar(scaling);
+
+        output_scalings
+            .into_data()
+            .assert_approx_eq(&expected_scalings.into_data(), 6);
     }
 }
