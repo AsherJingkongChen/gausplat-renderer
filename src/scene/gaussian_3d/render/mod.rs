@@ -233,7 +233,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
 
         #[cfg(debug_assertions)]
         {
-            let colors_sh_grad = Tensor::<B, 3>::new(TensorPrimitive::Float(
+            let colors_sh_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
                 output.colors_sh_grad.to_owned(),
             ));
             let opacities_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
@@ -311,7 +311,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         }
 
         if let Some(node) = &ops.parents[0] {
-            grads.register::<B, 3>(node.id, output.colors_sh_grad);
+            grads.register::<B, 2>(node.id, output.colors_sh_grad);
         }
         if let Some(node) = &ops.parents[1] {
             grads.register::<B, 2>(node.id, output.opacities_grad);

@@ -4,8 +4,8 @@ pub use super::*;
 
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
-    /// `[P, 16, 3]`
-    pub colors_sh: B::FloatTensorPrimitive<3>,
+    /// `[P, 16 * 3]`
+    pub colors_sh: B::FloatTensorPrimitive<2>,
     /// `[P, 1]`
     pub opacities: B::FloatTensorPrimitive<2>,
     /// `[P, 3]`

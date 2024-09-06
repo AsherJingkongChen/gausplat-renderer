@@ -17,8 +17,8 @@ use std::{fmt, mem::size_of};
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
-    /// `[P, 16, 3]`
-    pub colors_sh: Param<Tensor<B, 3>>,
+    /// `[P, 16 * 3]`
+    pub colors_sh: Param<Tensor<B, 2>>,
     /// `[P, 1]`
     pub opacities: Param<Tensor<B, 2>>,
     /// `[P, 3]`
@@ -53,18 +53,18 @@ impl<B: Backend> Gaussian3dScene<B> {
             .flat_map(|point| point.position)
             .collect::<Vec<_>>();
 
-        // [P, 16, 3]
+        // [P, 16 * 3]
         let colors_sh = Param::uninitialized(
             "Gaussian3dScene::colors_sh".into(),
             move |device, is_require_grad| {
-                let mut colors_sh = Tensor::zeros([point_count, 16, 3], device);
+                let mut colors_sh = Tensor::zeros([point_count, 16 * 3], device);
                 let colors_rgb = Tensor::from_data(
-                    TensorData::new(colors_rgb.to_owned(), [point_count, 1, 3]),
+                    TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,
                 );
 
                 colors_sh = colors_sh.slice_assign(
-                    [0..point_count, 0..1, 0..3],
+                    [0..point_count, 0..3],
                     (colors_rgb - 0.5) / SH_C.0[0],
                 );
 
@@ -298,7 +298,7 @@ mod tests {
         );
 
         let colors_sh = scene.colors_sh();
-        assert_eq!(colors_sh.dims(), [2, 16, 3]);
+        assert_eq!(colors_sh.dims(), [2, 16 * 3]);
 
         let opacities = scene.opacities();
         assert_eq!(opacities.dims(), [2, 1]);

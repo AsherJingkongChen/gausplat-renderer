@@ -5,20 +5,20 @@ use burn::tensor::{activation, ElementConversion};
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
     ///
-    /// `[P, 16, 3]`
-    pub fn colors_sh(&self) -> Tensor<B, 3> {
+    /// `[P, 16 * 3]`
+    pub fn colors_sh(&self) -> Tensor<B, 2> {
         self.colors_sh.val()
     }
 
     /// Making for [`Gaussian3dScene::colors_sh`]
-    pub fn make_colors_sh(colors_sh: Tensor<B, 3>) -> Tensor<B, 3> {
+    pub fn make_colors_sh(colors_sh: Tensor<B, 2>) -> Tensor<B, 2> {
         colors_sh
     }
 
     /// Setting for [`Gaussian3dScene::colors_sh`]
     pub fn set_colors_sh(
         &mut self,
-        colors_sh: Tensor<B, 3>,
+        colors_sh: Tensor<B, 2>,
     ) -> &mut Self {
         self.colors_sh =
             Param::initialized(self.colors_sh.id.to_owned(), colors_sh);
@@ -28,7 +28,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     /// Making and setting for [`Gaussian3dScene::colors_sh`]
     pub fn make_set_colors_sh(
         &mut self,
-        colors_sh: Tensor<B, 3>,
+        colors_sh: Tensor<B, 2>,
     ) -> &mut Self {
         self.set_colors_sh(Self::make_colors_sh(colors_sh));
         self
@@ -176,8 +176,8 @@ mod tests {
 
         let device = Default::default();
 
-        let input_colors_sh = Tensor::<NdArray<f32>, 3>::random(
-            [10, 16, 3],
+        let input_colors_sh = Tensor::<NdArray<f32>, 2>::random(
+            [10, 16 * 3],
             Distribution::Default,
             &device,
         );

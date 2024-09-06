@@ -60,7 +60,7 @@ pub fn render_gaussian_3d_scene(
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     let view_bound_y =
         (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
-    // [P, 16, 3]
+    // [P, 16 * 3]
     let colors_sh = into_contiguous(input.colors_sh);
     let client = &colors_sh.client;
     let device = &colors_sh.device;
