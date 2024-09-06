@@ -1,22 +1,166 @@
 pub use super::*;
 
-use burn::tensor::{activation, ElementConversion};
+use burn::tensor::activation;
 
+/// Outer value getters
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
     ///
     /// `[P, 16 * 3]`
+    #[inline]
     pub fn colors_sh(&self) -> Tensor<B, 2> {
-        self.colors_sh.val()
+        Self::make_colors_sh(self.colors_sh.val())
     }
 
-    /// Making for [`Gaussian3dScene::colors_sh`]
+    /// The opacities are applied to the sigmoid function
+    ///
+    /// `[P, 1]`
+    #[inline]
+    pub fn opacities(&self) -> Tensor<B, 2> {
+        Self::make_opacities(self.opacities.val())
+    }
+
+    /// The 3D positions in world space
+    ///
+    /// `[P, 3]`
+    #[inline]
+    pub fn positions(&self) -> Tensor<B, 2> {
+        Self::make_positions(self.positions.val())
+    }
+
+    /// The rotations are normalized quaternions
+    ///
+    /// `[P, 4]`
+    #[inline]
+    pub fn rotations(&self) -> Tensor<B, 2> {
+        Self::make_rotations(self.rotations.val())
+    }
+
+    /// The scalings are applied to the exponential function
+    ///
+    /// `[P, 3]`
+    #[inline]
+    pub fn scalings(&self) -> Tensor<B, 2> {
+        Self::make_scalings(self.scalings.val())
+    }
+}
+
+/// Outer value makers
+impl<B: Backend> Gaussian3dScene<B> {
+    /// Making values for [`Gaussian3dScene::colors_sh`]
+    #[inline]
     pub fn make_colors_sh(colors_sh: Tensor<B, 2>) -> Tensor<B, 2> {
         colors_sh
     }
 
-    /// Setting for [`Gaussian3dScene::colors_sh`]
+    /// Making values for [`Gaussian3dScene::opacities`]
+    #[inline]
+    pub fn make_opacities(opacities: Tensor<B, 2>) -> Tensor<B, 2> {
+        activation::sigmoid(opacities)
+    }
+
+    /// Making values for [`Gaussian3dScene::positions`]
+    #[inline]
+    pub fn make_positions(positions: Tensor<B, 2>) -> Tensor<B, 2> {
+        positions
+    }
+
+    /// Making values for [`Gaussian3dScene::rotations`]
+    #[inline]
+    pub fn make_rotations(rotations: Tensor<B, 2>) -> Tensor<B, 2> {
+        rotations
+            .to_owned()
+            .div(rotations.powf_scalar(2.0).sum_dim(1).sqrt())
+    }
+
+    /// Making values for [`Gaussian3dScene::scalings`]
+    #[inline]
+    pub fn make_scalings(scalings: Tensor<B, 2>) -> Tensor<B, 2> {
+        scalings.exp()
+    }
+}
+
+/// Outer value setters
+impl<B: Backend> Gaussian3dScene<B> {
+    /// Setting values for [`Gaussian3dScene::colors_sh`]
     pub fn set_colors_sh(
+        &mut self,
+        colors_sh: Tensor<B, 2>,
+    ) -> &mut Self {
+        self.set_inner_colors_sh(Self::make_inner_colors_sh(colors_sh));
+        self
+    }
+
+    /// Setting values for [`Gaussian3dScene::opacities`]
+    pub fn set_opacities(
+        &mut self,
+        opacities: Tensor<B, 2>,
+    ) -> &mut Self {
+        self.set_inner_opacities(Self::make_inner_opacities(opacities))
+    }
+
+    /// Setting values for [`Gaussian3dScene::positions`]
+    pub fn set_positions(
+        &mut self,
+        positions: Tensor<B, 2>,
+    ) -> &mut Self {
+        self.set_inner_positions(Self::make_inner_positions(positions))
+    }
+
+    /// Setting values for [`Gaussian3dScene::rotations`]
+    pub fn set_rotations(
+        &mut self,
+        rotations: Tensor<B, 2>,
+    ) -> &mut Self {
+        self.set_inner_rotations(Self::make_inner_rotations(rotations))
+    }
+
+    /// Setting values for [`Gaussian3dScene::scalings`]
+    pub fn set_scalings(
+        &mut self,
+        scalings: Tensor<B, 2>,
+    ) -> &mut Self {
+        self.set_inner_scalings(Self::make_inner_scalings(scalings))
+    }
+}
+
+/// Inner value makers
+impl<B: Backend> Gaussian3dScene<B> {
+    /// Making inner values for [`Gaussian3dScene::colors_sh`]
+    #[inline]
+    pub fn make_inner_colors_sh(colors_sh: Tensor<B, 2>) -> Tensor<B, 2> {
+        colors_sh
+    }
+
+    /// Making inner values for [`Gaussian3dScene::opacities`]
+    #[inline]
+    pub fn make_inner_opacities(opacities: Tensor<B, 2>) -> Tensor<B, 2> {
+        opacities.to_owned().div(-opacities + 1.0).log()
+    }
+
+    /// Making inner values for [`Gaussian3dScene::positions`]
+    #[inline]
+    pub fn make_inner_positions(positions: Tensor<B, 2>) -> Tensor<B, 2> {
+        positions
+    }
+
+    /// Making inner values for [`Gaussian3dScene::rotations`]
+    #[inline]
+    pub fn make_inner_rotations(rotations: Tensor<B, 2>) -> Tensor<B, 2> {
+        rotations
+    }
+
+    /// Making inner values for [`Gaussian3dScene::scalings`]
+    #[inline]
+    pub fn make_inner_scalings(scalings: Tensor<B, 2>) -> Tensor<B, 2> {
+        scalings.log()
+    }
+}
+
+/// Inner value setters
+impl<B: Backend> Gaussian3dScene<B> {
+    /// Setting inner values for [`Gaussian3dScene::colors_sh`]
+    pub fn set_inner_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 2>,
     ) -> &mut Self {
@@ -25,29 +169,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         self
     }
 
-    /// Making and setting for [`Gaussian3dScene::colors_sh`]
-    pub fn make_set_colors_sh(
-        &mut self,
-        colors_sh: Tensor<B, 2>,
-    ) -> &mut Self {
-        self.set_colors_sh(Self::make_colors_sh(colors_sh));
-        self
-    }
-
-    /// The opacities are applied to the sigmoid function
-    ///
-    /// `[P, 1]`
-    pub fn opacities(&self) -> Tensor<B, 2> {
-        activation::sigmoid(self.opacities.val())
-    }
-
-    /// Making for [`Gaussian3dScene::opacities`]
-    pub fn make_opacities(opacities: Tensor<B, 2>) -> Tensor<B, 2> {
-        opacities.to_owned().div(-opacities + 1.0).log()
-    }
-
-    /// Setting for [`Gaussian3dScene::opacities`]
-    pub fn set_opacities(
+    /// Setting inner values for [`Gaussian3dScene::opacities`]
+    pub fn set_inner_opacities(
         &mut self,
         opacities: Tensor<B, 2>,
     ) -> &mut Self {
@@ -56,28 +179,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         self
     }
 
-    /// Making and setting for [`Gaussian3dScene::opacities`]
-    pub fn make_set_opacities(
-        &mut self,
-        opacities: Tensor<B, 2>,
-    ) -> &mut Self {
-        self.set_opacities(Self::make_opacities(opacities))
-    }
-
-    /// The 3D positions in world space
-    ///
-    /// `[P, 3]`
-    pub fn positions(&self) -> Tensor<B, 2> {
-        self.positions.val()
-    }
-
-    /// Making for [`Gaussian3dScene::positions`]
-    pub fn make_positions(positions: Tensor<B, 2>) -> Tensor<B, 2> {
-        positions
-    }
-
-    /// Setting for [`Gaussian3dScene::positions`]
-    pub fn set_positions(
+    /// Setting inner values for [`Gaussian3dScene::positions`]
+    pub fn set_inner_positions(
         &mut self,
         positions: Tensor<B, 2>,
     ) -> &mut Self {
@@ -86,30 +189,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         self
     }
 
-    /// Making and setting for [`Gaussian3dScene::positions`]
-    pub fn make_set_positions(
-        &mut self,
-        positions: Tensor<B, 2>,
-    ) -> &mut Self {
-        self.set_positions(Self::make_positions(positions))
-    }
-
-    /// The rotations are normalized quaternions
-    ///
-    /// `[P, 4]`
-    pub fn rotations(&self) -> Tensor<B, 2> {
-        let rotations = self.rotations.val();
-        let norms = rotations.to_owned().powf_scalar(2.0).sum_dim(1).sqrt();
-        rotations.div(norms)
-    }
-
-    /// Making for [`Gaussian3dScene::rotations`]
-    pub fn make_rotations(rotations: Tensor<B, 2>) -> Tensor<B, 2> {
-        rotations
-    }
-
-    /// Setting for [`Gaussian3dScene::rotations`]
-    pub fn set_rotations(
+    /// Setting inner values for [`Gaussian3dScene::rotations`]
+    pub fn set_inner_rotations(
         &mut self,
         rotations: Tensor<B, 2>,
     ) -> &mut Self {
@@ -118,28 +199,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         self
     }
 
-    /// Making and setting for [`Gaussian3dScene::rotations`]
-    pub fn make_set_rotations(
-        &mut self,
-        rotations: Tensor<B, 2>,
-    ) -> &mut Self {
-        self.set_rotations(Self::make_rotations(rotations))
-    }
-
-    /// The scalings are applied to the exponential function
-    ///
-    /// `[P, 3]`
-    pub fn scalings(&self) -> Tensor<B, 2> {
-        self.scalings.val().exp()
-    }
-
-    /// Making for [`Gaussian3dScene::scalings`]
-    pub fn make_scalings(scalings: Tensor<B, 2>) -> Tensor<B, 2> {
-        scalings.log()
-    }
-
-    /// Setting for [`Gaussian3dScene::scalings`]
-    pub fn set_scalings(
+    /// Setting inner values for [`Gaussian3dScene::scalings`]
+    pub fn set_inner_scalings(
         &mut self,
         scalings: Tensor<B, 2>,
     ) -> &mut Self {
@@ -147,30 +208,12 @@ impl<B: Backend> Gaussian3dScene<B> {
             Param::initialized(self.scalings.id.to_owned(), scalings);
         self
     }
-
-    /// Making and setting for [`Gaussian3dScene::scalings`]
-    pub fn make_set_scalings(
-        &mut self,
-        scalings: Tensor<B, 2>,
-    ) -> &mut Self {
-        self.set_scalings(Self::make_scalings(scalings))
-    }
-
-    /// Making and dividing [`Gaussian3dScene::scalings`] by scalar
-    pub fn make_divs_scalings(
-        &mut self,
-        scaling: B::FloatElem,
-    ) -> &mut Self {
-        self.set_scalings(
-            self.scalings.val().sub_scalar(scaling.elem::<f64>().ln()),
-        )
-    }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn make_set_input_equals_to_output() {
+    fn set() {
         use super::*;
         use burn::{backend::NdArray, tensor::Distribution};
 
@@ -200,10 +243,10 @@ mod tests {
         let mut scene = Gaussian3dScene::<NdArray<f32>>::default();
 
         scene
-            .make_set_colors_sh(input_colors_sh.to_owned())
-            .make_set_opacities(input_opacities.to_owned())
-            .make_set_positions(input_positions.to_owned())
-            .make_set_scalings(input_scalings.to_owned());
+            .set_colors_sh(input_colors_sh.to_owned())
+            .set_opacities(input_opacities.to_owned())
+            .set_positions(input_positions.to_owned())
+            .set_scalings(input_scalings.to_owned());
 
         input_colors_sh
             .into_data()
@@ -217,31 +260,5 @@ mod tests {
         input_scalings
             .into_data()
             .assert_approx_eq(&scene.scalings().into_data(), 6);
-    }
-
-    #[test]
-    fn make_divs_scalings() {
-        use super::*;
-        use burn::{backend::NdArray, tensor::Distribution};
-
-        let device = Default::default();
-
-        let input_scalings = Tensor::<NdArray<f32>, 2>::random(
-            [10, 3],
-            Distribution::Default,
-            &device,
-        );
-        let scaling = 0.25;
-
-        let output_scalings = Gaussian3dScene::<NdArray<f32>>::default()
-            .make_set_scalings(input_scalings.to_owned())
-            .make_divs_scalings(scaling)
-            .scalings();
-
-        let expected_scalings = input_scalings.to_owned().div_scalar(scaling);
-
-        output_scalings
-            .into_data()
-            .assert_approx_eq(&expected_scalings.into_data(), 6);
     }
 }

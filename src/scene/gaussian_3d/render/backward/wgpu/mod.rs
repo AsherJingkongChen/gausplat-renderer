@@ -112,9 +112,10 @@ pub fn render_gaussian_3d_scene(
         image_size_half_y,
         point_count: point_count as u32,
     }));
-    let colors_sh_grad = Tensor::<Wgpu, 2>::zeros([point_count, 16 * 3], device)
-        .into_primitive()
-        .tensor();
+    let colors_sh_grad =
+        Tensor::<Wgpu, 2>::zeros([point_count, 16 * 3], device)
+            .into_primitive()
+            .tensor();
     let positions_2d_grad_norm =
         Tensor::<Wgpu, 1>::zeros([point_count], device)
             .into_primitive()

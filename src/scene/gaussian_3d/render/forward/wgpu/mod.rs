@@ -219,8 +219,7 @@ pub fn render_gaussian_3d_scene(
 
     // (T, [P])
     let (tile_touched_count, tile_touched_offsets) = {
-        let b = tile_touched_counts.handle.binding();
-        let counts = &client.read(b);
+        let counts = &client.read(tile_touched_counts.handle.binding());
         let counts = cast_slice::<u8, u32>(counts);
 
         let mut count = *counts.last().unwrap_or(&0);
@@ -250,6 +249,10 @@ pub fn render_gaussian_3d_scene(
         log::debug!(
             target: "gausplat_renderer::scene",
             "Gaussian3dRenderer::<Wgpu>::render_forward > 2",
+        );
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRenderer::<Wgpu>::render_forward > tile_touched_count ({tile_touched_count})",
         );
     }
 

@@ -57,7 +57,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         let colors_sh = Param::uninitialized(
             "Gaussian3dScene::colors_sh".into(),
             move |device, is_require_grad| {
-                let mut colors_sh = Tensor::zeros([point_count, 16 * 3], device);
+                let mut colors_sh =
+                    Tensor::zeros([point_count, 16 * 3], device);
                 let colors_rgb = Tensor::from_data(
                     TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,
@@ -68,7 +69,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                     (colors_rgb - 0.5) / SH_C.0[0],
                 );
 
-                colors_sh = Self::make_colors_sh(colors_sh)
+                colors_sh = Self::make_inner_colors_sh(colors_sh)
                     .set_require_grad(is_require_grad);
 
                 #[cfg(debug_assertions)]
@@ -87,7 +88,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         let opacities = Param::uninitialized(
             "Gaussian3dScene::opacities".into(),
             move |device, is_require_grad| {
-                let opacities = Self::make_opacities(Tensor::full(
+                let opacities = Self::make_inner_opacities(Tensor::full(
                     [point_count, 1],
                     0.1,
                     device,
@@ -110,7 +111,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         let positions = Param::uninitialized(
             "Gaussian3dScene::positions".into(),
             move |device, is_require_grad| {
-                let positions = Self::make_positions(Tensor::from_data(
+                let positions = Self::make_inner_positions(Tensor::from_data(
                     TensorData::new(positions.to_owned(), [point_count, 3]),
                     device,
                 ))
@@ -132,7 +133,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         let rotations = Param::uninitialized(
             "Gaussian3dScene::rotations".into(),
             move |device, is_require_grad| {
-                let rotations = Self::make_rotations(Tensor::from_data(
+                let rotations = Self::make_inner_rotations(Tensor::from_data(
                     TensorData::new(
                         [0.0, 0.0, 0.0, 1.0].repeat(point_count),
                         [point_count, 4],
@@ -171,7 +172,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                     })
                     .collect();
 
-                let scalings = Self::make_scalings(
+                let scalings = Self::make_inner_scalings(
                     Tensor::from_data(
                         TensorData::new(samples, [point_count, 1]),
                         device,
@@ -293,9 +294,7 @@ mod tests {
             },
         ];
 
-        let scene = Gaussian3dScene::<NdArray<f32>>::init(
-            &device, priors,
-        );
+        let scene = Gaussian3dScene::<NdArray<f32>>::init(&device, priors);
 
         let colors_sh = scene.colors_sh();
         assert_eq!(colors_sh.dims(), [2, 16 * 3]);
