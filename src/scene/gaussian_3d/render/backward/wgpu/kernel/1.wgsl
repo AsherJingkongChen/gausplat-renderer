@@ -37,16 +37,16 @@ var<storage, read_write> transmittances: array<f32>;
 
 // [P, 3 (+ 1)]
 @group(0) @binding(10)
-var<storage, read_write> colors_rgb_3d_grad: array<atomic<u32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(11)
-var<storage, read_write> conics_grad: array<atomic<u32>>;
+var<storage, read_write> conics_grad: array<atomic<f32>>;
 // [P, 1]
 @group(0) @binding(12)
-var<storage, read_write> opacities_3d_grad: array<atomic<u32>>;
+var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
 // [P, 2]
 @group(0) @binding(13)
-var<storage, read_write> positions_2d_grad: array<atomic<u32>>;
+var<storage, read_write> positions_2d_grad: array<atomic<f32>>;
 
 // [T_x * T_y, 3]
 var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
@@ -197,119 +197,19 @@ fn main(
             let point_index = batch_point_indexes[batch_index];
 
             // [P, 3 (+ 1)]
-            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 0]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &colors_rgb_3d_grad[4 * point_index + 0],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[0]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 1]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &colors_rgb_3d_grad[4 * point_index + 1],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[1]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&colors_rgb_3d_grad[4 * point_index + 2]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &colors_rgb_3d_grad[4 * point_index + 2],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + color_rgb_3d_grad[2]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], color_rgb_3d_grad[0]);
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 1], color_rgb_3d_grad[1]);
+            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 2], color_rgb_3d_grad[2]);
             // [P, 2, 2]
-            for (var expected = atomicLoad(&conics_grad[4 * point_index + 0]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &conics_grad[4 * point_index + 0],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[0][0]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&conics_grad[4 * point_index + 1]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &conics_grad[4 * point_index + 1],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[0][1]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&conics_grad[4 * point_index + 2]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &conics_grad[4 * point_index + 2],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[1][0]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&conics_grad[4 * point_index + 3]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &conics_grad[4 * point_index + 3],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + conic_grad[1][1]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
+            atomicAdd(&conics_grad[4 * point_index + 0], conic_grad[0][0]);
+            atomicAdd(&conics_grad[4 * point_index + 1], conic_grad[0][1]);
+            atomicAdd(&conics_grad[4 * point_index + 2], conic_grad[1][0]);
+            atomicAdd(&conics_grad[4 * point_index + 3], conic_grad[1][1]);
             // [P, 1]
-            for (var expected = atomicLoad(&opacities_3d_grad[point_index]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &opacities_3d_grad[point_index],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + opacity_3d_grad),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
+            atomicAdd(&opacities_3d_grad[point_index], opacity_3d_grad);
             // [P, 2]
-            for (var expected = atomicLoad(&positions_2d_grad[2 * point_index + 0]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &positions_2d_grad[2 * point_index + 0],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + position_2d_grad[0]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
-            for (var expected = atomicLoad(&positions_2d_grad[2 * point_index + 1]);;) {
-                let tested = atomicCompareExchangeWeak(
-                    &positions_2d_grad[2 * point_index + 1],
-                    expected,
-                    bitcast<u32>(bitcast<f32>(expected) + position_2d_grad[1]),
-                );
-                if tested.exchanged {
-                    break;
-                }
-                expected = tested.old_value;
-            }
+            atomicAdd(&positions_2d_grad[2 * point_index + 0], position_2d_grad[0]);
+            atomicAdd(&positions_2d_grad[2 * point_index + 1], position_2d_grad[1]);
         }
 
         tile_point_count -= batch_point_count;

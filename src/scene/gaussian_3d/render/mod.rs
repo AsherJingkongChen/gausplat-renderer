@@ -123,7 +123,7 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device).require_grad();
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -184,7 +184,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         grads: &mut Gradients,
         _checkpointer: &mut Checkpointer,
     ) {
-        // #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         use std::collections::BTreeMap;
 
         #[cfg(debug_assertions)]
@@ -197,7 +197,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
 
         let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 
-        // #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         {
             let colors_rgb_2d_grad = Tensor::<B, 3>::new(
                 TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
