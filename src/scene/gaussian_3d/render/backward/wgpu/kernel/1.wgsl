@@ -60,7 +60,7 @@ var<workgroup> batch_point_indexes: array<u32, BATCH_SIZE>;
 var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 
 const OPACITY_2D_MAX: f32 = 0.99;
-const OPACITY_2D_MIN: f32 = 1.0 / 255.0;
+const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
 const TRANSMITTANCE_MIN: f32 = 1e-4;
 // T_x
 const GROUP_SIZE_X: u32 = 16;

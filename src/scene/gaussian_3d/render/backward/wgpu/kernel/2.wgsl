@@ -343,8 +343,8 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L/∂Pv[3] = (∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z)
-    //           = (〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.z〉)
+    // ∂L/∂Pv[3] = [∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z]
+    //           = [〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.z〉]
     // ∂J/∂Pv.x[2, 3] = [[0, 0, -f.x / Pv.z^2]
     //                   [0, 0, 0            ]]
     // ∂J/∂Pv.x[2, 3] = [[0, 0, 0            ]
@@ -433,8 +433,8 @@ fn main(
 
     // Computing the gradients
     //
-    // ∂L/∂Q[4] = (∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w)
-    //          = (∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w)
+    // ∂L/∂Q[4] = [∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w]
+    //          = [∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w]
     // ∂R/∂Q.x[3, 3] = [[0,    Q.y,      Q.z    ]
     //            [Q.y, -2 * Q.x, -Q.w    ]
     //            [Q.z,  Q.w,     -2 * Q.x]] * 2

@@ -126,6 +126,8 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     1.4453057,
     -0.5900436,
 );
+// The r for `1 - Min opacity = ∫[-r, r] e^(-x^2 / 2) dx / √2π`
+const RADIUS_FACTOR: f32 = 3.0961087;
 
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
@@ -191,8 +193,26 @@ fn main(
     // Computing the 3D covariance matrix from rotation and scaling
     // RS[3, 3] = R[3, 3] * S[3, 3]
     // Σ[3, 3] (Symmetric) = RS[3, 3] * RS^t[3, 3]
-    //
+    // 
     // S is diagonal
+    // 
+    // ** Advanced **
+    // 
+    // This is derived from inverse Principal Component Analysis
+    // of the 3D covariance matrix:
+    // 
+    // Defining covariance matrix using Singular Value Decomposition:
+    // 
+    // Σ = V * L * V^-1
+    // 
+    // Defining rotation matrix R as eigenvectors of Σ:
+    // 
+    // R = V
+    // R^t = R^-1 = V^-1
+    // 
+    // Defining scaling matrix S as square root of eigenvalues of Σ:
+    // 
+    // S = √L
 
     let rotation_matrix = 2.0 * mat3x3<f32>(
         (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
@@ -248,19 +268,38 @@ fn main(
 
     // Computing the max radius using the 2D covariance matrix
     // r <= Σ'[2, 2]
+    // 
+    // ** Advanced **
+    // 
+    // This is derived from the Eigendecomposition of the 2D covariance matrix:
+    // 
+    // Σ' = [[a, b]
+    //       [b, c]]
+    // 
+    // det(Σ) = a * c - b^2
+    // 
+    // Deriving eigenvalues:
+    // 
+    // det(Σ - λ * I) = 0
+    // λ = ((a + c) ± √((a + c)^2 - 4 * (a * c - b^2))) / 2
+    //   = (a + c) / 2 ± √(((a + c) / 2)^2 - det(Σ))
+    // 
+    // Defining radius as the square root of the maximum eigenvalue:
+    // 
+    // r = √λ_max
 
-    let covariance_2d_middle = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
-    let extent_difference = max(
+    let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
+    let eigenvalue_difference = max(
         arguments.filter_low_pass,
-        sqrt(covariance_2d_middle * covariance_2d_middle - covariance_2d_det),
+        sqrt(covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det),
     );
-    let extent_max = max(
-        covariance_2d_middle + extent_difference,
-        covariance_2d_middle - extent_difference,
+    let eigenvalue_max = max(
+        covariance_2d_diag_mean + eigenvalue_difference,
+        covariance_2d_diag_mean - eigenvalue_difference,
     );
-    let radius = ceil(sqrt(extent_max) * 3.0);
+    let radius = ceil(sqrt(eigenvalue_max) * RADIUS_FACTOR);
 
-    // Finding the tiles touched
+    // Checking the tiles touched
 
     let tile_size_f32 = vec2<f32>(
         f32(arguments.tile_size_x),
