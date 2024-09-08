@@ -276,8 +276,8 @@ fn main(
     // ∂Ov/∂Pw[3, 3] = I
     // ∂Dv/∂Ov[3, 3] = [[Dv.y^2 + Dv.z^2, -Dv.x * Dv.y,    -Dv.x * Dv.z]
     //                  [-Dv.x * Dv.y,    Dv.x^2 + Dv.z^2, -Dv.y * Dv.z]
-    //                  [-Dv.x * Dv.z,    -Dv.y * Dv.z,    Dv.x^2 + Dv.y^2]]
-    //               * (Dv.x^2 + Dv.y^2 + Dv.z^2)^-3/2
+    //                  [-Dv.x * Dv.z,    -Dv.y * Dv.z,    Dv.x^2 + Dv.y^2]] *
+    //                 (Dv.x^2 + Dv.y^2 + Dv.z^2)^-3/2
 
     // ∂L/∂Dv[1, 3]
     let view_direction_grad = color_rgb_3d_grad * color_rgb_3d_to_view_direction_grad;
@@ -326,7 +326,8 @@ fn main(
     //    =〈∂L/∂T * Rv^t, ∂J〉+〈J^t * ∂L/∂T, ∂Rv〉
     //
     // ∂L/∂Σ[3, 3] = T^t[3, 2] * ∂L/∂Σ'[2, 2] * T[2, 3]
-    // ∂L/∂T[2, 3] = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ^t[3, 3] + (∂L/∂Σ')^t[2, 2] * T[2, 3] * Σ[3, 3]
+    // ∂L/∂T[2, 3] = (∂L/∂Σ')[2, 2] * T[2, 3] * Σ^t[3, 3] +
+    //               (∂L/∂Σ')^t[2, 2] * T[2, 3] * Σ[3, 3]
     //             = ∂L/∂Σ'[2, 2] * T[2, 3] * Σ[3, 3] * 2
     // ∂L/∂J[2, 3] = ∂L/∂T[2, 3] * Rv^t[3, 3]
     //
@@ -354,7 +355,7 @@ fn main(
 
     let depth = depths[index];
     let position_3d_in_normalized = positions_3d_in_normalized[index];
-    // (Pv.x / Pv.z, Pv.y / Pv.z)
+    // [Pv.x / Pv.z, Pv.y / Pv.z]
     let position_3d_in_normalized_clamped = positions_3d_in_normalized_clamped[index];
     let is_position_3d_in_normalized_not_clamped = vec2<f32>(
         position_3d_in_normalized == position_3d_in_normalized_clamped
@@ -363,9 +364,9 @@ fn main(
         arguments.focal_length_x,
         arguments.focal_length_y
     ) / depth;
-    // (f.x / Pv.z^2, f.y / Pv.z^2)
+    // [f.x / Pv.z^2, f.y / Pv.z^2]
     let focal_length_normalized2 = focal_length_normalized / depth;
-    // (f.x / Pv.z^2 * (∂L/∂J).2,0, f.y / Pv.z^2 * (∂L/∂J).2,1)
+    // [f.x / Pv.z^2 * (∂L/∂J).2,0, f.y / Pv.z^2 * (∂L/∂J).2,1]
     let focal_length_normalized2_projection_affine_grad_2 =
         focal_length_normalized2 * projection_affine_grad[2];
     // ∂L/∂Pv[3]
@@ -384,7 +385,7 @@ fn main(
     //    =〈∂L/∂Pv, ∂Rv * Pw + Rv * ∂Pw〉
     //    =〈∂L/∂Pv * Pw^t, ∂Rv〉+〈Rv^t * ∂L/∂Pv, ∂Pw〉
     //
-    // ∂L/∂Pw[3, 1] = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
+    // (∂L/∂Pw)[3, 1]   = (Rv)^t[3, 3] * ∂L/∂Pv[3, 1]
     // (∂L/∂Pw)^t[1, 3] = (∂L/∂Pv)^t[1, 3] * Rv[3, 3]
 
     position_3d_grad += position_3d_in_view_grad * view_rotation;

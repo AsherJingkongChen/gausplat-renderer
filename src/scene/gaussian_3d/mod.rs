@@ -36,16 +36,13 @@ impl<B: Backend> Gaussian3dScene<B> {
     ) -> Self {
         // P
         let point_count = priors.len();
-
         let priors = (priors.to_owned(), priors);
-
         // [P, 3]
         let colors_rgb = priors
             .0
             .into_iter()
             .flat_map(|point| point.color_rgb)
             .collect::<Vec<_>>();
-
         // [P, 3]
         let positions = priors
             .1
@@ -203,10 +200,6 @@ impl<B: Backend> Gaussian3dScene<B> {
             rotations,
             scalings,
         }
-    }
-
-    pub fn size(&self) -> usize {
-        self.num_params() * size_of::<B::FloatElem>()
     }
 }
 

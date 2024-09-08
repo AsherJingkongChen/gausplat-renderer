@@ -140,7 +140,7 @@ fn main(
             }
 
             // Computing the density of the point in the pixel
-            // g[1, 1] = d^T[1, 2] * c'^-1[2, 2] * d[2, 1]
+            // σ[n] = e^(-0.5 * D^t[1, 2] * Σ'^-1[2, 2] * D[2, 1])[n]
 
             let conic = batch_conics[batch_index];
             let position_2d = batch_positions_2d[batch_index];
@@ -164,35 +164,76 @@ fn main(
                 continue;
             }
 
-            // Updating the states
+            // Updating the states of the pixel
+            // 
+            // C_rgb'[n] = C_rgb[n + 1] * α'[n + 1] +
+            //             C_rgb'[n + 1] * (1 - α'[n + 1])
+            // C_rgb[n]  = C_rgb[n]
+            // α'[n]     = α[n] * σ[n]
+            // t[n]      = t[n + 1] / (1 - α'[n])
 
-            color_rgb_2d_state *= 1.0 - opacity_2d_state;
-            color_rgb_2d_state += color_rgb_3d_state * opacity_2d_state;
+            color_rgb_2d_state = color_rgb_3d_state * opacity_2d_state
+                               + color_rgb_2d_state * (1.0 - opacity_2d_state);
             color_rgb_3d_state = batch_colors_rgb_3d[batch_index];
             opacity_2d_state = opacity_2d;
             transmittance_state /= 1.0 - opacity_2d;
 
             // Computing the gradients of the point
+            // 
+            // ∂L =〈∂L/∂C_rgb', ∂C_rgb'〉
+            //    =〈∂L/∂C_rgb', sum(∂C_rgb[n] *  α'[n] *  t[n])〉+
+            //     〈∂L/∂C_rgb', sum( C_rgb[n] * ∂α'[n] *  t[n])〉+
+            //     〈∂L/∂C_rgb', sum( C_rgb[n] *  α'[n] * ∂t[n])〉
+            // 
+            // t[n + 1] = t[n] * (1 - α'[n])
+            // 
+            // ∂L/∂C_rgb[n] = ∂L/∂C_rgb' * α'[n] * t[n]
+            // ∂L/∂α'[n]    =〈∂L/∂C_rgb', C_rgb[n] * t[n]〉+
+            //               〈∂L/∂C_rgb', C_rgb[n + 1] * α'[n + 1] * t[n] * (1 - α'[n])〉+
+            //               〈∂L/∂C_rgb', C_rgb[n + 2] * α'[n + 2] * t[n] * (1 - α'[n]) * (1 - α'[n + 1])〉+ ...
+            //              =〈∂L/∂C_rgb', t[n] * C_rgb[n]〉-
+            //               〈∂L/∂C_rgb', t[n] * C_rgb[n + 1] * α'[n + 1]〉-
+            //               〈∂L/∂C_rgb', t[n] * C_rgb[n + 2] * α'[n + 2] * (1 - α'[n + 1])〉- ...
+            //              =〈∂L/∂C_rgb', t[n] * (C_rgb[n] - C_rgb'[n])〉
 
             let color_rgb_3d_grad = opacity_2d * transmittance_state * color_rgb_2d_grad;
             let opacity_2d_grad = transmittance_state * dot(
                 (color_rgb_3d_state - color_rgb_2d_state) * color_rgb_2d_grad,
                 vec3<f32>(1.0),
             );
+
+            // Computing the gradients of the point
+            // 
+            // ∂L/∂α[n] = ∂L/∂α'[n] * σ[n]
+            // ∂L/∂σ[n] = ∂L/∂α'[n] * α[n]
+
             let opacity_3d_grad = density * opacity_2d_grad;
             let density_grad = opacity_3d * opacity_2d_grad;
+
+            // Computing the gradients of the point
+            // 
+            // ∂L =〈∂L/∂σ, ∂σ〉[n]
+            //    =〈∂L/∂σ, ∂e^(-0.5 * D^t * Σ'^-1 * D)〉
+            //    =〈∂L/∂σ, ∂(D^t * Σ'^-1 * D) * -0.5 * e^(-0.5 * D^t * Σ'^-1 * D)〉
+            //    =〈∂L/∂σ, ∂(D^t * Σ'^-1 * D)〉* -0.5 * σ
+            //    =〈∂L/∂σ, (∂D^t * Σ'^-1 * D) + (D^t * ∂Σ'^-1 * D) + (D^t * Σ'^-1 * ∂D)〉* -0.5 * σ
+            //    =〈Σ'^-1 * D * ∂L/∂σ, ∂D〉* 1.0 * -σ +〈D * ∂L/∂σ * D^t, ∂Σ'^-1〉* 0.5 * -σ
+            // 
+            // ∂L/∂Σ'^-1[2, 2] = ∂L/∂σ * -σ * D[2, 1] * D^t[1, 2] * 0.5
+            // ∂L/∂P[2, 1]     = ∂L/∂D * ∂D/∂P
+            //                 = ∂L/∂D
+            //                 = ∂L/∂σ * -σ * Σ'^-1[2, 2] * D[2, 1]
+            // 
+            // Σ^-1 is symmetric
+
             let density_density_grad_n = -density * density_grad;
             let conic_grad = 0.5 * density_density_grad_n * mat2x2<f32>(
                 position_offset * position_offset.x,
                 position_offset * position_offset.y,
             );
-            let position_2d_grad = conic * position_offset * density_density_grad_n;
+            let position_2d_grad = density_density_grad_n * conic * position_offset;
 
             // Updating the gradients of the point
-            // - 3D color in RGB space
-            // - Inverse of 2D covariance
-            // - 3D opacity
-            // - 2D position
 
             let point_index = batch_point_indexes[batch_index];
 

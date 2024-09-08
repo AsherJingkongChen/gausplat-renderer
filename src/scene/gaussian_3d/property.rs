@@ -12,7 +12,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         Self::make_colors_sh(self.colors_sh.val())
     }
 
-    /// The opacities are applied to the sigmoid function
+    /// The opacities which range from `0.0` to `1.0`
     ///
     /// `[P, 1]`
     #[inline]
@@ -28,7 +28,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         Self::make_positions(self.positions.val())
     }
 
-    /// The rotations are normalized quaternions
+    /// The rotations represented as normalized quaternions
     ///
     /// `[P, 4]`
     #[inline]
@@ -36,7 +36,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         Self::make_rotations(self.rotations.val())
     }
 
-    /// The scalings are applied to the exponential function
+    /// The scalings
     ///
     /// `[P, 3]`
     #[inline]
@@ -207,6 +207,35 @@ impl<B: Backend> Gaussian3dScene<B> {
         self.scalings =
             Param::initialized(self.scalings.id.to_owned(), scalings);
         self
+    }
+}
+
+impl<B: Backend> Gaussian3dScene<B> {
+    #[inline]
+    pub fn point_count(&self) -> usize {
+        debug_assert_eq!(
+            self.colors_sh.val().dims()[0],
+            self.opacities.val().dims()[0]
+        );
+        debug_assert_eq!(
+            self.colors_sh.val().dims()[0],
+            self.positions.val().dims()[0]
+        );
+        debug_assert_eq!(
+            self.colors_sh.val().dims()[0],
+            self.rotations.val().dims()[0]
+        );
+        debug_assert_eq!(
+            self.colors_sh.val().dims()[0],
+            self.scalings.val().dims()[0]
+        );
+
+        self.colors_sh.val().dims()[0]
+    }
+
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.num_params() * size_of::<B::FloatElem>()
     }
 }
 

@@ -126,7 +126,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     1.4453057,
     -0.5900436,
 );
-// The r for `1 - Min opacity = ∫[-r, r] e^(-x^2 / 2) dx / √2π`
+// The r for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
 const RADIUS_FACTOR: f32 = 3.0961087;
 
 const GROUP_SIZE_X: u32 = 16;

@@ -130,7 +130,8 @@ fn main(
             point_rendered_state++;
 
             // Computing the density of the point in the pixel
-            // σ = e^(-0.5 * D^t[1, 2] * Σ'^-1[2, 2] * D[2, 1])
+            // D[2, 1] = Pv'[2, 1] - Px[2, 1]
+            // σ[n] = e^(-0.5 * D^t[1, 2] * Σ'^-1[2, 2] * D[2, 1])[n]
 
             let conic = batch_conics[batch_index];
             let position_2d = batch_positions_2d[batch_index];
@@ -144,7 +145,7 @@ fn main(
             }
 
             // Computing the 2D opacity of the point in the pixel
-            // α' = α * σ
+            // α'[n] = α[n] * σ[n]
 
             let opacity_3d = batch_opacities_3d[batch_index];
             let opacity_2d = min(opacity_3d * density, OPACITY_2D_MAX);
@@ -155,8 +156,8 @@ fn main(
                 continue;
             }
 
-            // Computing the transmittance
-            // T[n] = T[n-1] * (1 - α')
+            // Computing the next transmittance
+            // t[n + 1] = t[n] * (1 - α'[n])
 
             let transmittance = transmittance_state * (1.0 - opacity_2d);
 
@@ -168,11 +169,12 @@ fn main(
             }
 
             // Blending the 3D colors of the pixel into the 2D color in RGB space
+            // C_rgb'[n + 1] = C_rgb'[n] + C_rgb[n] * α'[n] * t[n]
 
             let color_rgb_3d = batch_colors_rgb_3d[batch_index];
-            color_rgb_2d += opacity_2d * transmittance_state * color_rgb_3d;
+            color_rgb_2d += color_rgb_3d * opacity_2d * transmittance_state;
 
-            // Updating the states
+            // Updating the states of the pixel
 
             point_rendered_count = point_rendered_state;
             transmittance_state = transmittance;
@@ -185,12 +187,16 @@ fn main(
 
     if is_pixel_valid {
         // Paint the pixel
+
         // [I_y, I_x, 3]
         colors_rgb_2d[pixel_index] = array<f32, 3>(
             color_rgb_2d[0],
             color_rgb_2d[1],
             color_rgb_2d[2],
         );
+
+        // Recording the states
+
         // [I_y, I_x]
         point_rendered_counts[pixel_index] = point_rendered_count;
         // [I_y, I_x]
