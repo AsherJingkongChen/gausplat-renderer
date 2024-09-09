@@ -5,6 +5,7 @@ pub use super::*;
 use crate::preset::render::*;
 use backend::Wgpu;
 use burn::backend::wgpu::SourceKernel;
+use burn_jit::cubecl::{CubeCount, CubeDim};
 use bytemuck::bytes_of;
 use kernel::*;
 
@@ -68,13 +69,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel1WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: tile_size_x,
                 y: tile_size_y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(tile_count_x, tile_count_y, 1),
+        CubeCount::Static(tile_count_x, tile_count_y, 1),
         vec![
             arguments.binding(),
             state.conics.handle.to_owned().binding(),
@@ -92,15 +93,6 @@ pub fn render_gaussian_3d_scene(
             positions_2d_grad.handle.to_owned().binding(),
         ],
     );
-
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_backward > 1",
-        );
-    }
 
     // Performing the backward pass #2
 
@@ -133,13 +125,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel2WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: GROUP_SIZE_X,
                 y: GROUP_SIZE_Y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(
+        CubeCount::Static(
             (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
@@ -172,15 +164,6 @@ pub fn render_gaussian_3d_scene(
             scalings_grad.handle.to_owned().binding(),
         ],
     );
-
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_backward > 2",
-        );
-    }
 
     backward::RenderOutput {
         colors_sh_grad,

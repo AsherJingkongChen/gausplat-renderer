@@ -1,4 +1,5 @@
 use burn::backend::wgpu::{KernelSource, SourceTemplate};
+use burn_jit::cubecl::KernelId;
 use bytemuck::{Pod, Zeroable};
 
 pub struct Kernel1WgslSource;
@@ -32,8 +33,8 @@ impl KernelSource for Kernel1WgslSource {
         SourceTemplate::new(include_str!("./1.wgsl"))
     }
 
-    fn id(&self) -> cubecl::KernelId {
-        cubecl::KernelId::new::<Self>()
+    fn id(&self) -> KernelId {
+        KernelId::new::<Self>()
     }
 }
 
@@ -42,7 +43,7 @@ impl KernelSource for Kernel2WgslSource {
         SourceTemplate::new(include_str!("./2.wgsl"))
     }
 
-    fn id(&self) -> cubecl::KernelId {
-        cubecl::KernelId::new::<Self>()
+    fn id(&self) -> KernelId {
+        KernelId::new::<Self>()
     }
 }

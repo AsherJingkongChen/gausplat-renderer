@@ -9,6 +9,7 @@ use burn::{
     backend::wgpu::{into_contiguous, SourceKernel},
     tensor::Shape,
 };
+use burn_jit::cubecl::{CubeCount, CubeDim};
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use kernel::*;
 use point::*;
@@ -164,13 +165,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel1WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: GROUP_SIZE_X,
                 y: GROUP_SIZE_Y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(
+        CubeCount::Static(
             (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
@@ -206,15 +207,6 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 1",
-        );
-    }
-
     // Performing the forward pass #2
 
     // (T, [P])
@@ -243,19 +235,6 @@ pub fn render_gaussian_3d_scene(
         )
     };
 
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 2",
-        );
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > tile_touched_count ({tile_touched_count})",
-        );
-    }
-
     // Performing the forward pass #3
 
     let arguments = client.create(bytes_of(&Kernel3Arguments {
@@ -269,13 +248,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel3WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: GROUP_SIZE_X,
                 y: GROUP_SIZE_Y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(
+        CubeCount::Static(
             (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
@@ -291,15 +270,6 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 3",
-        );
-    }
-
     // Performing the forward pass #4
 
     // ([T], [T])
@@ -314,15 +284,6 @@ pub fn render_gaussian_3d_scene(
             .map(|point| (point.index, point.tile_index()))
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
-
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 4",
-        );
-    }
 
     // Performing the forward pass #5
 
@@ -360,13 +321,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel5WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: GROUP_SIZE_X,
                 y: GROUP_SIZE_Y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(
+        CubeCount::Static(
             (tile_touched_count + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
@@ -377,15 +338,6 @@ pub fn render_gaussian_3d_scene(
             tile_point_ranges.handle.to_owned().binding(),
         ],
     );
-
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 5",
-        );
-    }
 
     // Performing the forward pass #6
 
@@ -413,13 +365,13 @@ pub fn render_gaussian_3d_scene(
     client.execute(
         Box::new(SourceKernel::new(
             Kernel6WgslSource,
-            cubecl::CubeDim {
+            CubeDim {
                 x: tile_size_x,
                 y: tile_size_y,
                 z: 1,
             },
         )),
-        cubecl::CubeCount::Static(tile_count_x, tile_count_y, 1),
+        CubeCount::Static(tile_count_x, tile_count_y, 1),
         vec![
             arguments.binding(),
             colors_rgb_3d.handle.to_owned().binding(),
@@ -433,19 +385,6 @@ pub fn render_gaussian_3d_scene(
             transmittances.handle.to_owned().binding(),
         ],
     );
-
-    #[cfg(debug_assertions)]
-    {
-        client.sync(cubecl::client::SyncType::Wait);
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > 6",
-        );
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward > tile_touched_count ({tile_touched_count})",
-        );
-    }
 
     // Specifying the results
 
