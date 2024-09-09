@@ -321,8 +321,10 @@ fn main(
         vec2<u32>(),
         vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
     );
-    let tile_touched_count = (tile_touched_max.x - tile_touched_min.x) * (tile_touched_max.y - tile_touched_min.y);
-    
+    let tile_touched_count =
+        (tile_touched_max.x - tile_touched_min.x) *
+        (tile_touched_max.y - tile_touched_min.y);
+
     // Leaving if no tile is touched
 
     if tile_touched_count == 0 {

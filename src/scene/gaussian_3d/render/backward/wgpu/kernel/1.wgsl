@@ -197,9 +197,11 @@ fn main(
             //              =〈∂L/∂C_rgb', t[n] * (C_rgb[n] - C_rgb'[n])〉
 
             let color_rgb_3d_grad = opacity_2d * transmittance_state * color_rgb_2d_grad;
-            let opacity_2d_grad = transmittance_state * dot(
-                (color_rgb_3d_state - color_rgb_2d_state) * color_rgb_2d_grad,
-                vec3<f32>(1.0),
+            let opacity_2d_grad_terms = (color_rgb_3d_state - color_rgb_2d_state) * color_rgb_2d_grad;
+            let opacity_2d_grad = transmittance_state * (
+                opacity_2d_grad_terms[0] +
+                opacity_2d_grad_terms[1] +
+                opacity_2d_grad_terms[2]
             );
 
             // Computing the gradients of the point

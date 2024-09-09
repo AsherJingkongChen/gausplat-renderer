@@ -45,7 +45,7 @@ var<workgroup> batch_opacities_3d: array<f32, BATCH_SIZE>;
 // [T_x * T_y, 2]
 var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_x * T_y)
-var<workgroup> pixel_done_count: atomic<u32>;
+var<workgroup> pixel_done_count: u32;
 
 const OPACITY_2D_MAX: f32 = 0.99;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
@@ -76,7 +76,6 @@ fn main(
     // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
     let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
-
     // R
     var tile_point_count = tile_point_range.y - tile_point_range.x;
     var color_rgb_2d = vec3<f32>();
@@ -94,11 +93,11 @@ fn main(
 
         if is_pixel_done && !was_pixel_done {
             was_pixel_done = true;
-            let count = atomicAdd(&pixel_done_count, 1u) + 1u;
+            pixel_done_count += 1u;
 
             // Leaving if all the pixels of tile are finished rendering
 
-            if count == BATCH_SIZE {
+            if pixel_done_count == BATCH_SIZE {
                 break;
             }
         }

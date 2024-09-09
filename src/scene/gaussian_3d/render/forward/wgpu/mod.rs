@@ -293,14 +293,11 @@ pub fn render_gaussian_3d_scene(
     let tile_point_ranges = {
         let ranges_shape =
             Shape::from([tile_count_y as usize, tile_count_x as usize, 2]);
-        let mut ranges = vec![0; ranges_shape.num_elements()]; // Tensor::<Wgpu, 2, Int>::empty([tile_count, 2], device);
+        let mut ranges = vec![0; ranges_shape.num_elements()];
 
         if !point_tile_indexes.is_empty() {
-            // let tile_index_first =
-            //     *point_tile_indexes.first().expect("Unreachable") as usize;
             let tile_index_last =
                 *point_tile_indexes.last().expect("Unreachable") as usize;
-            // ranges[tile_index_first * 2 + 0] = 0;
             ranges[tile_index_last * 2 + 1] = tile_touched_count;
         }
 

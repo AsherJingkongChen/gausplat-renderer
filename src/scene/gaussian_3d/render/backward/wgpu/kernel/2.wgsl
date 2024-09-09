@@ -371,8 +371,10 @@ fn main(
         focal_length_normalized2 * projection_affine_grad[2];
     // ∂L/∂Pv[3]
     let position_3d_in_view_grad = vec3<f32>(
-        - is_position_3d_in_normalized_not_clamped.x * focal_length_normalized2_projection_affine_grad_2.x,
-        - is_position_3d_in_normalized_not_clamped.y * focal_length_normalized2_projection_affine_grad_2.y,
+        - is_position_3d_in_normalized_not_clamped.x *
+          focal_length_normalized2_projection_affine_grad_2.x,
+        - is_position_3d_in_normalized_not_clamped.y *
+          focal_length_normalized2_projection_affine_grad_2.y,
         - focal_length_normalized2.x * projection_affine_grad[0][0]
         - focal_length_normalized2.y * projection_affine_grad[1][1]
         + 2 * dot(position_3d_in_normalized_clamped, focal_length_normalized2_projection_affine_grad_2),
