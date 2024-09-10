@@ -248,8 +248,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
         &self,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
-        f.debug_struct("Gaussian3dScene")
-            .field("backend", &B::name())
+        f.debug_struct(&format!("Gaussian3dScene<{}>", B::name()))
             .field("devices", &self.devices())
             .field("size", &format_size(self.size(), BINARY))
             .field("colors_sh.dims()", &self.colors_sh.dims())

@@ -8,7 +8,6 @@ pub struct PointInfo {
 }
 
 impl PointInfo {
-    #[inline]
     pub fn key(&self) -> u64 {
         (self.key[0] as u64) << 32 | (self.key[1] as u64)
     }

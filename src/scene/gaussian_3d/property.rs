@@ -253,6 +253,7 @@ mod tests {
             Distribution::Default,
             &device,
         );
+        let input_rotations = Tensor::<NdArray<f32>, 2>::ones([10, 4], &device);
         let input_opacities = Tensor::<NdArray<f32>, 2>::random(
             [10, 1],
             Distribution::Default,
@@ -275,7 +276,10 @@ mod tests {
             .set_colors_sh(input_colors_sh.to_owned())
             .set_opacities(input_opacities.to_owned())
             .set_positions(input_positions.to_owned())
+            .set_rotations(input_rotations.to_owned())
             .set_scalings(input_scalings.to_owned());
+
+        assert_eq!(scene.point_count(), 10);
 
         input_colors_sh
             .into_data()
@@ -286,6 +290,10 @@ mod tests {
         input_positions
             .into_data()
             .assert_approx_eq(&scene.positions().into_data(), 6);
+        assert!(input_rotations
+            .not_equal(scene.rotations())
+            .all()
+            .into_scalar());
         input_scalings
             .into_data()
             .assert_approx_eq(&scene.scalings().into_data(), 6);

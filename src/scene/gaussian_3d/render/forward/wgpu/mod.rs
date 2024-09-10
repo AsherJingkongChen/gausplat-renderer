@@ -225,6 +225,8 @@ pub fn render_gaussian_3d_scene(
             .collect::<Vec<_>>();
         count += *offsets.last().unwrap_or(&0);
 
+        debug_assert!(count != 0, "No point is touched by any tile");
+
         (
             count,
             Tensor::<Wgpu, 1, Int>::from_data(

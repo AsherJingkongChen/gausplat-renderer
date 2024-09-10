@@ -2,7 +2,7 @@ pub mod backward;
 pub mod forward;
 
 pub use super::*;
-pub use burn::{config::Config, tensor::Int};
+pub use burn::{config::Config, record::Record, tensor::Int};
 
 use burn::{
     backend::autodiff::{
@@ -30,7 +30,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     ) -> backward::RenderOutput<B>;
 }
 
-#[derive(Config, Debug)]
+#[derive(Config, Debug, Record)]
 pub struct Gaussian3dRendererOptions {
     #[config(default = "SH_DEGREE_MAX")]
     /// It should be no more than [`SH_DEGREE_MAX`].
@@ -185,9 +185,6 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         _checkpointer: &mut Checkpointer,
     ) {
         #[cfg(debug_assertions)]
-        use std::collections::BTreeMap;
-
-        #[cfg(debug_assertions)]
         {
             log::debug!(
                 target: "gausplat_renderer::scene",
@@ -197,118 +194,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
 
         let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 
-        #[cfg(debug_assertions)]
-        {
-            let colors_rgb_2d_grad = Tensor::<B, 3>::new(
-                TensorPrimitive::Float(colors_rgb_2d_grad.to_owned()),
-            );
-
-            #[cfg(debug_assertions)]
-            {
-                let gradient_means = BTreeMap::from([(
-                    "colors_rgb_2d_grad.mean",
-                    colors_rgb_2d_grad
-                        .to_owned()
-                        .mean_dim(0)
-                        .mean_dim(1)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                )]);
-                log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
-                );
-            }
-
-            if colors_rgb_2d_grad.contains_nan().into_scalar() {
-                log::warn!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dRendererBackward::backward > colors_rgb_2d_grad.contains_nan",
-                );
-            }
-        }
-
         let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
-
-        #[cfg(debug_assertions)]
-        {
-            let colors_sh_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.colors_sh_grad.to_owned(),
-            ));
-            let opacities_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.opacities_grad.to_owned(),
-            ));
-            let positions_2d_grad_norm =
-                Tensor::<B, 1>::new(TensorPrimitive::Float(
-                    output.positions_2d_grad_norm.to_owned(),
-                ));
-            let positions_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.positions_grad.to_owned(),
-            ));
-            let rotations_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.rotations_grad.to_owned(),
-            ));
-            let scalings_grad = Tensor::<B, 2>::new(TensorPrimitive::Float(
-                output.scalings_grad.to_owned(),
-            ));
-
-            let gradient_means = BTreeMap::from([
-                (
-                    "colors_sh_grad.mean",
-                    colors_sh_grad
-                        .mean_dim(0)
-                        .mean_dim(1)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-                (
-                    "opacities_grad.mean",
-                    opacities_grad
-                        .mean_dim(0)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-                (
-                    "positions_2d_grad_norm.mean",
-                    positions_2d_grad_norm
-                        .mean_dim(0)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-                (
-                    "positions_grad.mean",
-                    positions_grad
-                        .mean_dim(0)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-                (
-                    "rotations_grad.mean",
-                    rotations_grad
-                        .mean_dim(0)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-                (
-                    "scalings_grad.mean",
-                    scalings_grad
-                        .mean_dim(0)
-                        .into_data()
-                        .to_vec::<f32>()
-                        .unwrap(),
-                ),
-            ]);
-            log::debug!(
-                target: "gausplat_renderer::scene",
-                "Gaussian3dRendererBackward::backward > Gradient means {gradient_means:#?}",
-            );
-        }
 
         if let Some(node) = &ops.parents[0] {
             grads.register::<B, 2>(node.id, output.colors_sh_grad);
@@ -345,7 +231,7 @@ impl<B: Backend> fmt::Debug for RenderOutput<B> {
         &self,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        f.debug_struct("RenderOutput")
+        f.debug_struct(&format!("RenderOutput<{}>", B::name()))
             .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
             .finish()
     }
@@ -359,7 +245,7 @@ impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
         let radii_dims = self.radii.dims();
         let positions_2d_grad_norm_dims = &radii_dims;
 
-        f.debug_struct("RenderOutputAutodiff")
+        f.debug_struct(&format!("RenderOutputAutodiff<{}>", B::name()))
             .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
             .field(
                 "positions_2d_grad_norm.dims()",
@@ -367,5 +253,42 @@ impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
             )
             .field("radii.dims()", &radii_dims)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VIEW: View = View {
+        field_of_view_x: 1.39,
+        field_of_view_y: 0.88,
+        image_height: 600,
+        image_width: 900,
+        view_id: 0,
+        view_position: [1.86, 0.45, 2.92],
+        view_transform: [
+            [-0.99, 0.08, -0.10, 0.00],
+            [0.06, 0.99, 0.05, 0.00],
+            [0.10, 0.05, -0.99, 0.00],
+            [1.47, -0.69, 3.08, 1.00],
+        ],
+    };
+
+    #[test]
+    fn default_render_wgpu() {
+        use super::*;
+
+        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
+    }
+
+    #[test]
+    fn default_render_wgpu_autodiff() {
+        use super::*;
+
+        Gaussian3dScene::<Autodiff<Wgpu>>::default()
+            .render(&VIEW, &Default::default())
+            .colors_rgb_2d
+            .backward();
     }
 }
