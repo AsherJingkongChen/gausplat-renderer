@@ -86,6 +86,7 @@ var<storage, read_write> rotations_grad: array<vec4<f32>>;
 @group(0) @binding(24)
 var<storage, read_write> scalings_grad: array<array<f32, 3>>;
 
+// The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
 const SH_C_0: array<f32, 1> = array<f32, 1>(
     0.2820948,
 );

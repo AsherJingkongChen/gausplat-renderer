@@ -1,20 +1,16 @@
 use bytemuck::{Pod, Zeroable};
 
-#[repr(C, packed(4))]
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, Pod, Zeroable)]
 pub struct PointInfo {
-    pub key: [u32; 2],
+    pub order: u32,
     pub index: u32,
 }
 
 impl PointInfo {
-    pub fn key(&self) -> u64 {
-        (self.key[0] as u64) << 32 | (self.key[1] as u64)
-    }
-
     #[inline]
     pub fn tile_index(&self) -> u32 {
-        self.key[0]
+        self.order >> 16
     }
 }
 
@@ -24,7 +20,7 @@ impl Ord for PointInfo {
         &self,
         other: &Self,
     ) -> std::cmp::Ordering {
-        self.key().cmp(&other.key())
+        self.order.cmp(&other.order)
     }
 }
 
@@ -34,7 +30,7 @@ impl PartialEq for PointInfo {
         &self,
         other: &Self,
     ) -> bool {
-        self.key().eq(&other.key())
+        self.order.eq(&other.order)
     }
 }
 

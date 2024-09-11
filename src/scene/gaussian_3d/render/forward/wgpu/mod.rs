@@ -68,6 +68,19 @@ pub fn render_gaussian_3d_scene(
     // P
     let point_count = colors_sh.shape.dims[0];
 
+    debug_assert!(
+        colors_sh_degree_max <= SH_DEGREE_MAX,
+        "colors_sh_degree_max should be no more than {SH_DEGREE_MAX}",
+    );
+    debug_assert!(
+        image_size_x > 0 && image_size_y > 0,
+        "image_size_x and image_size_y should be more than 0",
+    );
+    debug_assert!(
+        image_size_x * image_size_y <= PIXEL_COUNT_MAX,
+        "Pixel count should be no more than {PIXEL_COUNT_MAX}",
+    );
+
     // Performing the forward pass #1
 
     let arguments = client.create(bytes_of(&Kernel1Arguments {
@@ -244,7 +257,7 @@ pub fn render_gaussian_3d_scene(
         tile_count_x,
     }));
     let point_infos =
-        Tensor::<Wgpu, 2, Int>::empty([tile_touched_count as usize, 3], device)
+        Tensor::<Wgpu, 2, Int>::empty([tile_touched_count as usize, 2], device)
             .into_primitive();
 
     client.execute(

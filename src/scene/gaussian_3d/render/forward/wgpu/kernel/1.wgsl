@@ -102,6 +102,7 @@ var<storage, read_write> view_directions: array<vec3<f32>>;
 @group(0) @binding(23)
 var<storage, read_write> view_offsets: array<vec3<f32>>;
 
+// The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
 const SH_C_0: array<f32, 1> = array<f32, 1>(
     0.2820948,
 );
@@ -126,8 +127,13 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     1.4453057,
     -0.5900436,
 );
-// The r for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const RADIUS_FACTOR: f32 = 3.0961087;
+
+// The depth range is optimized for sorting of 32-bit key
+const DEPTH_MAX: f32 = f32(1u << (17 - 4));
+const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
+
+// The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
+const FACTOR_RADIUS: f32 = 3.0961087;
 
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
@@ -156,7 +162,7 @@ fn main(
 
     // Performing viewing-frustum culling
 
-    if depth <= 0.2 {
+    if depth < DEPTH_MIN || depth >= DEPTH_MAX {
         return;
     }
 
@@ -297,7 +303,7 @@ fn main(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
     );
-    let radius = ceil(sqrt(eigenvalue_max) * RADIUS_FACTOR);
+    let radius = ceil(sqrt(eigenvalue_max) * FACTOR_RADIUS);
 
     // Checking the tiles touched
 
