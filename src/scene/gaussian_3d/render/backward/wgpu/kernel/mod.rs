@@ -1,5 +1,7 @@
-use burn::backend::wgpu::{KernelSource, SourceTemplate};
-use burn_jit::cubecl::KernelId;
+use burn_jit::{
+    cubecl::KernelId,
+    template::{KernelSource, SourceTemplate},
+};
 use bytemuck::{Pod, Zeroable};
 
 pub struct Kernel1WgslSource;

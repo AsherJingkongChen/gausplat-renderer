@@ -5,11 +5,12 @@ pub use super::*;
 
 use crate::preset::render::*;
 use backend::Wgpu;
-use burn::{
-    backend::wgpu::{into_contiguous, SourceKernel},
-    tensor::Shape,
+use burn::tensor::Shape;
+use burn_jit::{
+    cubecl::{CubeCount, CubeDim},
+    kernel::into_contiguous,
+    template::SourceKernel,
 };
-use burn_jit::cubecl::{CubeCount, CubeDim};
 use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
 use kernel::*;
 use point::*;

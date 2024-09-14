@@ -4,8 +4,11 @@ pub use super::*;
 
 use crate::preset::render::*;
 use backend::Wgpu;
-use burn::backend::wgpu::SourceKernel;
-use burn_jit::cubecl::{CubeCount, CubeDim};
+use burn_jit::{
+    cubecl::{CubeCount, CubeDim},
+    kernel::into_contiguous,
+    template::SourceKernel,
+};
 use bytemuck::bytes_of;
 use kernel::*;
 
@@ -23,6 +26,7 @@ pub fn render_gaussian_3d_scene(
     }
 
     let client = &state.colors_sh.client;
+    let colors_rgb_2d_grad = into_contiguous(colors_rgb_2d_grad);
     let colors_sh_degree_max = state.colors_sh_degree_max;
     let device = &state.colors_sh.device;
     let focal_length_x = state.focal_length_x as f32;
