@@ -132,7 +132,7 @@ pub fn render_gaussian_3d_scene(
             },
         )),
         CubeCount::Static(
-            (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
+            (point_count as u32 + GROUP_COUNT - 1) / GROUP_COUNT,
             1,
             1,
         ),
