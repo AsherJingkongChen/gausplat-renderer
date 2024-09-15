@@ -93,7 +93,7 @@ fn main(
         colors_rgb_2d_grad[pixel_index][1],
         colors_rgb_2d_grad[pixel_index][2],
     );
-    let point_rendered_count = select(0u, point_rendered_counts[pixel_index], is_pixel_valid);
+    var point_rendered_count = u32();
 
     // R
     var tile_point_count = tile_point_range.y - tile_point_range.x;
@@ -101,7 +101,12 @@ fn main(
     var color_rgb_3d_state = vec3<f32>();
     var opacity_2d_state = 0.0;
     var point_rendered_state = tile_point_count;
-    var transmittance_state = select(0.0, transmittances[pixel_index], is_pixel_valid);
+    var transmittance_state = f32();
+
+    if is_pixel_valid {
+        point_rendered_count = point_rendered_counts[pixel_index];
+        transmittance_state = transmittances[pixel_index];
+    }
 
     // Processing batches of points of the tile
     // [R / (T_x * T_y)]

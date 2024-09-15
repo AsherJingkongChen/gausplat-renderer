@@ -415,8 +415,8 @@ fn main(
 
     color_rgb_3d += 0.5;
 
-    let is_color_rgb_3d_not_clamped = vec3<f32>(color_rgb_3d >= vec3<f32>());
-    color_rgb_3d = max(color_rgb_3d, vec3<f32>());
+    let is_color_rgb_3d_not_clamped = color_rgb_3d >= vec3<f32>();
+    color_rgb_3d = select(vec3<f32>(), color_rgb_3d, is_color_rgb_3d_not_clamped);
 
     // Specifying the results
 
@@ -429,7 +429,7 @@ fn main(
     // [P]
     depths[index] = depth;
     // [P, 3 (+ 1)]
-    is_colors_rgb_3d_not_clamped[index] = is_color_rgb_3d_not_clamped;
+    is_colors_rgb_3d_not_clamped[index] = vec3<f32>(is_color_rgb_3d_not_clamped);
     // [P, 2]
     positions_2d[index] = position_2d;
     // [P, 2]
