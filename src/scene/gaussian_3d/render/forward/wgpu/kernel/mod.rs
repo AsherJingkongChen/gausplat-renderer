@@ -1,15 +1,21 @@
+pub use burn::backend::wgpu::WgpuRuntime;
 pub use burn_jit::{
-    cubecl::KernelId,
+    cubecl::{client::ComputeClient, KernelId, Runtime},
     template::{KernelSource, SourceTemplate},
 };
 pub use bytemuck::{Pod, Zeroable};
+
+pub type WgpuClient = ComputeClient<
+    <WgpuRuntime as Runtime>::Server,
+    <WgpuRuntime as Runtime>::Channel,
+>;
 
 pub struct Kernel1WgslSource;
 pub struct Kernel3WgslSource;
 pub struct Kernel5WgslSource;
 pub struct Kernel6WgslSource;
-pub struct KernelSumExclusiveAdd;
-pub struct KernelSumExclusiveScan;
+pub struct KernelScanAddExclusiveAdd;
+pub struct KernelScanAddExclusiveScan;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -105,9 +111,9 @@ impl KernelSource for Kernel6WgslSource {
     }
 }
 
-impl KernelSource for KernelSumExclusiveAdd {
+impl KernelSource for KernelScanAddExclusiveAdd {
     fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./sum_exclusive_add.wgsl"))
+        SourceTemplate::new(include_str!("./scan_add_exclusive_add.wgsl"))
     }
 
     fn id(&self) -> KernelId {
@@ -115,9 +121,9 @@ impl KernelSource for KernelSumExclusiveAdd {
     }
 }
 
-impl KernelSource for KernelSumExclusiveScan {
+impl KernelSource for KernelScanAddExclusiveScan {
     fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./sum_exclusive_scan.wgsl"))
+        SourceTemplate::new(include_str!("./scan_add_exclusive_scan.wgsl"))
     }
 
     fn id(&self) -> KernelId {

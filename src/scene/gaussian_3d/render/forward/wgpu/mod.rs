@@ -225,69 +225,12 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // Performing the forward pass #2
-
-    // use bytemuck::cast_slice;
-
-    // // (T, [P])
-    // let (tile_touched_count_old, tile_touched_offsets_old) = {
-    //     let counts =
-    //         &client.read(tile_touched_counts.handle.to_owned().binding());
-    //     let counts = cast_slice::<u8, u32>(counts);
-
-    //     let mut count = *counts.last().unwrap_or(&0);
-    //     let offsets = counts
-    //         .iter()
-    //         .scan(0, |state, count| {
-    //             let offset = *state;
-    //             *state += count;
-    //             Some(offset)
-    //         })
-    //         .collect::<Vec<_>>();
-    //     count += *offsets.last().unwrap_or(&0);
-
-    //     debug_assert!(count != 0, "No point is touched by any tile");
-
-    //     (
-    //         count,
-    //         Tensor::<Wgpu, 1, Int>::from_data(
-    //             TensorData::new(offsets, [point_count]),
-    //             device,
-    //         )
-    //         .into_primitive(),
-    //     )
-    // };
-
-    // client.sync(burn::tensor::backend::SyncType::Wait);
-    // let time = std::time::Instant::now();
+    // Computing the offsets of touched tiles
 
     // [P]
     let tile_touched_offsets = tile_touched_counts;
     // T
-    let tile_touched_count = sum_exclusive(client, &tile_touched_offsets);
-
-    // debug_assert!(tile_touched_count != 0, "No point is touched by any tile");
-    // client.sync(burn::tensor::backend::SyncType::Wait);
-    // let time = time.elapsed().as_secs_f64();
-    // println!("    {},", time);
-
-    // {
-    //     assert_eq!(tile_touched_count, tile_touched_count_old);
-    //     let tile_touched_offsets =
-    //         &client.read(tile_touched_offsets.handle.to_owned().binding());
-    //     let tile_touched_offsets_old =
-    //         &client.read(tile_touched_offsets_old.handle.to_owned().binding());
-
-    //     let tile_touched_offsets = cast_slice::<u8, u32>(tile_touched_offsets);
-    //     let tile_touched_offsets_old =
-    //         cast_slice::<u8, u32>(tile_touched_offsets_old);
-
-    //     tile_touched_offsets.iter().zip(tile_touched_offsets_old).enumerate().for_each(
-    //         |(index, (offset, offset_old))| {
-    //             assert_eq!(offset, offset_old, "index: {index}");
-    //         },
-    //     );
-    // }
+    let tile_touched_count = scan_add_exclusive(client, &tile_touched_offsets);
 
     // Performing the forward pass #3
 
