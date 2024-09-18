@@ -47,9 +47,9 @@ var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_x * T_y)
 var<workgroup> pixel_done_count: u32;
 
-const OPACITY_2D_MAX: f32 = 0.99;
+const OPACITY_2D_MAX: f32 = 1.0 - 1.5 / 255.0;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
-const TRANSMITTANCE_MIN: f32 = 1e-4;
+const TRANSMITTANCE_MIN: f32 = 5e-5;
 // T_x * T_y
 const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 // T_x
@@ -60,21 +60,27 @@ const GROUP_SIZE_Y: u32 = 16;
 @compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(workgroup_id) group_id: vec3<u32>,
-    // (I_x / T_x, I_y / T_y)
-    @builtin(num_workgroups) group_count: vec3<u32>,
     // (0 ~ T_x * T_y)
     @builtin(local_invocation_index) local_index: u32,
+    @builtin(workgroup_id) tile_id: vec3<u32>,
+    // (I_x / T_x, I_y / T_y)
+    @builtin(num_workgroups) tile_count: vec3<u32>,
 ) {
-    // Specifying the parameters
+    // Specifying the index
 
     // (0 ~ I_x, 0 ~ I_y)
     let pixel = global_id.xy;
-    let position_pixel = vec2<f32>(pixel);
+    // (0 ~ I_x * I_y)
     let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
+    // (0 ~ (I_x / T_x) * (I_y / T_y))
+    let tile_index = tile_id.y * tile_count.x + tile_id.x;
+
+    // Specifying the parameters
+
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
+    let position_pixel = vec2<f32>(pixel);
     // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
-    let tile_point_range = tile_point_ranges[group_id.y * group_count.x + group_id.x];
+    let tile_point_range = tile_point_ranges[tile_index];
     let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
     // R
     var tile_point_count = tile_point_range.y - tile_point_range.x;

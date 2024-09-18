@@ -19,7 +19,6 @@ const GROUP_SIZE_Y: u32 = 16;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
-    @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(num_workgroups) group_count: vec3<u32>,
     @builtin(workgroup_id) group_id: vec3<u32>,
     @builtin(local_invocation_index) local_index: u32,
