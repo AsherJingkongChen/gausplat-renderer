@@ -185,12 +185,10 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         _checkpointer: &mut Checkpointer,
     ) {
         #[cfg(debug_assertions)]
-        {
-            log::debug!(
-                target: "gausplat_renderer::scene",
-                "Gaussian3dRendererBackward::backward",
-            );
-        }
+        log::debug!(
+            target: "gausplat_renderer::scene",
+            "Gaussian3dRendererBackward::backward",
+        );
 
         let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
 

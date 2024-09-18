@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+pub use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, Pod, Zeroable)]

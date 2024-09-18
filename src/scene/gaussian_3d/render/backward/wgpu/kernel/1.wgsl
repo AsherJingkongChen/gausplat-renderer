@@ -62,12 +62,12 @@ var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
 const OPACITY_2D_MAX: f32 = 0.99;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
 const TRANSMITTANCE_MIN: f32 = 1e-4;
+// T_x * T_y
+const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 // T_x
 const GROUP_SIZE_X: u32 = 16;
 // T_y
 const GROUP_SIZE_Y: u32 = 16;
-// T_x * T_y
-const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 
 @compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
 fn main(

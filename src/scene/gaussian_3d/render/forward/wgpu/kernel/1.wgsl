@@ -128,25 +128,25 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
 );
 
-// The depth range is optimized for sorting of 32-bit key
+// The depth range is restricted by 16-bit depth order
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
 
 // The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
 const FACTOR_RADIUS: f32 = 3.0961087;
 
+const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
 
-@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
+@compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
-    // Checking the index
+    // Specifying the index
 
     // (0 ~ P)
-    let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
+    let index = global_id.x;
     if index >= arguments.point_count {
         return;
     }

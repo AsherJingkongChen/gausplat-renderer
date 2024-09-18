@@ -13,18 +13,21 @@ var<storage, read_write> point_tile_indexes: array<u32>;
 @group(0) @binding(2)
 var<storage, read_write> tile_point_ranges: array<u32>;
 
+const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
 
-@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
+@compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(num_workgroups) group_count: vec3<u32>,
+    @builtin(workgroup_id) group_id: vec3<u32>,
+    @builtin(local_invocation_index) local_index: u32,
 ) {
-    // Checking the index
+    // Specifying the index
 
     // (1 ~ T)
-    let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
+    let index = (group_id.y * group_count.x + group_id.x) * GROUP_SIZE + local_index;
     if index >= arguments.tile_touched_count || index == 0 {
         return;
     }

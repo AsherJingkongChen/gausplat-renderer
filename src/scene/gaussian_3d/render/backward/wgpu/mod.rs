@@ -18,12 +18,10 @@ pub fn render_gaussian_3d_scene(
     colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
 ) -> backward::RenderOutput<Wgpu> {
     #[cfg(debug_assertions)]
-    {
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_backward",
-        );
-    }
+    log::debug!(
+        target: "gausplat_renderer::scene",
+        "Gaussian3dRenderer::<Wgpu>::render_backward",
+    );
 
     let client = &state.colors_sh.client;
     let colors_rgb_2d_grad = into_contiguous(colors_rgb_2d_grad);
@@ -130,13 +128,13 @@ pub fn render_gaussian_3d_scene(
         Box::new(SourceKernel::new(
             Kernel2WgslSource,
             CubeDim {
-                x: GROUP_SIZE_X,
-                y: GROUP_SIZE_Y,
+                x: GROUP_SIZE,
+                y: 1,
                 z: 1,
             },
         )),
         CubeCount::Static(
-            (point_count as u32 + GROUP_COUNT - 1) / GROUP_COUNT,
+            (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
         ),

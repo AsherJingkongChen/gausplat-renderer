@@ -1,13 +1,15 @@
-use burn_jit::{
+pub use burn_jit::{
     cubecl::KernelId,
     template::{KernelSource, SourceTemplate},
 };
-use bytemuck::{Pod, Zeroable};
+pub use bytemuck::{Pod, Zeroable};
 
 pub struct Kernel1WgslSource;
 pub struct Kernel3WgslSource;
 pub struct Kernel5WgslSource;
 pub struct Kernel6WgslSource;
+pub struct KernelSumExclusiveAdd;
+pub struct KernelSumExclusiveScan;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -96,6 +98,26 @@ impl KernelSource for Kernel5WgslSource {
 impl KernelSource for Kernel6WgslSource {
     fn source(&self) -> SourceTemplate {
         SourceTemplate::new(include_str!("./6.wgsl"))
+    }
+
+    fn id(&self) -> KernelId {
+        KernelId::new::<Self>()
+    }
+}
+
+impl KernelSource for KernelSumExclusiveAdd {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./sum_exclusive_add.wgsl"))
+    }
+
+    fn id(&self) -> KernelId {
+        KernelId::new::<Self>()
+    }
+}
+
+impl KernelSource for KernelSumExclusiveScan {
+    fn source(&self) -> SourceTemplate {
+        SourceTemplate::new(include_str!("./sum_exclusive_scan.wgsl"))
     }
 
     fn id(&self) -> KernelId {

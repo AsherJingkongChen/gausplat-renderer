@@ -112,18 +112,18 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
 );
 
+const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
 const GROUP_SIZE_X: u32 = 16;
 const GROUP_SIZE_Y: u32 = 16;
 
-@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
+@compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(num_workgroups) group_count: vec3<u32>,
 ) {
-    // Checking the index
+    // Specifying the index
 
     // (0 ~ P)
-    let index = global_id.y * group_count.x * GROUP_SIZE_X + global_id.x;
+    let index = global_id.x;
     if index >= arguments.point_count || radii[index] == 0u {
         return;
     }

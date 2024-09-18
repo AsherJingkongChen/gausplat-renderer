@@ -1,5 +1,6 @@
 mod kernel;
 mod point;
+mod scan;
 
 pub use super::*;
 
@@ -11,13 +12,14 @@ use burn_jit::{
     kernel::into_contiguous,
     template::SourceKernel,
 };
-use bytemuck::{bytes_of, cast_slice, cast_slice_mut};
+use bytemuck::{bytes_of, cast_slice_mut};
 use kernel::*;
 use point::*;
 use rayon::{
     iter::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
+use scan::*;
 
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
@@ -27,12 +29,10 @@ pub fn render_gaussian_3d_scene(
     // Specifying the parameters
 
     #[cfg(debug_assertions)]
-    {
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRenderer::<Wgpu>::render_forward",
-        );
-    }
+    log::debug!(
+        target: "gausplat_renderer::scene",
+        "Gaussian3dRenderer::<Wgpu>::render_forward",
+    );
 
     let colors_sh_degree_max = options.colors_sh_degree_max;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
@@ -80,6 +80,10 @@ pub fn render_gaussian_3d_scene(
     debug_assert!(
         image_size_x * image_size_y <= PIXEL_COUNT_MAX,
         "Pixel count should be no more than {PIXEL_COUNT_MAX}",
+    );
+    debug_assert!(
+        point_count > 0,
+        "The number of points should be more than 0",
     );
 
     // Performing the forward pass #1
@@ -180,13 +184,13 @@ pub fn render_gaussian_3d_scene(
         Box::new(SourceKernel::new(
             Kernel1WgslSource,
             CubeDim {
-                x: GROUP_SIZE_X,
-                y: GROUP_SIZE_Y,
+                x: GROUP_SIZE,
+                y: 1,
                 z: 1,
             },
         )),
         CubeCount::Static(
-            (point_count as u32 + GROUP_COUNT - 1) / GROUP_COUNT,
+            (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
         ),
@@ -223,33 +227,67 @@ pub fn render_gaussian_3d_scene(
 
     // Performing the forward pass #2
 
-    // (T, [P])
-    let (tile_touched_count, tile_touched_offsets) = {
-        let counts = &client.read(tile_touched_counts.handle.binding());
-        let counts = cast_slice::<u8, u32>(counts);
+    // use bytemuck::cast_slice;
 
-        let mut count = *counts.last().unwrap_or(&0);
-        let offsets = counts
-            .iter()
-            .scan(0, |state, count| {
-                let offset = *state;
-                *state += count;
-                Some(offset)
-            })
-            .collect::<Vec<_>>();
-        count += *offsets.last().unwrap_or(&0);
+    // // (T, [P])
+    // let (tile_touched_count_old, tile_touched_offsets_old) = {
+    //     let counts =
+    //         &client.read(tile_touched_counts.handle.to_owned().binding());
+    //     let counts = cast_slice::<u8, u32>(counts);
 
-        debug_assert!(count != 0, "No point is touched by any tile");
+    //     let mut count = *counts.last().unwrap_or(&0);
+    //     let offsets = counts
+    //         .iter()
+    //         .scan(0, |state, count| {
+    //             let offset = *state;
+    //             *state += count;
+    //             Some(offset)
+    //         })
+    //         .collect::<Vec<_>>();
+    //     count += *offsets.last().unwrap_or(&0);
 
-        (
-            count,
-            Tensor::<Wgpu, 1, Int>::from_data(
-                TensorData::new(offsets, [point_count]),
-                device,
-            )
-            .into_primitive(),
-        )
-    };
+    //     debug_assert!(count != 0, "No point is touched by any tile");
+
+    //     (
+    //         count,
+    //         Tensor::<Wgpu, 1, Int>::from_data(
+    //             TensorData::new(offsets, [point_count]),
+    //             device,
+    //         )
+    //         .into_primitive(),
+    //     )
+    // };
+
+    // client.sync(burn::tensor::backend::SyncType::Wait);
+    // let time = std::time::Instant::now();
+
+    // [P]
+    let tile_touched_offsets = tile_touched_counts;
+    // T
+    let tile_touched_count = sum_exclusive(client, &tile_touched_offsets);
+
+    // debug_assert!(tile_touched_count != 0, "No point is touched by any tile");
+    // client.sync(burn::tensor::backend::SyncType::Wait);
+    // let time = time.elapsed().as_secs_f64();
+    // println!("    {},", time);
+
+    // {
+    //     assert_eq!(tile_touched_count, tile_touched_count_old);
+    //     let tile_touched_offsets =
+    //         &client.read(tile_touched_offsets.handle.to_owned().binding());
+    //     let tile_touched_offsets_old =
+    //         &client.read(tile_touched_offsets_old.handle.to_owned().binding());
+
+    //     let tile_touched_offsets = cast_slice::<u8, u32>(tile_touched_offsets);
+    //     let tile_touched_offsets_old =
+    //         cast_slice::<u8, u32>(tile_touched_offsets_old);
+
+    //     tile_touched_offsets.iter().zip(tile_touched_offsets_old).enumerate().for_each(
+    //         |(index, (offset, offset_old))| {
+    //             assert_eq!(offset, offset_old, "index: {index}");
+    //         },
+    //     );
+    // }
 
     // Performing the forward pass #3
 
@@ -265,13 +303,13 @@ pub fn render_gaussian_3d_scene(
         Box::new(SourceKernel::new(
             Kernel3WgslSource,
             CubeDim {
-                x: GROUP_SIZE_X,
-                y: GROUP_SIZE_Y,
+                x: GROUP_SIZE,
+                y: 1,
                 z: 1,
             },
         )),
         CubeCount::Static(
-            (point_count as u32 + GROUP_COUNT * GROUP_SIZE_X - 1) / GROUP_COUNT,
+            (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
             1,
             1,
         ),
@@ -335,15 +373,15 @@ pub fn render_gaussian_3d_scene(
         Box::new(SourceKernel::new(
             Kernel5WgslSource,
             CubeDim {
-                x: GROUP_SIZE_X,
-                y: GROUP_SIZE_Y,
+                x: GROUP_SIZE,
+                y: 1,
                 z: 1,
             },
         )),
         CubeCount::Static(
-            (tile_touched_count + GROUP_COUNT * GROUP_COUNT - 1)
-                / (GROUP_COUNT * GROUP_COUNT),
-            GROUP_COUNT,
+            (tile_touched_count + GROUP_SIZE * GROUP_SIZE - 1)
+                / (GROUP_SIZE * GROUP_SIZE),
+            GROUP_SIZE,
             1,
         ),
         vec![
