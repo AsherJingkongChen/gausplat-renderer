@@ -1,6 +1,5 @@
 mod kernel;
 mod point;
-mod scan;
 
 pub use super::*;
 
@@ -12,27 +11,26 @@ use burn_jit::{
     kernel::into_contiguous,
     template::SourceKernel,
 };
-use bytemuck::{bytes_of, cast_slice_mut};
+use bytemuck::{bytes_of, cast_slice_mut, from_bytes};
 use kernel::*;
 use point::*;
 use rayon::{
     iter::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
-use scan::*;
 
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
     view: &View,
     options: &Gaussian3dRendererOptions,
 ) -> forward::RenderOutput<Wgpu> {
-    // Specifying the parameters
-
     #[cfg(debug_assertions)]
     log::debug!(
         target: "gausplat_renderer::scene",
         "Gaussian3dRenderer::<Wgpu>::render_forward",
     );
+
+    // Specifying the parameters
 
     let colors_sh_degree_max = options.colors_sh_degree_max;
     let field_of_view_x_half_tan = (view.field_of_view_x / 2.0).tan();
@@ -74,17 +72,12 @@ pub fn render_gaussian_3d_scene(
         "colors_sh_degree_max should be no more than {SH_DEGREE_MAX}",
     );
     debug_assert!(
-        image_size_x > 0 && image_size_y > 0,
-        "image_size_x and image_size_y should be more than 0",
-    );
-    debug_assert!(
         image_size_x * image_size_y <= PIXEL_COUNT_MAX,
         "Pixel count should be no more than {PIXEL_COUNT_MAX}",
     );
-    debug_assert!(
-        point_count > 0,
-        "The number of points should be more than 0",
-    );
+    debug_assert_ne!(image_size_x, 0);
+    debug_assert_ne!(image_size_y, 0);
+    debug_assert_ne!(point_count, 0);
 
     // Performing the forward pass #1
 
@@ -227,10 +220,10 @@ pub fn render_gaussian_3d_scene(
 
     // Computing the offsets of touched tiles
 
-    // [P]
     let tile_touched_offsets = tile_touched_counts;
     // T
-    let tile_touched_count = scan_add_exclusive(client, &tile_touched_offsets);
+    let tile_touched_count = scan_add(&tile_touched_offsets);
+    debug_assert_ne!(tile_touched_count, 0);
 
     // Performing the forward pass #3
 
@@ -269,6 +262,9 @@ pub fn render_gaussian_3d_scene(
 
     // Performing the forward pass #4
 
+    client.sync(burn::tensor::backend::SyncType::Wait);
+    let time = std::time::Instant::now();
+
     // ([T], [T])
     let (point_indexes, point_tile_indexes) = {
         let point_infos = &mut client.read(point_infos.handle.binding());
@@ -282,10 +278,12 @@ pub fn render_gaussian_3d_scene(
             .unzip::<_, _, Vec<_>, Vec<_>>()
     };
 
+    client.sync(burn::tensor::backend::SyncType::Wait);
+    let time = time.elapsed().as_secs_f64();
+    print!("{time} ");
+
     // Performing the forward pass #5
 
-    let arguments =
-        client.create(bytes_of(&Kernel5Arguments { tile_touched_count }));
     // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = {
         let ranges_shape =
@@ -328,7 +326,6 @@ pub fn render_gaussian_3d_scene(
             1,
         ),
         vec![
-            arguments.binding(),
             point_tile_indexes.handle.binding(),
             tile_point_ranges.handle.to_owned().binding(),
         ],
@@ -416,5 +413,255 @@ pub fn render_gaussian_3d_scene(
             view_offsets,
             view_rotation: view_transform,
         },
+    }
+}
+
+/// Performing an exclusive scan-and-add operation on the given tensor in place.
+///
+/// ## Arguments
+///
+/// - `sums`: The tensor to scan in place.
+///
+/// ## Returns
+///
+/// The total sum of all elements in `sums`.
+pub fn scan_add(
+    // [N]
+    sums: &<Wgpu as Backend>::IntTensorPrimitive<1>,
+) -> u32 {
+    const GROUP_SIZE: u32 = 256;
+
+    // Specifying the parameters
+
+    let client = &sums.client;
+    let device = &sums.device;
+    // N
+    let count = sums.shape.dims[0];
+    // N'
+    let count_next = (count as u32 + GROUP_SIZE - 1) / GROUP_SIZE;
+    // [N']
+    let sums_next =
+        Tensor::<Wgpu, 1, Int>::empty([count_next as usize], device)
+            .into_primitive();
+
+    let cube_count = CubeCount::Static(count_next, 1, 1);
+    let cube_dim = CubeDim {
+        x: GROUP_SIZE,
+        y: 1,
+        z: 1,
+    };
+
+    // Scanning
+
+    client.execute(
+        Box::new(SourceKernel::new(KernelScanAddScan, cube_dim)),
+        cube_count.to_owned(),
+        vec![
+            sums.handle.to_owned().binding(),
+            sums_next.handle.to_owned().binding(),
+        ],
+    );
+
+    // Recursing if there is more than one remaining group
+    if count_next > 1 {
+        let sum = scan_add(&sums_next);
+
+        // Adding
+
+        client.execute(
+            Box::new(SourceKernel::new(KernelScanAddAdd, cube_dim)),
+            cube_count,
+            vec![sums.handle.to_owned().binding(), sums_next.handle.binding()],
+        );
+
+        sum
+    } else {
+        debug_assert_eq!(count_next, 1);
+        *from_bytes::<u32>(&client.read(sums_next.handle.binding()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn radix_sort() {
+        use super::*;
+
+        // 2^R
+        const RADIX: u32 = 1 << RADIX_BIT_COUNT;
+        // R
+        const RADIX_BIT_COUNT: u32 = 8;
+
+        let device = &WgpuDevice::default();
+        let radix = RADIX as usize;
+        let mut keys_input = Tensor::<Wgpu, 1, Int>::from_ints(
+            [
+                0x100, 0x200, 0x103, 0x102, 0x905, 0x904, 0x907, 0x306, 0x302,
+                0x308,
+            ],
+            device,
+        )
+        .into_primitive();
+        let values_input = Tensor::<Wgpu, 1, Int>::from_ints(
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            device,
+        )
+        .into_primitive();
+        let mut keys_output =
+            Tensor::<Wgpu, 1, Int>::zeros([10], device).into_primitive();
+        let values_output =
+            Tensor::<Wgpu, 1, Int>::zeros([10], device).into_primitive();
+
+        let client = &values_output.client;
+
+        let cube_dim = CubeDim {
+            x: RADIX,
+            y: 1,
+            z: 1,
+        };
+        let cube_count = CubeCount::Static(
+            (keys_input.shape.dims[0] as u32 + RADIX - 1) / RADIX,
+            1,
+            1,
+        );
+
+        println!(
+            "keys_input: {:04x?}",
+            bytemuck::cast_slice::<u8, u32>(
+                &client.read(keys_input.handle.to_owned().binding()),
+            )
+        );
+
+        for pass in 0..4 {
+            let arguments =
+                client.create(bytes_of(&KernelRadixSortArguments {
+                    radix_bit_offset: 8 * pass,
+                }));
+            let radix_counts =
+                Tensor::<Wgpu, 1, Int>::zeros([radix], device).into_primitive();
+
+            let time = std::time::Instant::now();
+            client.execute(
+                Box::new(SourceKernel::new(
+                    KernelRadixSortCountRadix,
+                    cube_dim,
+                )),
+                cube_count.to_owned(),
+                vec![
+                    arguments.to_owned().binding(),
+                    keys_input.handle.to_owned().binding(),
+                    radix_counts.handle.to_owned().binding(),
+                ],
+            );
+            client.sync(burn::tensor::backend::SyncType::Wait);
+            println!("Sort Pass {pass} - 1: {:?}", time.elapsed());
+
+            let time = std::time::Instant::now();
+            client.execute(
+                Box::new(SourceKernel::new(
+                    KernelRadixSortScanRadix,
+                    CubeDim { x: 1, y: 1, z: 1 },
+                )),
+                CubeCount::Static(1, 1, 1),
+                vec![radix_counts.handle.to_owned().binding()],
+            );
+            // scan_add(&radix_counts);
+            let radix_offsets = radix_counts;
+            client.sync(burn::tensor::backend::SyncType::Wait);
+            println!("Sort Pass {pass} - 2: {:?}", time.elapsed());
+
+            let time = std::time::Instant::now();
+            client.execute(
+                Box::new(SourceKernel::new(
+                    KernelRadixSortScatterKey,
+                    cube_dim,
+                )),
+                cube_count.to_owned(),
+                vec![
+                    arguments.to_owned().binding(),
+                    keys_input.handle.to_owned().binding(),
+                    keys_output.handle.to_owned().binding(),
+                    radix_offsets.handle.to_owned().binding(),
+                ],
+            );
+            client.sync(burn::tensor::backend::SyncType::Wait);
+            println!("Sort Pass {pass} - 3: {:?}", time.elapsed());
+
+            println!(
+                "keys_output: {:04x?}",
+                bytemuck::cast_slice::<u8, u32>(
+                    &client.read(keys_output.handle.to_owned().binding()),
+                )
+            );
+
+            std::mem::swap(&mut keys_input, &mut keys_output);
+        }
+    }
+
+    #[test]
+    fn scan_add_small() {
+        use super::*;
+        use bytemuck::cast_slice;
+
+        let device = &Default::default();
+
+        let sums = Tensor::<Wgpu, 1, Int>::from_ints(
+            [0, 3, 0, 2, 4, 1, 3, 2, 9],
+            device,
+        )
+        .into_primitive();
+
+        let sum_value = scan_add(&sums);
+        let sums_value = sums.client.read(sums.handle.to_owned().binding());
+        let sums_value = cast_slice::<u8, u32>(&sums_value);
+
+        let sum_target = 24;
+        let sums_target = [0, 0, 3, 3, 5, 9, 10, 13, 15];
+
+        assert_eq!(sum_value, sum_target);
+        sums_value.iter().zip(&sums_target).enumerate().for_each(
+            |(index, (&value, &target))| {
+                assert_eq!(value, target, "index: {index}");
+            },
+        );
+    }
+
+    #[test]
+    fn scan_add_random() {
+        use super::*;
+        use burn::tensor::Distribution;
+        use bytemuck::cast_slice;
+
+        let device = &Default::default();
+
+        let sums = Tensor::<Wgpu, 1, Int>::random(
+            [1 << 15],
+            Distribution::Uniform(0.0, 15.0),
+            device,
+        )
+        .into_primitive();
+        let sums_source = sums.client.read(sums.handle.to_owned().binding());
+        let sums_source = cast_slice::<u8, u32>(&sums_source);
+
+        let sum_value = scan_add(&sums);
+        let sums_value = sums.client.read(sums.handle.to_owned().binding());
+        let sums_value = cast_slice::<u8, u32>(&sums_value);
+
+        let sum_target = sums_source.iter().sum::<u32>();
+        let sums_target = sums_source
+            .iter()
+            .scan(0, |state, &sum| {
+                let value = *state;
+                *state += sum;
+                Some(value)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(sum_value, sum_target);
+        sums_value.iter().zip(&sums_target).enumerate().for_each(
+            |(index, (&value, &target))| {
+                assert_eq!(value, target, "index: {index}");
+            },
+        );
     }
 }

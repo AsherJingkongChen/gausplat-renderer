@@ -23,6 +23,8 @@ pub fn render_gaussian_3d_scene(
         "Gaussian3dRenderer::<Wgpu>::render_backward",
     );
 
+    // Specifying the parameters
+
     let client = &state.colors_sh.client;
     let colors_rgb_2d_grad = into_contiguous(colors_rgb_2d_grad);
     let colors_sh_degree_max = state.colors_sh_degree_max;

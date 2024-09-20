@@ -6,9 +6,7 @@ var<storage, read_write> sums: array<u32>;
 var<storage, read_write> sums_next: array<u32>;
 
 // N / N'
-const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
-const GROUP_SIZE_X: u32 = 16u;
-const GROUP_SIZE_Y: u32 = 16u;
+const GROUP_SIZE: u32 = 256u;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
@@ -27,6 +25,5 @@ fn main(
     }
 
     // Adding sums back
-
     sums[index] += sums_next[group_index];
 }

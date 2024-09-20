@@ -1,16 +1,8 @@
-struct Arguments {
-    // T
-    tile_touched_count: u32,
-}
-
-@group(0) @binding(0)
-var<storage, read_write> arguments: Arguments;
 // [T] (0 ~ (I_y / T_y) * (I_x / T_x))
-@group(0) @binding(1)
+@group(0) @binding(0)
 var<storage, read_write> point_tile_indexes: array<u32>;
-
 // [(I_y / T_y) * (I_x / T_x), 2]
-@group(0) @binding(2)
+@group(0) @binding(1)
 var<storage, read_write> tile_point_ranges: array<u32>;
 
 const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
@@ -27,7 +19,7 @@ fn main(
 
     // (1 ~ T)
     let index = (group_id.y * group_count.x + group_id.x) * GROUP_SIZE + local_index;
-    if index >= arguments.tile_touched_count || index == 0 {
+    if index >= arrayLength(&point_tile_indexes) || index == 0 {
         return;
     }
 

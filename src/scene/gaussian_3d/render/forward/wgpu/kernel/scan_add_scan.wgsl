@@ -9,9 +9,7 @@ var<storage, read_write> sums_next: array<u32>;
 var<workgroup> sums_in_group: array<u32, GROUP_SIZE>;
 
 // N / N'
-const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
-const GROUP_SIZE_X: u32 = 16u;
-const GROUP_SIZE_Y: u32 = 16u;
+const GROUP_SIZE: u32 = 256u;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
@@ -28,10 +26,11 @@ fn main(
 
     // Specifying the parameters
 
-    // (1 ~ N / N')
+    let is_invocation_valid = index < arrayLength(&sums);
+    // (1 ~ N / N', * 2)
     var stride = 1u;
 
-    if index < arrayLength(&sums) {
+    if is_invocation_valid {
         sums_in_group[local_index] = sums[index];
     } else {
         sums_in_group[local_index] = 0u;
@@ -42,10 +41,10 @@ fn main(
 
     while stride < GROUP_SIZE {
         let stride_up = stride << 1u;
-        let local_index_strided = (local_index + 1u) * stride_up - 1u;
-        if local_index_strided < GROUP_SIZE {
-            let local_index_up = local_index_strided - stride;
-            sums_in_group[local_index_strided] += sums_in_group[local_index_up];
+        let local_index_up = (local_index + 1u) * stride_up - 1u;
+        if local_index_up < GROUP_SIZE {
+            let local_index_strided = local_index_up - stride;
+            sums_in_group[local_index_up] += sums_in_group[local_index_strided];
         }
         stride = stride_up;
         workgroupBarrier();
@@ -63,12 +62,12 @@ fn main(
 
     while stride > 1u {
         let stride_down = stride >> 1u;
-        let local_index_strided = (local_index + 1u) * stride - 1u;
-        if (local_index_strided < GROUP_SIZE) {
-            let local_index_down = local_index_strided - stride_down;
-            let sum_in_group_local_down = sums_in_group[local_index_down];
-            sums_in_group[local_index_down] = sums_in_group[local_index_strided];
-            sums_in_group[local_index_strided] += sum_in_group_local_down;
+        let local_index_down = (local_index + 1u) * stride - 1u;
+        if (local_index_down < GROUP_SIZE) {
+            let local_index_strided = local_index_down - stride_down;
+            let sum_in_group_strided = sums_in_group[local_index_strided];
+            sums_in_group[local_index_strided] = sums_in_group[local_index_down];
+            sums_in_group[local_index_down] += sum_in_group_strided;
         }
         stride = stride_down;
         workgroupBarrier();
@@ -76,7 +75,7 @@ fn main(
 
     // Specifying the results: `sums`
 
-    if index < arrayLength(&sums) {
+    if is_invocation_valid {
         sums[index] = sums_in_group[local_index];
     }
 }
