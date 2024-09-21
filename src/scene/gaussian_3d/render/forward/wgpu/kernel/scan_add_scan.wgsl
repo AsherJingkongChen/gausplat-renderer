@@ -27,55 +27,39 @@ fn main(
     // Specifying the parameters
 
     let is_invocation_valid = index < arrayLength(&sums);
-    // (1 ~ N / N', * 2)
-    var stride = 1u;
+    var sum = 0u;
 
     if is_invocation_valid {
         sums_in_group[local_index] = sums[index];
-    } else {
-        sums_in_group[local_index] = 0u;
     }
     workgroupBarrier();
 
-    // Reducing (Up-sweep)
+    // Scanning the sums in the group in an inclusive manner
 
-    while stride < GROUP_SIZE {
-        let stride_up = stride << 1u;
-        let local_index_up = (local_index + 1u) * stride_up - 1u;
-        if local_index_up < GROUP_SIZE {
-            let local_index_strided = local_index_up - stride;
-            sums_in_group[local_index_up] += sums_in_group[local_index_strided];
+    for (var offset = 1u; offset < GROUP_SIZE; offset <<= 1u) {
+        sum = sums_in_group[local_index];
+        if (local_index >= offset) {
+            sum += sums_in_group[local_index - offset];
         }
-        stride = stride_up;
+        workgroupBarrier();
+
+        sums_in_group[local_index] = sum;
         workgroupBarrier();
     }
 
-    // Specifying the results: `sums_next`
+    // Specifying the result of sums for the next pass
 
     if local_index + 1u == GROUP_SIZE {
-        sums_next[group_index] = sums_in_group[local_index];
-        sums_in_group[local_index] = 0u;
-    }
-    workgroupBarrier();
-
-    // Scanning (Down-sweep)
-
-    while stride > 1u {
-        let stride_down = stride >> 1u;
-        let local_index_down = (local_index + 1u) * stride - 1u;
-        if (local_index_down < GROUP_SIZE) {
-            let local_index_strided = local_index_down - stride_down;
-            let sum_in_group_strided = sums_in_group[local_index_strided];
-            sums_in_group[local_index_strided] = sums_in_group[local_index_down];
-            sums_in_group[local_index_down] += sum_in_group_strided;
-        }
-        stride = stride_down;
-        workgroupBarrier();
+        sums_next[group_index] = sum;
     }
 
-    // Specifying the results: `sums`
+    // Specifying the result of sums in an exclusive manner
 
     if is_invocation_valid {
-        sums[index] = sums_in_group[local_index];
+        if local_index == 0u {
+            sums[index] = 0u;
+        } else {
+            sums[index] = sums_in_group[local_index - 1u];
+        }
     }
 }

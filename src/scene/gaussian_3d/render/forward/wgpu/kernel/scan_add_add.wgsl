@@ -25,5 +25,6 @@ fn main(
     }
 
     // Adding sums back
+
     sums[index] += sums_next[group_index];
 }
