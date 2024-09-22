@@ -49,15 +49,15 @@ var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
 var<storage, read_write> positions_2d_grad: array<atomic<f32>>;
 
 // [T_x * T_y, 3]
-var<workgroup> batch_colors_rgb_3d: array<vec3<f32>, BATCH_SIZE>;
+var<workgroup> colors_rgb_3d_in_batch: array<vec3<f32>, BATCH_SIZE>;
 // [T_x * T_y, 2, 2]
-var<workgroup> batch_conics: array<mat2x2<f32>, BATCH_SIZE>;
+var<workgroup> conics_in_batch: array<mat2x2<f32>, BATCH_SIZE>;
 // [T_x * T_y, 1]
-var<workgroup> batch_opacities_3d: array<f32, BATCH_SIZE>;
+var<workgroup> opacities_3d_in_batch: array<f32, BATCH_SIZE>;
 // [T_x * T_y]
-var<workgroup> batch_point_indexes: array<u32, BATCH_SIZE>;
+var<workgroup> point_indexes_in_batch: array<u32, BATCH_SIZE>;
 // [T_x * T_y, 2]
-var<workgroup> batch_positions_2d: array<vec2<f32>, BATCH_SIZE>;
+var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 
 const OPACITY_2D_MAX: f32 = 1.0 - 1.5 / 255.0;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
@@ -123,11 +123,11 @@ fn main(
         let index = tile_point_range.y - batch_index * BATCH_SIZE - local_index - 1;
         if index >= tile_point_range.x {
             let point_index = point_indexes[index];
-            batch_colors_rgb_3d[local_index] = colors_rgb_3d[point_index];
-            batch_conics[local_index] = conics[point_index];
-            batch_opacities_3d[local_index] = opacities_3d[point_index];
-            batch_point_indexes[local_index] = point_index;
-            batch_positions_2d[local_index] = positions_2d[point_index];
+            colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
+            conics_in_batch[local_index] = conics[point_index];
+            opacities_3d_in_batch[local_index] = opacities_3d[point_index];
+            point_indexes_in_batch[local_index] = point_index;
+            positions_2d_in_batch[local_index] = positions_2d[point_index];
         }
         workgroupBarrier();
 
@@ -152,8 +152,8 @@ fn main(
             // Computing the density of the point in the pixel
             // σ[n] = e^(-0.5 * D^t[1, 2] * Σ'^-1[2, 2] * D[2, 1])[n]
 
-            let conic = batch_conics[batch_index];
-            let position_2d = batch_positions_2d[batch_index];
+            let conic = conics_in_batch[batch_index];
+            let position_2d = positions_2d_in_batch[batch_index];
             let position_offset = position_2d - position_pixel;
             let density = exp(-0.5 * dot(position_offset * conic, position_offset));
 
@@ -165,7 +165,7 @@ fn main(
 
             // Computing the 2D opacity of the point in the pixel
 
-            let opacity_3d = batch_opacities_3d[batch_index];
+            let opacity_3d = opacities_3d_in_batch[batch_index];
             let opacity_2d = min(opacity_3d * density, OPACITY_2D_MAX);
 
             // Skipping if the 2D opacity is too low
@@ -184,7 +184,7 @@ fn main(
 
             color_rgb_2d_state = color_rgb_3d_state * opacity_2d_state
                                + color_rgb_2d_state * (1.0 - opacity_2d_state);
-            color_rgb_3d_state = batch_colors_rgb_3d[batch_index];
+            color_rgb_3d_state = colors_rgb_3d_in_batch[batch_index];
             opacity_2d_state = opacity_2d;
             transmittance_state /= 1.0 - opacity_2d;
 
@@ -247,7 +247,7 @@ fn main(
 
             // Updating the gradients of the point
 
-            let point_index = batch_point_indexes[batch_index];
+            let point_index = point_indexes_in_batch[batch_index];
 
             // [P, 3 (+ 1)]
             atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], color_rgb_3d_grad[0]);
