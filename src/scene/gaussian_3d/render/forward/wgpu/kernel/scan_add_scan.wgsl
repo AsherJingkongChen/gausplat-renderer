@@ -1,9 +1,9 @@
 // [N]
-@group(0) @binding(0)
-var<storage, read_write> sums: array<u32>;
+@group(0) @binding(0) var<storage, read_write>
+sums: array<u32>;
 // [N']
-@group(0) @binding(1)
-var<storage, read_write> sums_next: array<u32>;
+@group(0) @binding(1) var<storage, read_write>
+sums_next: array<u32>;
 
 // [N / N']
 var<workgroup> sums_in_group: array<u32, GROUP_SIZE>;
@@ -19,47 +19,49 @@ fn main(
 ) {
     // Specifying the index
 
+    // (0 ~ N)
+    let global_index = global_id.x;
     // (0 ~ N')
     let group_index = group_id.x;
-    // (0 ~ N)
-    let index = global_id.x;
 
     // Specifying the parameters
 
-    let is_invocation_valid = index < arrayLength(&sums);
-    var sum = 0u;
+    let is_invocation_valid = global_index < arrayLength(&sums);
+    let is_largest_local_index = local_index + 1u == GROUP_SIZE;
+    var sum_original = 0u;
+    var sum_exclusive = 0u;
 
     if is_invocation_valid {
-        sums_in_group[local_index] = sums[index];
-    }
-    workgroupBarrier();
-
-    // Scanning the sums in the group in an inclusive manner
-
-    for (var offset = 1u; offset < GROUP_SIZE; offset <<= 1u) {
-        sum = sums_in_group[local_index];
-        if (local_index >= offset) {
-            sum += sums_in_group[local_index - offset];
+        sum_original = sums[global_index];
+        if !is_largest_local_index {
+            // Shifting by one for exclusive scan
+            sums_in_group[local_index + 1u] = sum_original;
         }
-        workgroupBarrier();
+    }
 
-        sums_in_group[local_index] = sum;
+    // Scanning the sums in the group exclusively
+
+    for (var stride = 1u; stride < GROUP_SIZE; stride <<= 1u) {
         workgroupBarrier();
+        sum_exclusive = sums_in_group[local_index];
+        if local_index >= stride {
+            sum_exclusive += sums_in_group[local_index - stride];
+        }
+
+        workgroupBarrier();
+        sums_in_group[local_index] = sum_exclusive;
     }
 
     // Specifying the result of sums for the next pass
 
-    if local_index + 1u == GROUP_SIZE {
-        sums_next[group_index] = sum;
+    if is_largest_local_index {
+        let sum_inclusive = sum_exclusive + sum_original;
+        sums_next[group_index] = sum_inclusive;
     }
 
-    // Specifying the result of sums in an exclusive manner
+    // Specifying the result of sums
 
     if is_invocation_valid {
-        if local_index == 0u {
-            sums[index] = 0u;
-        } else {
-            sums[index] = sums_in_group[local_index - 1u];
-        }
+        sums[global_index] = sum_exclusive;
     }
 }
