@@ -3,7 +3,6 @@ mod kernel;
 pub use super::*;
 
 use crate::preset::render::*;
-use backend::Wgpu;
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     kernel::into_contiguous,
@@ -86,7 +85,7 @@ pub fn render_gaussian_3d_scene(
             colors_rgb_2d_grad.handle.binding(),
             state.colors_rgb_3d.handle.binding(),
             state.opacities_3d.handle.binding(),
-            state.point_indexes.handle.binding(),
+            state.point_indices.handle.binding(),
             state.point_rendered_counts.handle.binding(),
             state.positions_2d.handle.binding(),
             state.tile_point_ranges.handle.binding(),

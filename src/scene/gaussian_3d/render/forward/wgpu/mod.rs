@@ -1,23 +1,15 @@
 mod kernel;
-mod point;
 
 pub use super::*;
 
 use crate::preset::render::*;
-use backend::Wgpu;
-use burn::tensor::Shape;
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     kernel::into_contiguous,
     template::SourceKernel,
 };
-use bytemuck::{bytes_of, cast_slice_mut, from_bytes};
+use bytemuck::{bytes_of, from_bytes};
 use kernel::*;
-use point::*;
-use rayon::{
-    iter::{IntoParallelIterator, ParallelIterator},
-    slice::ParallelSliceMut,
-};
 
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
@@ -235,8 +227,11 @@ pub fn render_gaussian_3d_scene(
         point_count: point_count as u32,
         tile_count_x,
     }));
-    let point_infos =
-        Tensor::<Wgpu, 2, Int>::empty([tile_touched_count as usize, 2], device)
+    let point_indices =
+        Tensor::<Wgpu, 1, Int>::empty([tile_touched_count as usize], device)
+            .into_primitive();
+    let point_orders =
+        Tensor::<Wgpu, 1, Int>::empty([tile_touched_count as usize], device)
             .into_primitive();
 
     client.execute(
@@ -260,56 +255,24 @@ pub fn render_gaussian_3d_scene(
             tile_touched_offsets.handle.binding(),
             tiles_touched_max.handle.binding(),
             tiles_touched_min.handle.binding(),
-            point_infos.handle.to_owned().binding(),
+            point_indices.handle.to_owned().binding(),
+            point_orders.handle.to_owned().binding(),
         ],
     );
 
-    // Performing the forward pass #4
-
-    client.sync(burn::tensor::backend::SyncType::Wait);
-    let time = std::time::Instant::now();
+    // Sorting the points by tile index and depth
 
     // ([T], [T])
-    let (point_indexes, point_tile_indexes) = {
-        let point_infos = &mut client.read(point_infos.handle.binding());
-        let point_infos = cast_slice_mut::<u8, PointInfo>(point_infos);
-
-        point_infos.par_sort_unstable();
-
-        point_infos
-            .into_par_iter()
-            .map(|point| (point.index, point.tile_index()))
-            .unzip::<_, _, Vec<_>, Vec<_>>()
-    };
-
-    client.sync(burn::tensor::backend::SyncType::Wait);
-    let time = time.elapsed().as_secs_f64();
-    print!("{time} ");
+    let SortStableOutput {
+        keys: point_orders,
+        values: point_indices,
+    } = sort_stable(point_orders, point_indices);
 
     // Performing the forward pass #5
 
     // [I_y / T_y, I_x / T_x, 2]
-    let tile_point_ranges = {
-        let ranges_shape =
-            Shape::from([tile_count_y as usize, tile_count_x as usize, 2]);
-        let mut ranges = vec![0; ranges_shape.num_elements()];
-
-        if !point_tile_indexes.is_empty() {
-            let tile_index_last =
-                *point_tile_indexes.last().expect("Unreachable") as usize;
-            ranges[tile_index_last * 2 + 1] = tile_touched_count;
-        }
-
-        Tensor::<Wgpu, 3, Int>::from_data(
-            TensorData::new(ranges, ranges_shape),
-            device,
-        )
-        .into_primitive()
-    };
-
-    // [T]
-    let point_tile_indexes = Tensor::<Wgpu, 1, Int>::from_data(
-        TensorData::new(point_tile_indexes, [tile_touched_count as usize]),
+    let tile_point_ranges = Tensor::<Wgpu, 3, Int>::empty(
+        [tile_count_y as usize, tile_count_x as usize, 2],
         device,
     )
     .into_primitive();
@@ -330,7 +293,7 @@ pub fn render_gaussian_3d_scene(
             1,
         ),
         vec![
-            point_tile_indexes.handle.binding(),
+            point_orders.handle.binding(),
             tile_point_ranges.handle.to_owned().binding(),
         ],
     );
@@ -341,12 +304,6 @@ pub fn render_gaussian_3d_scene(
         image_size_x,
         image_size_y,
     }));
-    // [T]
-    let point_indexes = Tensor::<Wgpu, 1, Int>::from_data(
-        TensorData::new(point_indexes, [tile_touched_count as usize]),
-        device,
-    )
-    .into_primitive();
     let image_size = [image_size_y as usize, image_size_x as usize];
     let colors_rgb_2d =
         Tensor::<Wgpu, 3>::empty([image_size[0], image_size[1], 3], device)
@@ -373,7 +330,7 @@ pub fn render_gaussian_3d_scene(
             colors_rgb_3d.handle.to_owned().binding(),
             conics.handle.to_owned().binding(),
             opacities_3d.handle.to_owned().binding(),
-            point_indexes.handle.to_owned().binding(),
+            point_indices.handle.to_owned().binding(),
             positions_2d.handle.to_owned().binding(),
             tile_point_ranges.handle.to_owned().binding(),
             colors_rgb_2d.handle.to_owned().binding(),
@@ -399,7 +356,7 @@ pub fn render_gaussian_3d_scene(
             image_size_y,
             is_colors_rgb_3d_not_clamped,
             opacities_3d,
-            point_indexes,
+            point_indices,
             point_rendered_counts,
             positions_2d,
             positions_3d,
@@ -497,22 +454,24 @@ pub fn scan_add(
 }
 
 #[derive(Clone, Debug)]
-pub struct SortOutput {
-    /// The sorted keys.
+pub struct SortStableOutput {
+    /// The keys of sorted items.
     pub keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
-    /// The indices of sorted keys.
-    pub indices: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    /// The values of sorted items.
+    pub values: <Wgpu as Backend>::IntTensorPrimitive<1>,
 }
 
 /// Sort stably.
-/// 
+///
 /// ## Arguments
-/// 
+///
 /// - `keys`: The keys to sort.
-pub fn sort(
+pub fn sort_stable(
     // [N]
     keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
-) -> SortOutput {
+    // [N]
+    values: <Wgpu as Backend>::IntTensorPrimitive<1>,
+) -> SortStableOutput {
     const GROUP_SIZE: u32 = 256;
     const RADIX_BIT_COUNT: u32 = 2;
     const RADIX: u32 = 1 << RADIX_BIT_COUNT;
@@ -535,14 +494,12 @@ pub fn sort(
     // [N]
     let mut keys_input = keys;
     // [N]
-    let mut indices_input =
-        Tensor::<Wgpu, 1, Int>::arange(0..count as i64, device)
-            .into_primitive();
+    let mut values_input = values;
     // [N]
     let mut keys_output =
         Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
     // [N]
-    let mut indices_output =
+    let mut values_output =
         Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
 
     let cube_count = CubeCount::Static(group_count as u32, 1, 1);
@@ -559,11 +516,11 @@ pub fn sort(
             .create(bytes_of(&KernelRadixSortArguments { radix_bit_offset }));
         // [R, N / G]
         let counts_group_radix =
-            Tensor::<Wgpu, 1, Int>::zeros([radix * group_count], device)
+            Tensor::<Wgpu, 1, Int>::empty([radix * group_count], device)
                 .into_primitive();
         // [N]
         let offsets_local =
-            Tensor::<Wgpu, 1, Int>::zeros([count], device).into_primitive();
+            Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
 
         client.execute(
             Box::new(SourceKernel::new(KernelRadixSortScanLocal, cube_dim)),
@@ -584,38 +541,39 @@ pub fn sort(
             vec![
                 arguments.to_owned().binding(),
                 keys_input.handle.to_owned().binding(),
-                indices_input.handle.to_owned().binding(),
+                values_input.handle.to_owned().binding(),
                 offsets_group.handle.to_owned().binding(),
                 offsets_local.handle.to_owned().binding(),
                 keys_output.handle.to_owned().binding(),
-                indices_output.handle.to_owned().binding(),
+                values_output.handle.to_owned().binding(),
             ],
         );
 
         (keys_input, keys_output) = (keys_output, keys_input);
-        (indices_input, indices_output) = (indices_output, indices_input);
+        (values_input, values_output) = (values_output, values_input);
         is_swapped = !is_swapped;
     }
 
-    let (keys, indices) = if is_swapped {
-        (keys_output, indices_output)
+    let (keys, values) = if is_swapped {
+        (keys_output, values_output)
     } else {
-        (keys_input, indices_input)
+        (keys_input, values_input)
     };
 
-    SortOutput { keys, indices }
+    SortStableOutput { keys, values }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn radix_sort() {
+    fn sort_stable() {
         use super::*;
+        use rayon::slice::ParallelSliceMut;
 
         let device = &Default::default();
         Wgpu::seed(0);
 
-        let keys_input = if false {
+        let keys = if false {
             Tensor::<Wgpu, 1, Int>::from_ints(
                 [
                     0x12100, 0x21200, 0x32103, 0x23102, 0x13905, 0x31904,
@@ -633,56 +591,53 @@ mod tests {
             .int()
         }
         .into_primitive();
-
-        // Target
-
-        keys_input
-            .client
-            .sync(burn::tensor::backend::SyncType::Wait);
-        let time = std::time::Instant::now();
-        let mut keys_output_target = bytemuck::cast_slice::<u8, u32>(
-            &keys_input
-                .client
-                .read(keys_input.handle.to_owned().binding()),
+        let values = Tensor::<Wgpu, 1, Int>::arange(
+            0..keys.shape.dims[0] as i64,
+            device,
         )
-        .iter()
-        .enumerate()
-        .map(|(index, key)| [*key, index as u32])
-        .collect::<Vec<_>>();
-        // keys_output_target.par_sort_unstable_by_key(|p| p[0]);
-        keys_output_target.par_sort_by_key(|p| p[0]);
+        .into_primitive();
+
+        keys.client.sync(burn::tensor::backend::SyncType::Wait);
+        let time = std::time::Instant::now();
+        let keys_target = &keys.client.read(keys.handle.to_owned().binding());
+        let keys_target = bytemuck::cast_slice::<u8, u32>(keys_target);
+        let values_target =
+            &values.client.read(values.handle.to_owned().binding());
+        let values_target = bytemuck::cast_slice::<u8, u32>(values_target);
+        let mut items_target = keys_target
+            .iter()
+            .zip(values_target)
+            .map(|(&key, &value)| (key, value))
+            .collect::<Vec<_>>();
+        // keys_target.par_sort_unstable_by_key(|p| p.0);
+        items_target.par_sort_by_key(|p| p.0);
+        let (keys_target, values_target) =
+            items_target.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
         println!("Sorting on CPU: {:?}", time.elapsed());
 
-        keys_input
-            .client
-            .sync(burn::tensor::backend::SyncType::Wait);
+        keys.client.sync(burn::tensor::backend::SyncType::Wait);
         let time = std::time::Instant::now();
-        let SortOutput { keys, indices } = sort(keys_input);
-        Wgpu::sync(device, burn::tensor::backend::SyncType::Wait);
+        let SortStableOutput { keys, values } = sort_stable(keys, values);
+        keys.client.sync(burn::tensor::backend::SyncType::Wait);
         println!("Sorting on GPU: {:?}", time.elapsed());
 
-        let keys_output_value =
-            &keys.client.read(keys.handle.to_owned().binding());
-        let keys_output_value =
-            bytemuck::cast_slice::<u8, u32>(keys_output_value);
+        let keys_output = &keys.client.read(keys.handle.to_owned().binding());
+        let keys_output = bytemuck::cast_slice::<u8, u32>(keys_output);
 
-        let indices_output_value =
-            &indices.client.read(indices.handle.to_owned().binding());
-        let indices_output_value =
-            bytemuck::cast_slice::<u8, u32>(indices_output_value);
+        let values_output =
+            &values.client.read(values.handle.to_owned().binding());
+        let values_output = bytemuck::cast_slice::<u8, u32>(values_output);
 
-        keys_output_value
-            .iter()
-            .zip(&keys_output_target)
-            .enumerate()
-            .for_each(|(index, (value, [target, _]))| {
+        keys_output.iter().zip(keys_target).enumerate().for_each(
+            |(index, (&value, target))| {
                 assert_eq!(value, target, "index: {index}");
-            });
-        indices_output_value
+            },
+        );
+        values_output
             .iter()
-            .zip(&keys_output_target)
+            .zip(values_target)
             .enumerate()
-            .for_each(|(index, (value, [_, target]))| {
+            .for_each(|(index, (&value, target))| {
                 assert_eq!(value, target, "index: {index}");
             });
     }
@@ -690,7 +645,7 @@ mod tests {
     #[test]
     fn bench() {
         (0..100).for_each(|_| {
-            radix_sort();
+            sort_stable();
         });
     }
 
@@ -711,16 +666,16 @@ mod tests {
         let sums_target = [0, 0, 3, 3, 5, 9, 10, 13, 15];
 
         let ScanAddOutput { sum, sums } = scan_add(sums);
-        let sum_value = *from_bytes::<u32>(
+        let sum_output = *from_bytes::<u32>(
             &sums.client.read(sum.handle.to_owned().binding()),
         );
-        let sums_value = sums.client.read(sums.handle.to_owned().binding());
-        let sums_value = cast_slice::<u8, u32>(&sums_value);
+        let sums_output = sums.client.read(sums.handle.to_owned().binding());
+        let sums_output = cast_slice::<u8, u32>(&sums_output);
 
-        assert_eq!(sum_value, sum_target);
-        sums_value.iter().zip(&sums_target).enumerate().for_each(
-            |(index, (value, target))| {
-                assert_eq!(value, target, "index: {index}");
+        assert_eq!(sum_output, sum_target);
+        sums_output.iter().zip(&sums_target).enumerate().for_each(
+            |(index, (output, target))| {
+                assert_eq!(output, target, "index: {index}");
             },
         );
     }
@@ -746,23 +701,23 @@ mod tests {
         let sums_target = sums_target
             .iter()
             .scan(0, |state, &sum| {
-                let value = *state;
+                let output = *state;
                 *state += sum;
-                Some(value)
+                Some(output)
             })
             .collect::<Vec<_>>();
 
         let ScanAddOutput { sum, sums } = scan_add(sums);
-        let sum_value = *from_bytes::<u32>(
+        let sum_output = *from_bytes::<u32>(
             &sums.client.read(sum.handle.to_owned().binding()),
         );
-        let sums_value = sums.client.read(sums.handle.to_owned().binding());
-        let sums_value = cast_slice::<u8, u32>(&sums_value);
+        let sums_output = sums.client.read(sums.handle.to_owned().binding());
+        let sums_output = cast_slice::<u8, u32>(&sums_output);
 
-        assert_eq!(sum_value, sum_target);
-        sums_value.iter().zip(&sums_target).enumerate().for_each(
-            |(index, (value, target))| {
-                assert_eq!(value, target, "index: {index}");
+        assert_eq!(sum_output, sum_target);
+        sums_output.iter().zip(&sums_target).enumerate().for_each(
+            |(index, (output, target))| {
+                assert_eq!(output, target, "index: {index}");
             },
         );
     }

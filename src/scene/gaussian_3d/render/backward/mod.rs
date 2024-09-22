@@ -26,7 +26,7 @@ pub struct RenderInput<B: Backend> {
     /// `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive<2>,
     /// `[T]`
-    pub point_indexes: B::IntTensorPrimitive<1>,
+    pub point_indices: B::IntTensorPrimitive<1>,
     /// `[I_y, I_x]`
     pub point_rendered_counts: B::IntTensorPrimitive<2>,
     /// `[P, 2]`

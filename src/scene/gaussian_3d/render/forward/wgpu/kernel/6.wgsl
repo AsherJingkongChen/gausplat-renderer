@@ -18,7 +18,7 @@ var<storage, read_write> conics: array<mat2x2<f32>>;
 var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
 @group(0) @binding(4)
-var<storage, read_write> point_indexes: array<u32>;
+var<storage, read_write> point_indices: array<u32>;
 // [P, 2]
 @group(0) @binding(5)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
@@ -113,7 +113,7 @@ fn main(
         workgroupBarrier();
         let index = tile_point_range.x + batch_index * BATCH_SIZE + local_index;
         if index < tile_point_range.y {
-            let point_index = point_indexes[index];
+            let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
             conics_in_batch[local_index] = conics[point_index];
             opacities_3d_in_batch[local_index] = opacities_3d[point_index];

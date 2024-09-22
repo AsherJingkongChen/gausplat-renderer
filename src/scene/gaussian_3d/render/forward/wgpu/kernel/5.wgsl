@@ -1,6 +1,7 @@
-// [T] (0 ~ (I_y / T_y) * (I_x / T_x))
+// [T] (0 ~ (I_y / T_y) * (I_x / T_x) in high order bits)
 @group(0) @binding(0)
-var<storage, read_write> point_tile_indexes: array<u32>;
+var<storage, read_write> point_orders: array<u32>;
+
 // [(I_y / T_y) * (I_x / T_x), 2]
 @group(0) @binding(1)
 var<storage, read_write> tile_point_ranges: array<u32>;
@@ -17,18 +18,30 @@ fn main(
 ) {
     // Specifying the index
 
-    // (1 ~ T)
-    let index = (group_id.y * group_count.x + group_id.x) * GROUP_SIZE + local_index;
-    if index >= arrayLength(&point_tile_indexes) || index == 0 {
+    // (0 ~ T)
+    let global_index = (group_id.y * group_count.x + group_id.x) * GROUP_SIZE + local_index;
+    let global_count = arrayLength(&point_orders);
+    if global_index >= global_count {
         return;
     }
 
-    // Computing the ranges of distinct point tile indexes
+    // Specifying the first and last ranges
 
-    let tile_index_current = point_tile_indexes[index];
-    let tile_index_previous = point_tile_indexes[index - 1];
+    let tile_index_current = point_orders[global_index] >> 16;
+    if global_index == 0 {
+        tile_point_ranges[tile_index_current * 2 + 0] = 0u;
+        return;
+    }
+    if global_index + 1 == global_count {
+        tile_point_ranges[tile_index_current * 2 + 1] = global_count;
+        return;
+    }
+
+    // Computing the ranges of each point tile indices
+
+    let tile_index_previous = point_orders[global_index - 1] >> 16;
     if tile_index_current != tile_index_previous {
-        tile_point_ranges[tile_index_current * 2 + 0] = index;
-        tile_point_ranges[tile_index_previous * 2 + 1] = index;
+        tile_point_ranges[tile_index_current * 2 + 0] = global_index;
+        tile_point_ranges[tile_index_previous * 2 + 1] = global_index;
     }
 }

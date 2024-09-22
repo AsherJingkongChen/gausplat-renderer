@@ -21,7 +21,7 @@ var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
 @group(0) @binding(5)
-var<storage, read_write> point_indexes: array<u32>;
+var<storage, read_write> point_indices: array<u32>;
 // [I_y, I_x]
 @group(0) @binding(6)
 var<storage, read_write> point_rendered_counts: array<u32>;
@@ -55,7 +55,7 @@ var<workgroup> conics_in_batch: array<mat2x2<f32>, BATCH_SIZE>;
 // [T_x * T_y, 1]
 var<workgroup> opacities_3d_in_batch: array<f32, BATCH_SIZE>;
 // [T_x * T_y]
-var<workgroup> point_indexes_in_batch: array<u32, BATCH_SIZE>;
+var<workgroup> point_indices_in_batch: array<u32, BATCH_SIZE>;
 // [T_x * T_y, 2]
 var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 
@@ -122,11 +122,11 @@ fn main(
         workgroupBarrier();
         let index = tile_point_range.y - batch_index * BATCH_SIZE - local_index - 1;
         if index >= tile_point_range.x {
-            let point_index = point_indexes[index];
+            let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
             conics_in_batch[local_index] = conics[point_index];
             opacities_3d_in_batch[local_index] = opacities_3d[point_index];
-            point_indexes_in_batch[local_index] = point_index;
+            point_indices_in_batch[local_index] = point_index;
             positions_2d_in_batch[local_index] = positions_2d[point_index];
         }
         workgroupBarrier();
@@ -247,7 +247,7 @@ fn main(
 
             // Updating the gradients of the point
 
-            let point_index = point_indexes_in_batch[batch_index];
+            let point_index = point_indices_in_batch[batch_index];
 
             // [P, 3 (+ 1)]
             atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], color_rgb_3d_grad[0]);

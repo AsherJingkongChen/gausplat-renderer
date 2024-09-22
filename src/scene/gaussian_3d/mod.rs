@@ -1,7 +1,7 @@
 pub mod property;
 pub mod render;
 
-pub use crate::preset::backend;
+pub use crate::preset::backend::{self, *};
 pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{backend::Backend, Tensor, TensorData},
@@ -10,7 +10,6 @@ pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
 use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
-use backend::*;
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt, mem::size_of};
