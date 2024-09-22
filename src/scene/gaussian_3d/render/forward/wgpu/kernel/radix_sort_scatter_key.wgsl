@@ -10,13 +10,19 @@ arguments: Arguments;
 keys_input: array<u32>;
 // [N]
 @group(0) @binding(2) var<storage, read_write>
-keys_output: array<u32>;
+values_input: array<u32>;
 // [R, N / G]
 @group(0) @binding(3) var<storage, read_write>
 offsets_group: array<u32>;
 // [N]
 @group(0) @binding(4) var<storage, read_write>
 offsets_local: array<u32>;
+// [N]
+@group(0) @binding(5) var<storage, read_write>
+keys_output: array<u32>;
+// [N]
+@group(0) @binding(6) var<storage, read_write>
+values_output: array<u32>;
 
 // R
 const RADIX: u32 = 1u << RADIX_BIT_COUNT;
@@ -48,11 +54,13 @@ fn main(
 
     if global_index < arrayLength(&keys_input) {
         let key = keys_input[global_index];
+        let value = values_input[global_index];
         let radix = key >> arguments.radix_bit_offset & RADIX_BIT_MASK;
         let offset_group = offsets_group[radix * group_count + group_index];
         let offset_local = offsets_local[global_index];
         let offset = offset_group + offset_local;
 
         keys_output[offset] = key;
+        values_output[offset] = value;
     }
 }

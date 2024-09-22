@@ -50,11 +50,11 @@ fn main(
     let is_invocation_valid = global_index < arrayLength(&keys_input);
     let is_largest_local_index = local_index + 1u == GROUP_SIZE;
     var offset_radix = array<u32, RADIX>();
-    var radix = 0u;
+    var radix = u32();
 
     if is_invocation_valid {
         let key = keys_input[global_index];
-        radix = (key >> arguments.radix_bit_offset) & RADIX_BIT_MASK;
+        radix = key >> arguments.radix_bit_offset & RADIX_BIT_MASK;
     }
     workgroupBarrier();
 

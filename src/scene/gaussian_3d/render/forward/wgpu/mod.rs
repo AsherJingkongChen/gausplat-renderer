@@ -220,9 +220,13 @@ pub fn render_gaussian_3d_scene(
 
     // Computing the offsets of touched tiles
 
-    let tile_touched_offsets = tile_touched_counts;
+    let ScanAddOutput {
+        sum: tile_touched_count,
+        sums: tile_touched_offsets,
+    } = scan_add(tile_touched_counts);
     // T
-    let tile_touched_count = scan_add(&tile_touched_offsets);
+    let tile_touched_count =
+        *from_bytes::<u32>(&client.read(tile_touched_count.handle.binding()));
     debug_assert_ne!(tile_touched_count, 0);
 
     // Performing the forward pass #3
@@ -416,19 +420,23 @@ pub fn render_gaussian_3d_scene(
     }
 }
 
-/// Performing an exclusive scan-and-add operation on the given tensor in place.
+#[derive(Clone, Debug)]
+pub struct ScanAddOutput {
+    /// The sum of scanned values.
+    pub sum: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    /// The exclusive sum of scanned values.
+    pub sums: <Wgpu as Backend>::IntTensorPrimitive<1>,
+}
+
+/// Scan-and-add exclusively.
 ///
 /// ## Arguments
 ///
 /// - `sums`: The tensor to scan in place.
-///
-/// ## Returns
-///
-/// The total sum of all elements in `sums`.
 pub fn scan_add(
     // [N]
-    sums: &<Wgpu as Backend>::IntTensorPrimitive<1>,
-) -> u32 {
+    sums: <Wgpu as Backend>::IntTensorPrimitive<1>,
+) -> ScanAddOutput {
     const GROUP_SIZE: u32 = 256;
 
     // Specifying the parameters
@@ -443,8 +451,7 @@ pub fn scan_add(
     let count_next = (count + group_size - 1) / group_size;
     // [N']
     let sums_next =
-        Tensor::<Wgpu, 1, Int>::empty([count_next], device)
-            .into_primitive();
+        Tensor::<Wgpu, 1, Int>::empty([count_next], device).into_primitive();
 
     let cube_count = CubeCount::Static(count_next as u32, 1, 1);
     let cube_dim = CubeDim {
@@ -466,7 +473,10 @@ pub fn scan_add(
 
     // Recursing if there is more than one remaining group
     if count_next > 1 {
-        let sum = scan_add(&sums_next);
+        let ScanAddOutput {
+            sum,
+            sums: sums_next,
+        } = scan_add(sums_next);
 
         // Adding
 
@@ -476,13 +486,124 @@ pub fn scan_add(
             vec![sums.handle.to_owned().binding(), sums_next.handle.binding()],
         );
 
-        sum
+        ScanAddOutput { sum, sums }
     } else {
         debug_assert_eq!(count_next, 1);
-        0
-        // TODO
-        // *from_bytes::<u32>(&client.read(sums_next.handle.binding()))
+        ScanAddOutput {
+            sum: sums_next,
+            sums,
+        }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SortOutput {
+    /// The sorted keys.
+    pub keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    /// The indices of sorted keys.
+    pub indices: <Wgpu as Backend>::IntTensorPrimitive<1>,
+}
+
+/// Sort stably.
+/// 
+/// ## Arguments
+/// 
+/// - `keys`: The keys to sort.
+pub fn sort(
+    // [N]
+    keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
+) -> SortOutput {
+    const GROUP_SIZE: u32 = 256;
+    const RADIX_BIT_COUNT: u32 = 2;
+    const RADIX: u32 = 1 << RADIX_BIT_COUNT;
+
+    // Specifying the parameters
+
+    let client = &keys.client.to_owned();
+    let device = &keys.device.to_owned();
+    // N
+    let count = keys.shape.dims[0];
+    // G
+    let group_size = GROUP_SIZE as usize;
+    // N / G
+    let group_count = (count + group_size - 1) / group_size;
+    // R
+    let radix = RADIX as usize;
+    // log2(R)
+    let radix_bit_count = RADIX_BIT_COUNT as usize;
+
+    // [N]
+    let mut keys_input = keys;
+    // [N]
+    let mut indices_input =
+        Tensor::<Wgpu, 1, Int>::arange(0..count as i64, device)
+            .into_primitive();
+    // [N]
+    let mut keys_output =
+        Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
+    // [N]
+    let mut indices_output =
+        Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
+
+    let cube_count = CubeCount::Static(group_count as u32, 1, 1);
+    let cube_dim = CubeDim {
+        x: GROUP_SIZE,
+        y: 1,
+        z: 1,
+    };
+
+    let mut is_swapped = false;
+
+    for radix_bit_offset in (0..32).step_by(radix_bit_count) {
+        let arguments = client
+            .create(bytes_of(&KernelRadixSortArguments { radix_bit_offset }));
+        // [R, N / G]
+        let counts_group_radix =
+            Tensor::<Wgpu, 1, Int>::zeros([radix * group_count], device)
+                .into_primitive();
+        // [N]
+        let offsets_local =
+            Tensor::<Wgpu, 1, Int>::zeros([count], device).into_primitive();
+
+        client.execute(
+            Box::new(SourceKernel::new(KernelRadixSortScanLocal, cube_dim)),
+            cube_count.to_owned(),
+            vec![
+                arguments.to_owned().binding(),
+                keys_input.handle.to_owned().binding(),
+                counts_group_radix.handle.to_owned().binding(),
+                offsets_local.handle.to_owned().binding(),
+            ],
+        );
+
+        let offsets_group = scan_add(counts_group_radix).sums;
+
+        client.execute(
+            Box::new(SourceKernel::new(KernelRadixSortScatterKey, cube_dim)),
+            cube_count.to_owned(),
+            vec![
+                arguments.to_owned().binding(),
+                keys_input.handle.to_owned().binding(),
+                indices_input.handle.to_owned().binding(),
+                offsets_group.handle.to_owned().binding(),
+                offsets_local.handle.to_owned().binding(),
+                keys_output.handle.to_owned().binding(),
+                indices_output.handle.to_owned().binding(),
+            ],
+        );
+
+        (keys_input, keys_output) = (keys_output, keys_input);
+        (indices_input, indices_output) = (indices_output, indices_input);
+        is_swapped = !is_swapped;
+    }
+
+    let (keys, indices) = if is_swapped {
+        (keys_output, indices_output)
+    } else {
+        (keys_input, indices_input)
+    };
+
+    SortOutput { keys, indices }
 }
 
 #[cfg(test)]
@@ -491,18 +612,10 @@ mod tests {
     fn radix_sort() {
         use super::*;
 
-        use std::mem::swap;
-
-        // 2^R
-        const RADIX_COUNT: u32 = 1 << RADIX_BIT_COUNT;
-        // R
-        const RADIX_BIT_COUNT: u32 = 2;
-        const GROUP_SIZE: u32 = 256;
-
         let device = &Default::default();
         Wgpu::seed(0);
 
-        let mut keys_input = if false {
+        let keys_input = if false {
             Tensor::<Wgpu, 1, Int>::from_ints(
                 [
                     0x12100, 0x21200, 0x32103, 0x23102, 0x13905, 0x31904,
@@ -512,113 +625,73 @@ mod tests {
                 device,
             )
         } else {
-            Tensor::<Wgpu, 1, Int>::random(
-                [1 << 23],
-                burn::tensor::Distribution::Uniform(0.0, 0x1fffffff as f64),
+            Tensor::<Wgpu, 1>::random(
+                [1 << 22],
+                burn::tensor::Distribution::Uniform(0.0, i32::MAX as f64),
                 device,
             )
+            .int()
         }
         .into_primitive();
 
-        // Specifying the parameters
-
-        // N
-        let count = keys_input.shape.dims[0];
-        // G
-        let group_size = GROUP_SIZE as usize;
-        // N / G
-        let group_count = (count + group_size - 1) / group_size;
-        // R
-        let radix_count = RADIX_COUNT as usize;
-        // [N]
-        let mut keys_output =
-            Tensor::<Wgpu, 1, Int>::zeros([count], device).into_primitive();
-
-        let cube_count = CubeCount::Static(group_count as u32, 1, 1);
-        let cube_dim = CubeDim {
-            x: GROUP_SIZE,
-            y: 1,
-            z: 1,
-        };
-
         // Target
 
-        let keys_output_target = &mut keys_input
+        keys_input
             .client
-            .read(keys_input.handle.to_owned().binding());
-        let keys_output_target =
-            bytemuck::cast_slice_mut::<u8, u32>(keys_output_target);
-        // println!("keys_input: {:06x?}", keys_output_target);
-        keys_output_target.par_sort_unstable();
-
+            .sync(burn::tensor::backend::SyncType::Wait);
         let time = std::time::Instant::now();
-        for radix_bit_offset in (0..32).step_by(RADIX_BIT_COUNT as usize) {
-            let client = &keys_input.client;
+        let mut keys_output_target = bytemuck::cast_slice::<u8, u32>(
+            &keys_input
+                .client
+                .read(keys_input.handle.to_owned().binding()),
+        )
+        .iter()
+        .enumerate()
+        .map(|(index, key)| [*key, index as u32])
+        .collect::<Vec<_>>();
+        // keys_output_target.par_sort_unstable_by_key(|p| p[0]);
+        keys_output_target.par_sort_by_key(|p| p[0]);
+        println!("Sorting on CPU: {:?}", time.elapsed());
 
-            let arguments =
-                client.create(bytes_of(&KernelRadixSortArguments {
-                    radix_bit_offset,
-                }));
-            // [R, N / G]
-            let counts_group_radix = Tensor::<Wgpu, 1, Int>::zeros(
-                [radix_count * group_count],
-                device,
-            )
-            .into_primitive();
-            // [N]
-            let offsets_local =
-                Tensor::<Wgpu, 1, Int>::zeros([count], device)
-                    .into_primitive();
-
-            client.execute(
-                Box::new(SourceKernel::new(KernelRadixSortScanLocal, cube_dim)),
-                cube_count.to_owned(),
-                vec![
-                    arguments.to_owned().binding(),
-                    keys_input.handle.to_owned().binding(),
-                    counts_group_radix.handle.to_owned().binding(),
-                    offsets_local.handle.to_owned().binding(),
-                ],
-            );
-
-            let offsets_group = counts_group_radix;
-            scan_add(&offsets_group);
-
-            client.execute(
-                Box::new(SourceKernel::new(
-                    KernelRadixSortScatterKey,
-                    cube_dim,
-                )),
-                cube_count.to_owned(),
-                vec![
-                    arguments.to_owned().binding(),
-                    keys_input.handle.to_owned().binding(),
-                    keys_output.handle.to_owned().binding(),
-                    offsets_group.handle.to_owned().binding(),
-                    offsets_local.handle.to_owned().binding(),
-                ],
-            );
-
-            swap(&mut keys_input, &mut keys_output);
-        }
-        Wgpu::sync(device, burn::tensor::backend::SyncType::Wait);
-        println!("Sort: {:?}", time.elapsed());
-
-        let keys_output_value = &keys_output
+        keys_input
             .client
-            .read(keys_output.handle.to_owned().binding());
+            .sync(burn::tensor::backend::SyncType::Wait);
+        let time = std::time::Instant::now();
+        let SortOutput { keys, indices } = sort(keys_input);
+        Wgpu::sync(device, burn::tensor::backend::SyncType::Wait);
+        println!("Sorting on GPU: {:?}", time.elapsed());
+
+        let keys_output_value =
+            &keys.client.read(keys.handle.to_owned().binding());
         let keys_output_value =
             bytemuck::cast_slice::<u8, u32>(keys_output_value);
-        // println!("keys_output_target: {:06x?}", keys_output_target);
-        // println!("keys_output: {:06x?}", keys_output_value);
+
+        let indices_output_value =
+            &indices.client.read(indices.handle.to_owned().binding());
+        let indices_output_value =
+            bytemuck::cast_slice::<u8, u32>(indices_output_value);
 
         keys_output_value
             .iter()
-            .zip(keys_output_target)
+            .zip(&keys_output_target)
             .enumerate()
-            .for_each(|(index, (value, target))| {
+            .for_each(|(index, (value, [target, _]))| {
                 assert_eq!(value, target, "index: {index}");
             });
+        indices_output_value
+            .iter()
+            .zip(&keys_output_target)
+            .enumerate()
+            .for_each(|(index, (value, [_, target]))| {
+                assert_eq!(value, target, "index: {index}");
+            });
+    }
+
+    #[test]
+    fn bench() {
+        (0..100).for_each(|_| {
+            radix_sort();
+        });
     }
 
     #[test]
@@ -637,7 +710,10 @@ mod tests {
         let sum_target = 24;
         let sums_target = [0, 0, 3, 3, 5, 9, 10, 13, 15];
 
-        let sum_value = scan_add(&sums);
+        let ScanAddOutput { sum, sums } = scan_add(sums);
+        let sum_value = *from_bytes::<u32>(
+            &sums.client.read(sum.handle.to_owned().binding()),
+        );
         let sums_value = sums.client.read(sums.handle.to_owned().binding());
         let sums_value = cast_slice::<u8, u32>(&sums_value);
 
@@ -676,7 +752,10 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let sum_value = scan_add(&sums);
+        let ScanAddOutput { sum, sums } = scan_add(sums);
+        let sum_value = *from_bytes::<u32>(
+            &sums.client.read(sum.handle.to_owned().binding()),
+        );
         let sums_value = sums.client.read(sums.handle.to_owned().binding());
         let sums_value = cast_slice::<u8, u32>(&sums_value);
 

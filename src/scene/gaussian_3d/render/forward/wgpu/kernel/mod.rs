@@ -12,7 +12,6 @@ impl_kernel_source!(KernelScanAddAdd, "./scan_add_add.wgsl");
 impl_kernel_source!(KernelScanAddScan, "./scan_add_scan.wgsl");
 impl_kernel_source!(KernelRadixSortScanLocal, "./radix_sort_scan_local.wgsl");
 impl_kernel_source!(KernelRadixSortScatterKey, "./radix_sort_scatter_key.wgsl");
-impl_kernel_source!(KernelRadixSort1, "./radix_sort_1.wgsl");
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]

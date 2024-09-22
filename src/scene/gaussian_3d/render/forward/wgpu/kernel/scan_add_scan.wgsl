@@ -6,7 +6,8 @@ sums: array<u32>;
 sums_next: array<u32>;
 
 // [N / N']
-var<workgroup> sums_in_group: array<u32, GROUP_SIZE>;
+var<workgroup>
+sums_in_group: array<u32, GROUP_SIZE>;
 
 // N / N'
 const GROUP_SIZE: u32 = 256u;
