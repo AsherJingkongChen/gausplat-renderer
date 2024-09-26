@@ -216,6 +216,7 @@ pub fn render_gaussian_3d_scene(
         sum: tile_touched_count,
         sums: tile_touched_offsets,
     } = scan_add(tile_touched_counts);
+
     // T
     let tile_touched_count =
         *from_bytes::<u32>(&client.read(tile_touched_count.handle.binding()));
@@ -271,7 +272,7 @@ pub fn render_gaussian_3d_scene(
     // Performing the forward pass #5
 
     // [I_y / T_y, I_x / T_x, 2]
-    let tile_point_ranges = Tensor::<Wgpu, 3, Int>::empty(
+    let tile_point_ranges = Tensor::<Wgpu, 3, Int>::zeros(
         [tile_count_y as usize, tile_count_x as usize, 2],
         device,
     )
@@ -297,6 +298,23 @@ pub fn render_gaussian_3d_scene(
             tile_point_ranges.handle.to_owned().binding(),
         ],
     );
+
+    // {
+    //     let tile_point_ranges =
+    //         &client.read(tile_point_ranges.handle.to_owned().binding());
+    //     let tile_point_ranges =
+    //         bytemuck::cast_slice::<u8, [u32; 2]>(tile_point_ranges);
+    //     tile_point_ranges
+    //         .iter()
+    //         .enumerate()
+    //         .for_each(|(index, &range)| {
+    //             assert!(
+    //                 range[0] <= range[1],
+    //                 "index: {index}, range: {range:?}, tile_point_ranges: {:?}",
+    //                 &tile_point_ranges[2165..2170]
+    //             );
+    //         });
+    // }
 
     // Performing the forward pass #6
 
@@ -389,7 +407,7 @@ pub struct ScanAddOutput {
 ///
 /// ## Arguments
 ///
-/// - `sums`: The tensor to scan in place.
+/// - `sums`: The values to scan in place.
 pub fn scan_add(
     // [N]
     sums: <Wgpu as Backend>::IntTensorPrimitive<1>,
@@ -472,8 +490,8 @@ pub fn sort_stable(
     // [N]
     values: <Wgpu as Backend>::IntTensorPrimitive<1>,
 ) -> SortStableOutput {
-    use std::ops::Sub;
-
+    // K
+    const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
     // G = R
     const GROUP_SIZE: u32 = RADIX_COUNT;
     // R
@@ -487,15 +505,12 @@ pub fn sort_stable(
     let device = &keys.device.to_owned();
     // N
     let count = keys.shape.dims[0];
-    // N / N' <- ⌊2 ^ (log2(N) - 14.5)⌋
-    let block_count_group = (2.0_f64).powf((count as f64).log2().sub(14.5)).max(1.0) as u32;
-    // N'
-    let block_count =
-        ((count as u32 + block_count_group - 1) / block_count_group) as usize;
-    // G
-    let group_size = GROUP_SIZE as usize;
+    // N / N' <- N / 2^K
+    let block_count_group = (count as u32 >> BLOCK_COUNT_GROUP_SHIFT).max(1);
+    // N * G / N'
+    let block_size = (block_count_group * GROUP_SIZE) as usize;
     // N' / G
-    let group_count = (block_count + group_size - 1) / group_size;
+    let group_count = (count + block_size - 1) / block_size;
     // R
     let radix_count = RADIX_COUNT as usize;
     // log2(R)
@@ -516,23 +531,23 @@ pub fn sort_stable(
         Tensor::<Wgpu, 2, Int>::empty([group_count, radix_count], device)
             .into_primitive();
 
+    // N' / G
     let cube_count = CubeCount::Static(group_count as u32, 1, 1);
+    // G
     let cube_dim = CubeDim {
         x: GROUP_SIZE,
         y: 1,
         z: 1,
     };
 
-    let mut is_opposite = false;
-
     for radix_shift in (0..32).step_by(radix_count_shift) {
-        let arguments = client.create(bytes_of(&kernelSortArguments {
+        let arguments = client.create(bytes_of(&KernelSortArguments {
             block_count_group,
             radix_shift,
         }));
 
         client.execute(
-            Box::new(SourceKernel::new(kernelSortCountRadix, cube_dim)),
+            Box::new(SourceKernel::new(KernelSortCountRadix, cube_dim)),
             cube_count.to_owned(),
             vec![
                 arguments.to_owned().binding(),
@@ -545,7 +560,7 @@ pub fn sort_stable(
             Box::new(SourceKernel::new(KernelSortScatterKey, cube_dim)),
             cube_count.to_owned(),
             vec![
-                arguments.to_owned().binding(),
+                arguments.binding(),
                 counts_radix_group.handle.to_owned().binding(),
                 keys_input.handle.to_owned().binding(),
                 values_input.handle.to_owned().binding(),
@@ -556,16 +571,12 @@ pub fn sort_stable(
 
         (keys_input, keys_output) = (keys_output, keys_input);
         (values_input, values_output) = (values_output, values_input);
-        is_opposite = !is_opposite;
     }
 
-    let (keys, values) = if is_opposite {
-        (keys_output, values_output)
-    } else {
-        (keys_input, values_input)
-    };
-
-    SortStableOutput { keys, values }
+    SortStableOutput {
+        keys: keys_input,
+        values: values_input,
+    }
 }
 
 #[cfg(test)]
@@ -602,8 +613,6 @@ mod tests {
         )
         .into_primitive();
 
-        keys.client.sync(burn::tensor::backend::SyncType::Wait);
-        let time = std::time::Instant::now();
         let keys_target = &keys.client.read(keys.handle.to_owned().binding());
         let keys_target = bytemuck::cast_slice::<u8, u32>(keys_target);
         let values_target =
@@ -614,18 +623,11 @@ mod tests {
             .zip(values_target)
             .map(|(&key, &value)| (key, value))
             .collect::<Vec<_>>();
-        // items_target.par_sort_unstable_by_key(|p| p.0);
         items_target.par_sort_by_key(|p| p.0);
         let (keys_target, values_target) =
             items_target.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-        println!("Sorting on CPU: {:?}", time.elapsed());
 
-        keys.client.sync(burn::tensor::backend::SyncType::Wait);
-        let time = std::time::Instant::now();
         let SortStableOutput { keys, values } = sort_stable(keys, values);
-        keys.client.sync(burn::tensor::backend::SyncType::Wait);
-        println!("Sorting on GPU: {:?}", time.elapsed());
-
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
         let keys_output = bytemuck::cast_slice::<u8, u32>(keys_output);
 
@@ -645,13 +647,6 @@ mod tests {
             .for_each(|(index, (&value, target))| {
                 assert_eq!(value, target, "index: {index}");
             });
-    }
-
-    #[test]
-    fn bench() {
-        (0..100).for_each(|_| {
-            sort_stable();
-        });
     }
 
     #[test]
@@ -716,6 +711,7 @@ mod tests {
         let sum_output = *from_bytes::<u32>(
             &sums.client.read(sum.handle.to_owned().binding()),
         );
+
         let sums_output = sums.client.read(sums.handle.to_owned().binding());
         let sums_output = cast_slice::<u8, u32>(&sums_output);
 

@@ -39,6 +39,10 @@ fn main(
     // (0 ~ N' / G)
     let group_index = group_id.x;
 
+    // Specifying the parameters
+
+    counts_radix_in_group[local_index] = u32();
+
     // Counting radix in the block of the group
 
     // (0 ~ N / N')
