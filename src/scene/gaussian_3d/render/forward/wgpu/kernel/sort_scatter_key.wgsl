@@ -13,10 +13,16 @@ counts_radix_group: array<u32>;
 // [N] = [N' / G, N / N', G]
 @group(0) @binding(2) var<storage, read_write>
 keys_input: array<u32>;
-
 // [N]
 @group(0) @binding(3) var<storage, read_write>
+values_input: array<u32>;
+
+// [N]
+@group(0) @binding(4) var<storage, read_write>
 keys_out: array<u32>;
+// [N]
+@group(0) @binding(5) var<storage, read_write>
+values_out: array<u32>;
 
 // [R] <- [R / G']
 var<workgroup>
@@ -94,7 +100,6 @@ fn main(
     // [R]
     let offset_radix_groups = offset_radix_groups_subgroup + offset_radix_groups_in_subgroup;
     offsets_radix_group[local_index] = offset_radix_groups + offset_radix_group;
-    workgroupBarrier(); // FIXME
 
     // Scattering keys in the group blocks
 
@@ -114,8 +119,8 @@ fn main(
         // Initializing the mask
 
         // (0 ~ G / 32)
-        for (var w = 0u; w < (GROUP_SIZE >> 5u); w++) {
-            mask_radix_in_group[local_index][w] = 0u;
+        for (var index = 0u; index < (GROUP_SIZE >> 5u); index++) {
+            mask_radix_in_group[local_index][index] = 0u;
         }
         workgroupBarrier();
 
@@ -126,7 +131,7 @@ fn main(
             radix = key_input >> arguments.radix_shift & RADIX_MASK;
             offset_radix_group = offsets_radix_group[radix];
             // [R, G / 32] <- [R, G]
-            atomicAdd(&mask_radix_in_group[radix][mask_radix_index], mask_radix_local); // TODO: Use atomicOr
+            atomicOr(&mask_radix_in_group[radix][mask_radix_index], mask_radix_local);
         }
         workgroupBarrier();
 
@@ -156,6 +161,7 @@ fn main(
 
             let position = offset_radix_group + offset_radix_in_group;
             keys_out[position] = key_input;
+            values_out[position] = values_input[input_index];
 
             // Incrementing the radix offset of the group
             // [R]

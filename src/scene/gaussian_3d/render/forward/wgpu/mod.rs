@@ -522,15 +522,8 @@ pub fn sort_stable(
         y: 1,
         z: 1,
     };
-    println!("block_count_group: {:?}", block_count_group);
-    println!("radix_count_shift: {:?}", radix_count_shift);
-    println!("group_count: {:?}", group_count);
-    println!("radix_count: {:?}", radix_count);
-    println!("group_size: {:?}", group_size);
-    println!("count: {:?}", count);
-    println!("block_count: {:?}", block_count);
 
-    let mut is_swapped = false;
+    let mut is_opposite = false;
 
     for radix_shift in (0..32).step_by(radix_count_shift) {
         let arguments = client.create(bytes_of(&kernelSortArguments {
@@ -555,16 +548,18 @@ pub fn sort_stable(
                 arguments.to_owned().binding(),
                 counts_radix_group.handle.to_owned().binding(),
                 keys_input.handle.to_owned().binding(),
+                values_input.handle.to_owned().binding(),
                 keys_output.handle.to_owned().binding(),
+                values_output.handle.to_owned().binding(),
             ],
         );
 
         (keys_input, keys_output) = (keys_output, keys_input);
         (values_input, values_output) = (values_output, values_input);
-        is_swapped = !is_swapped;
+        is_opposite = !is_opposite;
     }
 
-    let (keys, values) = if is_swapped {
+    let (keys, values) = if is_opposite {
         (keys_output, values_output)
     } else {
         (keys_input, values_input)
@@ -619,7 +614,7 @@ mod tests {
             .zip(values_target)
             .map(|(&key, &value)| (key, value))
             .collect::<Vec<_>>();
-        // keys_target.par_sort_unstable_by_key(|p| p.0);
+        // items_target.par_sort_unstable_by_key(|p| p.0);
         items_target.par_sort_by_key(|p| p.0);
         let (keys_target, values_target) =
             items_target.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
@@ -643,13 +638,13 @@ mod tests {
                 assert_eq!(value, target, "index: {index}");
             },
         );
-        // values_output
-        //     .iter()
-        //     .zip(values_target)
-        //     .enumerate()
-        //     .for_each(|(index, (&value, target))| {
-        //         assert_eq!(value, target, "index: {index}");
-        //     });
+        values_output
+            .iter()
+            .zip(values_target)
+            .enumerate()
+            .for_each(|(index, (&value, target))| {
+                assert_eq!(value, target, "index: {index}");
+            });
     }
 
     #[test]
