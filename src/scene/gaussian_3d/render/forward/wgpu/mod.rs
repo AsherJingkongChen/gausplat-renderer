@@ -212,6 +212,7 @@ pub fn render_gaussian_3d_scene(
 
     // Computing the offsets of touched tiles
 
+    // (T, [P])
     let ScanAddOutput {
         sum: tile_touched_count,
         sums: tile_touched_offsets,
@@ -298,23 +299,6 @@ pub fn render_gaussian_3d_scene(
             tile_point_ranges.handle.to_owned().binding(),
         ],
     );
-
-    // {
-    //     let tile_point_ranges =
-    //         &client.read(tile_point_ranges.handle.to_owned().binding());
-    //     let tile_point_ranges =
-    //         bytemuck::cast_slice::<u8, [u32; 2]>(tile_point_ranges);
-    //     tile_point_ranges
-    //         .iter()
-    //         .enumerate()
-    //         .for_each(|(index, &range)| {
-    //             assert!(
-    //                 range[0] <= range[1],
-    //                 "index: {index}, range: {range:?}, tile_point_ranges: {:?}",
-    //                 &tile_point_ranges[2165..2170]
-    //             );
-    //         });
-    // }
 
     // Performing the forward pass #6
 
@@ -507,7 +491,7 @@ pub fn sort_stable(
     let count = keys.shape.dims[0];
     // N / N' <- N / 2^K
     let block_count_group = (count as u32 >> BLOCK_COUNT_GROUP_SHIFT).max(1);
-    // N * G / N'
+    // G * N / N'
     let block_size = (block_count_group * GROUP_SIZE) as usize;
     // N' / G
     let group_count = (count + block_size - 1) / block_size;
@@ -582,30 +566,72 @@ pub fn sort_stable(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn sort_stable() {
+    fn sort_stable_small() {
+        use super::*;
+
+        let device = &Default::default();
+        let keys = {
+            let mut keys_unsigned =
+                Tensor::<Wgpu, 1, Int>::empty([14], device).into_primitive();
+            keys_unsigned.handle = keys_unsigned.client.create(
+                bytemuck::cast_slice::<u32, u8>(&[
+                    0x331a707e, 0x804673dd, 0x08f23dac, 0xf9dc4824, 0xe0986a48,
+                    0xef358f8e, 0xe1f1a696, 0x4255a70e, 0x5009911f, 0x6628f9f4,
+                    0x6c95798b, 0xc61b9e2e, 0x81c02344, 0x168ff8d5,
+                ]),
+            );
+            keys_unsigned
+        };
+        let values = Tensor::<Wgpu, 1, Int>::arange(
+            0..keys.shape.dims[0] as i64,
+            device,
+        )
+        .mul_scalar(10)
+        .into_primitive();
+
+        let keys_target = [
+            0x08f23dac, 0x168ff8d5, 0x331a707e, 0x4255a70e, 0x5009911f,
+            0x6628f9f4, 0x6c95798b, 0x804673dd, 0x81c02344, 0xc61b9e2e,
+            0xe0986a48, 0xe1f1a696, 0xef358f8e, 0xf9dc4824,
+        ];
+        let values_target =
+            [20, 130, 0, 70, 80, 90, 100, 10, 120, 110, 40, 60, 50, 30];
+
+        let SortStableOutput { keys, values } = sort_stable(keys, values);
+        let keys_output = &keys.client.read(keys.handle.to_owned().binding());
+        let keys_output = bytemuck::cast_slice::<u8, u32>(keys_output);
+
+        let values_output =
+            &values.client.read(values.handle.to_owned().binding());
+        let values_output = bytemuck::cast_slice::<u8, u32>(values_output);
+
+        keys_output.iter().zip(keys_target).enumerate().for_each(
+            |(index, (&value, target))| {
+                assert_eq!(value, target, "index: {index}");
+            },
+        );
+        values_output
+            .iter()
+            .zip(values_target)
+            .enumerate()
+            .for_each(|(index, (&value, target))| {
+                assert_eq!(value, target, "index: {index}");
+            });
+    }
+
+    #[test]
+    fn sort_stable_random() {
         use super::*;
         use rayon::slice::ParallelSliceMut;
 
         let device = &Default::default();
         Wgpu::seed(0);
 
-        let keys = if false {
-            Tensor::<Wgpu, 1, Int>::from_ints(
-                [
-                    0x12100, 0x21200, 0x32103, 0x23102, 0x13905, 0x31904,
-                    0x31907, 0x23306, 0x10302, 0x20308, 0x12100, 0x21200,
-                    0x32103, 0x23102, 0x13905, 0x31904, 0x31907, 0x23306,
-                ],
-                device,
-            )
-        } else {
-            Tensor::<Wgpu, 1>::random(
-                [1 << 22],
-                burn::tensor::Distribution::Uniform(0.0, i32::MAX as f64),
-                device,
-            )
-            .int()
-        }
+        let keys = Tensor::<Wgpu, 1, Int>::random(
+            [1 << 23],
+            burn::tensor::Distribution::Uniform(0.0, i32::MAX as f64),
+            device,
+        )
         .into_primitive();
         let values = Tensor::<Wgpu, 1, Int>::arange(
             0..keys.shape.dims[0] as i64,
