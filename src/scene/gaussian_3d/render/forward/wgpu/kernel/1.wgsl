@@ -128,7 +128,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     -0.5900436,
 );
 
-// The depth range is restricted by 16-bit depth order
+// The depth range is restricted by 16-bit depth order for sorting
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
 
@@ -151,6 +151,11 @@ fn main(
         return;
     }
 
+    // Initializing the results
+
+    radii[index] = u32();
+    tile_touched_counts[index] = u32();
+
     // Transforming the 3D position from world space to view space
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
 
@@ -167,7 +172,7 @@ fn main(
     }
 
     // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // Pv'[2, 1] <= Pv[3, 1]
+    // Pv'[2, 1] <- Pv[3, 1]
     // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
     //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
 
@@ -262,7 +267,7 @@ fn main(
     );
 
     // Computing the inverse of the 2D covariance matrix
-    // Σ'^-1[2, 2] (Symmetric) <= Σ'[2, 2]
+    // Σ'^-1[2, 2] (Symmetric) <- Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
     let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det != 0.0);
@@ -273,7 +278,7 @@ fn main(
     );
 
     // Computing the max radius using the 2D covariance matrix
-    // r <= Σ'[2, 2]
+    // r <- Σ'[2, 2]
     // 
     // ** Advanced **
     // 
@@ -338,7 +343,7 @@ fn main(
     }
 
     // Computing the view direction in world space
-    // Dv[3] <= Ov[3] = Pw[3] - V[3]
+    // Dv[3] <- Ov[3] = Pw[3] - V[3]
 
     let view_offset = position_3d - view_position;
     let view_direction = normalize(view_offset);
@@ -352,7 +357,7 @@ fn main(
     var vd_zz_5_1 = f32();
 
     // Computing the 3D color in RGB space from SH space
-    // D[16] <= Dv[3]
+    // D[16] <- Dv[3]
     // C_rgb[3] = D[1, 16] * C_sh[16, 3] + 0.5
     //
     // C_rgb is clamped
@@ -422,9 +427,9 @@ fn main(
 
     // [P, 3 (+ 1)]
     colors_rgb_3d[index] = color_rgb_3d;
-    // [P, 2, 2] (Symmetric)
+    // [P, 2, 2]
     conics[index] = conic;
-    // [P, 3 (+ 1), 3] (Symmetric)
+    // [P, 3 (+ 1), 3]
     covariances_3d[index] = covariance_3d;
     // [P]
     depths[index] = depth;

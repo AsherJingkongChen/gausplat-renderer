@@ -129,7 +129,7 @@ fn main(
     }
 
     // Loading the view direction in world space
-    // Dv[3] <= Ov[3] = Pw[3] - V[3]
+    // Dv[3] <- Ov[3] = Pw[3] - V[3]
 
     let view_offset = view_offsets[index];
     let view_direction = view_directions[index];

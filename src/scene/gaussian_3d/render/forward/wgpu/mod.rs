@@ -137,7 +137,7 @@ pub fn render_gaussian_3d_scene(
             .into_primitive()
             .tensor();
     let radii =
-        Tensor::<Wgpu, 1, Int>::zeros([point_count], device).into_primitive();
+        Tensor::<Wgpu, 1, Int>::empty([point_count], device).into_primitive();
     let rotations_matrix =
         Tensor::<Wgpu, 3>::empty([point_count, 3 + 1, 3], device)
             .into_primitive()
@@ -147,7 +147,7 @@ pub fn render_gaussian_3d_scene(
             .into_primitive()
             .tensor();
     let tile_touched_counts =
-        Tensor::<Wgpu, 1, Int>::zeros([point_count], device).into_primitive();
+        Tensor::<Wgpu, 1, Int>::empty([point_count], device).into_primitive();
     let tiles_touched_max =
         Tensor::<Wgpu, 2, Int>::empty([point_count, 2], device)
             .into_primitive();
@@ -501,6 +501,13 @@ pub fn sort_stable(
     // [N]
     let mut values_output =
         Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
+    // [R, N / G]
+    let counts_group_radix =
+        Tensor::<Wgpu, 1, Int>::empty([radix * group_count], device)
+            .into_primitive();
+    // [N]
+    let offsets_local =
+        Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
 
     let cube_count = CubeCount::Static(group_count as u32, 1, 1);
     let cube_dim = CubeDim {
@@ -514,13 +521,6 @@ pub fn sort_stable(
     for radix_bit_offset in (0..32).step_by(radix_bit_count) {
         let arguments = client
             .create(bytes_of(&KernelRadixSortArguments { radix_bit_offset }));
-        // [R, N / G]
-        let counts_group_radix =
-            Tensor::<Wgpu, 1, Int>::empty([radix * group_count], device)
-                .into_primitive();
-        // [N]
-        let offsets_local =
-            Tensor::<Wgpu, 1, Int>::empty([count], device).into_primitive();
 
         client.execute(
             Box::new(SourceKernel::new(KernelRadixSortScanLocal, cube_dim)),
@@ -533,7 +533,7 @@ pub fn sort_stable(
             ],
         );
 
-        let offsets_group = scan_add(counts_group_radix).sums;
+        let offsets_group = scan_add(counts_group_radix.to_owned()).sums;
 
         client.execute(
             Box::new(SourceKernel::new(KernelRadixSortScatterKey, cube_dim)),

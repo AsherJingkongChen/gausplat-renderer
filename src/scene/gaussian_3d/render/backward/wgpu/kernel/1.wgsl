@@ -28,7 +28,7 @@ var<storage, read_write> point_rendered_counts: array<u32>;
 // [P, 2]
 @group(0) @binding(7)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
-// [(I_y / T_y) * (I_x / T_x), 2]
+// [I_y / T_y, I_x / T_x, 2]
 @group(0) @binding(8)
 var<storage, read_write> tile_point_ranges: array<vec2<u32>>;
 // [I_y, I_x] (0.0 ~ 1.0)
@@ -114,7 +114,7 @@ fn main(
     }
 
     // Processing batches of points of the tile
-    // [R / (T_x * T_y)]
+    // (0 ~ R / (T_x * T_y))
 
     for (var batch_index = 0u; batch_index < batch_count; batch_index++) {
         // Specifying the batch parameters
@@ -138,7 +138,7 @@ fn main(
         }
 
         // Computing the 2D colors in RGB space using the batch parameters
-        // [T_x * T_y]
+        // (0 ~ T_x * T_y)
 
         let batch_point_count = min(tile_point_count, BATCH_SIZE);
         for (var batch_index = 0u; batch_index < batch_point_count; batch_index++) {

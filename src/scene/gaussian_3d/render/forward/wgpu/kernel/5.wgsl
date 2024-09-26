@@ -2,7 +2,7 @@
 @group(0) @binding(0)
 var<storage, read_write> point_orders: array<u32>;
 
-// [(I_y / T_y) * (I_x / T_x), 2]
+// [I_y / T_y, I_x / T_x, 2]
 @group(0) @binding(1)
 var<storage, read_write> tile_point_ranges: array<u32>;
 
