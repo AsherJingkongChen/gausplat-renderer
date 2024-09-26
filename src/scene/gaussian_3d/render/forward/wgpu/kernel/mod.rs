@@ -10,6 +10,8 @@ impl_kernel_source!(Kernel5WgslSource, "./5.wgsl");
 impl_kernel_source!(Kernel6WgslSource, "./6.wgsl");
 impl_kernel_source!(KernelScanAddAdd, "./scan_add_add.wgsl");
 impl_kernel_source!(KernelScanAddScan, "./scan_add_scan.wgsl");
+impl_kernel_source!(kernelSortCountRadix, "./sort_count_radix.wgsl");
+impl_kernel_source!(KernelSortScatterKey, "./sort_scatter_key.wgsl");
 impl_kernel_source!(KernelRadixSortScanLocal, "./radix_sort_scan_local.wgsl");
 impl_kernel_source!(KernelRadixSortScatterKey, "./radix_sort_scatter_key.wgsl");
 
@@ -62,11 +64,19 @@ pub struct Kernel6Arguments {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct kernelSortArguments {
+    /// `N / N'`
+    pub block_count_group: u32,
+    /// `(0 ~ 32: +log2(R))`
+    pub radix_shift: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct KernelRadixSortArguments {
     /// `(0 ~ .., 2^R)`
     pub radix_bit_offset: u32,
 }
-
 
 macro_rules! impl_kernel_source {
     ($kernel:ident, $source_path:expr) => {
