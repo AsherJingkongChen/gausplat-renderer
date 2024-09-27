@@ -4,7 +4,10 @@ pub mod render;
 pub use crate::preset::backend::{self, *};
 pub use burn::{
     module::{AutodiffModule, Module, Param},
-    tensor::{backend::Backend, Tensor, TensorData},
+    tensor::{
+        backend::{AutodiffBackend, Backend},
+        Tensor, TensorData,
+    },
 };
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};

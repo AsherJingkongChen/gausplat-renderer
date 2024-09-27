@@ -59,7 +59,7 @@ var<workgroup> point_indices_in_batch: array<u32, BATCH_SIZE>;
 // [T_x * T_y, 2]
 var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 
-const OPACITY_2D_MAX: f32 = 1.0 - 1.5 / 255.0;
+const OPACITY_2D_MAX: f32 = 1.0 - 5.0 / 255.0;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
 // T_x * T_y
 const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
