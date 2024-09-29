@@ -45,7 +45,7 @@ var<workgroup> opacities_3d_in_batch: array<f32, BATCH_SIZE>;
 // [T_x * T_y, 2]
 var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_x * T_y)
-var<workgroup> pixel_done_count: u32;
+var<workgroup> pixel_done_count: atomic<u32>;
 
 const OPACITY_2D_MAX: f32 = 1.0 - 5.0 * OPACITY_2D_MIN;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
@@ -62,6 +62,7 @@ fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     // (0 ~ T_x * T_y)
     @builtin(local_invocation_index) local_index: u32,
+    // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
     @builtin(workgroup_id) tile_id: vec3<u32>,
     // (I_x / T_x, I_y / T_y)
     @builtin(num_workgroups) tile_count: vec3<u32>,
@@ -72,45 +73,48 @@ fn main(
     let pixel = global_id.xy;
     // (0 ~ I_x * I_y)
     let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
-    // (0 ~ (I_x / T_x) * (I_y / T_y))
+    // (0 ~ (I_y / T_y) * (I_x / T_x))
     let tile_index = tile_id.y * tile_count.x + tile_id.x;
 
     // Specifying the parameters
 
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let position_pixel = vec2<f32>(pixel);
-    // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
     let tile_point_range = tile_point_ranges[tile_index];
-    let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
     // R
     var tile_point_count = tile_point_range.y - tile_point_range.x;
+    // R / (T_x * T_y)
+    let batch_count = (tile_point_count + BATCH_SIZE - 1) / BATCH_SIZE;
     var color_rgb_2d = vec3<f32>();
     var is_pixel_done = !is_pixel_valid;
     var point_rendered_count = 0u;
     var point_rendered_state = 0u;
     var transmittance_state = 1.0;
     var was_pixel_done = false;
+    if local_index == 0 {
+        pixel_done_count = 0u;
+    }
 
     // Processing batches of points of the tile
     // (0 ~ R / (T_x * T_y))
 
     for (var batch_index = 0u; batch_index < batch_count; batch_index++) {
-        // Specifying the progress state
+        // Specifying the task status of the pixel
 
         if is_pixel_done && !was_pixel_done {
             was_pixel_done = true;
-            pixel_done_count += 1u;
+            atomicAdd(&pixel_done_count, 1u);
+        }
+        workgroupBarrier();
 
-            // Leaving if all the pixels of tile are finished rendering
+        // Leaving if all the pixels in the tile finished rendering
 
-            if pixel_done_count == BATCH_SIZE {
-                break;
-            }
+        if pixel_done_count == BATCH_SIZE {
+            break;
         }
 
-        // Specifying the batch parameters
+        // Specifying the parameters in the batch
 
-        workgroupBarrier();
         let index = tile_point_range.x + batch_index * BATCH_SIZE + local_index;
         if index < tile_point_range.y {
             let point_index = point_indices[index];
@@ -191,7 +195,7 @@ fn main(
     // Specifying the results
 
     if is_pixel_valid {
-        // Paint the pixel
+        // Painting the pixel
 
         // [I_y, I_x, 3]
         colors_rgb_2d[pixel_index] = array<f32, 3>(

@@ -26,7 +26,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 
     fn render_backward(
         state: backward::RenderInput<B>,
-        colors_rgb_2d_grad: B::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: B::FloatTensorPrimitive,
     ) -> backward::RenderOutput<B>;
 }
 
@@ -107,7 +107,7 @@ impl<B: Backend> Gaussian3dScene<Autodiff<B>>
 where
     Self: Gaussian3dRenderer<B>,
 {
-    #[must_use = "The gradients should be consumed"]
+    #[must_use = "The gradients should be used"]
     pub fn render(
         &self,
         view: &View,
@@ -174,7 +174,7 @@ where
     }
 }
 
-impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
+impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
     for Gaussian3dRendererBackward<B, R>
 {
     type State = Gaussian3dRendererBackwardState<B>;
@@ -191,7 +191,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             "Gaussian3dRendererBackward::backward",
         );
 
-        let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
+        let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
 
         if ops.parents.iter().all(Option::is_none) {
             return;
@@ -200,22 +200,22 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
         let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
 
         if let Some(node) = &ops.parents[0] {
-            grads.register::<B, 2>(node.id, output.colors_sh_grad);
+            grads.register::<B>(node.id, output.colors_sh_grad);
         }
         if let Some(node) = &ops.parents[1] {
-            grads.register::<B, 2>(node.id, output.opacities_grad);
+            grads.register::<B>(node.id, output.opacities_grad);
         }
         if let Some(node) = &ops.parents[2] {
-            grads.register::<B, 2>(node.id, output.positions_grad);
+            grads.register::<B>(node.id, output.positions_grad);
         }
         if let Some(node) = &ops.parents[3] {
-            grads.register::<B, 2>(node.id, output.rotations_grad);
+            grads.register::<B>(node.id, output.rotations_grad);
         }
         if let Some(node) = &ops.parents[4] {
-            grads.register::<B, 2>(node.id, output.scalings_grad);
+            grads.register::<B>(node.id, output.scalings_grad);
         }
 
-        grads.register::<B, 1>(
+        grads.register::<B>(
             ops.state.positions_2d_grad_norm_ref_id,
             output.positions_2d_grad_norm,
         );

@@ -216,7 +216,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,
@@ -236,7 +236,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,

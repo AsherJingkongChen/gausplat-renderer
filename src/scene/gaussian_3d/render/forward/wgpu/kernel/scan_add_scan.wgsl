@@ -50,7 +50,7 @@ fn main(
     }
     workgroupBarrier();
 
-    let sum_exclusive_subgroup = subgroupBroadcast(
+    let sum_exclusive_subgroup = subgroupShuffle(
         subgroupExclusiveAdd(sums_subgroup[lane_index]),
         subgroup_index,
     );

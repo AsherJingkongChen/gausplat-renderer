@@ -14,7 +14,7 @@ use kernel::*;
 pub fn render_gaussian_3d_scene(
     state: backward::RenderInput<Wgpu>,
     // [I_y, I_x, 3]
-    colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+    colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
 ) -> backward::RenderOutput<Wgpu> {
     #[cfg(debug_assertions)]
     log::debug!(

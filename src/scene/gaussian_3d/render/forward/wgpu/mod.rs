@@ -3,6 +3,7 @@ mod kernel;
 pub use super::*;
 
 use crate::preset::render::*;
+use burn::tensor::Shape;
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     kernel::into_contiguous,
@@ -10,6 +11,24 @@ use burn_jit::{
 };
 use bytemuck::{bytes_of, from_bytes};
 use kernel::*;
+
+fn is_sorted<T: IntoIterator>(t: T) -> bool
+where
+    <T as IntoIterator>::Item: std::cmp::PartialOrd + std::fmt::Debug,
+{
+    let mut iter = t.into_iter();
+    iter.next()
+        .map(|first| {
+            iter.try_fold(first, |previous, current| {
+                if !(previous <= current) {
+                    println!("Is not sorted: !({previous:?} <= {current:?})");
+                }
+                (previous <= current).then_some(previous)
+            })
+            .is_some()
+        })
+        .unwrap_or(true)
+}
 
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
@@ -270,8 +289,66 @@ pub fn render_gaussian_3d_scene(
         values: point_indices,
     } = sort_stable(point_orders, point_indices);
 
+    if !is_sorted(
+        bytemuck::cast_slice::<u8, u32>(
+            &client.read(point_orders.handle.to_owned().binding()),
+        )
+        .iter()
+        .map(|&value| value >> 16),
+    ) {
+        println!("[1] point_tile_indices is not sorted");
+    }
+
+    {
+        let point_orders =
+            &client.read(point_orders.handle.to_owned().binding());
+        let point_orders = bytemuck::cast_slice::<u8, u32>(point_orders);
+        let point_tile_index_max =
+            point_orders.iter().map(|&value| value >> 16).max().unwrap();
+
+        assert!(
+            point_tile_index_max < tile_count_y * tile_count_x,
+            "[2] tile index max {point_tile_index_max} should be no more than {}",
+            tile_count_y * tile_count_x,
+        );
+    }
+
     // Performing the forward pass #5
 
+    // let tile_point_ranges = {
+    //     let shape =
+    //         Shape::new([tile_count_y as usize, tile_count_x as usize, 2]);
+    //     let mut tile_point_ranges = vec![0_u32; shape.num_elements()];
+
+    //     let global_count = point_orders.len();
+    //     (0..global_count).for_each(|global_index| {
+    //         let tile_index_current = point_orders[global_index] as usize >> 16;
+
+    //         if global_index == 0 {
+    //             tile_point_ranges[tile_index_current * 2 + 0] = 0;
+    //         } else {
+    //             let tile_index_previous =
+    //                 point_orders[global_index - 1] as usize >> 16;
+    //             if tile_index_current != tile_index_previous {
+    //                 tile_point_ranges[tile_index_previous * 2 + 1] =
+    //                     global_index as u32;
+    //                 tile_point_ranges[tile_index_current * 2 + 0] =
+    //                     global_index as u32;
+    //             }
+    //         }
+
+    //         if global_index + 1 == global_count {
+    //             tile_point_ranges[tile_index_current * 2 + 1] =
+    //                 global_count as u32;
+    //         }
+    //     });
+
+    //     Tensor::<Wgpu, 3, Int>::from_data(
+    //         TensorData::new(tile_point_ranges, shape),
+    //         device,
+    //     )
+    //     .into_primitive()
+    // };
     // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = Tensor::<Wgpu, 3, Int>::zeros(
         [tile_count_y as usize, tile_count_x as usize, 2],
@@ -295,10 +372,50 @@ pub fn render_gaussian_3d_scene(
             1,
         ),
         vec![
-            point_orders.handle.binding(),
+            point_orders.handle.to_owned().binding(),
             tile_point_ranges.handle.to_owned().binding(),
         ],
     );
+
+    {
+        let tile_point_ranges =
+            &client.read(tile_point_ranges.handle.to_owned().binding());
+        let tile_point_ranges_tuple =
+            bytemuck::cast_slice::<u8, [u32; 2]>(tile_point_ranges);
+        let tile_point_ranges_linear =
+            bytemuck::cast_slice::<u8, u32>(tile_point_ranges);
+
+        assert!(
+            is_sorted(tile_point_ranges_linear),
+            "[3] Linear range is not sorted"
+        );
+
+        tile_point_ranges_tuple
+            .iter()
+            .enumerate()
+            .for_each(|(index, range)| {
+                let start = range[0];
+                let end = range[1];
+                assert!(
+                    start <= end,
+                    "[4] Illegal range: [{start}, {end}), index: {index}, others: {:?}",
+                    &tile_point_ranges_tuple[0..10],
+                );
+                assert!(
+                    end <= tile_touched_count,
+                    "[5] {end} > {tile_touched_count}, index: {index}"
+                );
+                let range_size = end - start;
+                if range_size > (10000) {
+                    println!(
+                        "Large range: [{start}, {end}) = ({range_size}), index: {index}"
+                    );
+                    if range_size > (50000) {
+                        panic!("Super large range: [{start}, {end}) = ({range_size}), index: {index}");
+                    }
+                }
+            });
+    }
 
     // Performing the forward pass #6
 
@@ -382,9 +499,9 @@ pub fn render_gaussian_3d_scene(
 #[derive(Clone, Debug)]
 pub struct ScanAddOutput {
     /// The sum of scanned values.
-    pub sum: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    pub sum: <Wgpu as Backend>::IntTensorPrimitive,
     /// The exclusive sum of scanned values.
-    pub sums: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    pub sums: <Wgpu as Backend>::IntTensorPrimitive,
 }
 
 /// Scan-and-add exclusively.
@@ -394,7 +511,7 @@ pub struct ScanAddOutput {
 /// - `sums`: The values to scan in place.
 pub fn scan_add(
     // [N]
-    sums: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    sums: <Wgpu as Backend>::IntTensorPrimitive,
 ) -> ScanAddOutput {
     const GROUP_SIZE: u32 = 256;
 
@@ -458,9 +575,9 @@ pub fn scan_add(
 #[derive(Clone, Debug)]
 pub struct SortStableOutput {
     /// The keys of sorted items.
-    pub keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    pub keys: <Wgpu as Backend>::IntTensorPrimitive,
     /// The values of sorted items.
-    pub values: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    pub values: <Wgpu as Backend>::IntTensorPrimitive,
 }
 
 /// Sort stably.
@@ -470,12 +587,12 @@ pub struct SortStableOutput {
 /// - `keys`: The keys to sort.
 pub fn sort_stable(
     // [N]
-    keys: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    keys: <Wgpu as Backend>::IntTensorPrimitive,
     // [N]
-    values: <Wgpu as Backend>::IntTensorPrimitive<1>,
+    values: <Wgpu as Backend>::IntTensorPrimitive,
 ) -> SortStableOutput {
     // K
-    const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
+    const BLOCK_COUNT_GROUP_SHIFT: u32 = 18;
     // G = R
     const GROUP_SIZE: u32 = RADIX_COUNT;
     // R
@@ -493,7 +610,7 @@ pub fn sort_stable(
     let block_count_group = (count as u32 >> BLOCK_COUNT_GROUP_SHIFT).max(1);
     // G * N / N'
     let block_size = (block_count_group * GROUP_SIZE) as usize;
-    // N' / G
+    // N' / G <- N / (G * N / N')
     let group_count = (count + block_size - 1) / block_size;
     // R
     let radix_count = RADIX_COUNT as usize;
@@ -530,6 +647,7 @@ pub fn sort_stable(
             radix_shift,
         }));
 
+        client.sync(burn_jit::cubecl::client::SyncType::Wait);
         client.execute(
             Box::new(SourceKernel::new(KernelSortCountRadix, cube_dim)),
             cube_count.to_owned(),
@@ -540,6 +658,7 @@ pub fn sort_stable(
             ],
         );
 
+        client.sync(burn_jit::cubecl::client::SyncType::Wait);
         client.execute(
             Box::new(SourceKernel::new(KernelSortScatterKey, cube_dim)),
             cube_count.to_owned(),
@@ -556,6 +675,7 @@ pub fn sort_stable(
         (keys_input, keys_output) = (keys_output, keys_input);
         (values_input, values_output) = (values_output, values_input);
     }
+    client.sync(burn_jit::cubecl::client::SyncType::Wait);
 
     SortStableOutput {
         keys: keys_input,
@@ -605,9 +725,15 @@ mod tests {
             &values.client.read(values.handle.to_owned().binding());
         let values_output = bytemuck::cast_slice::<u8, u32>(values_output);
 
-        keys_output.iter().zip(keys_target).enumerate().for_each(
-            |(index, (&value, target))| {
-                assert_eq!(value, target, "index: {index}");
+        keys_output.iter().enumerate().try_fold(
+            keys_output.iter().next().unwrap(),
+            |previous, (index, current)| {
+                let result = (previous <= current).then_some(previous);
+                assert!(
+                    result.is_some(),
+                    "Unsorted keys: !({previous} <= {current}), index: {index}"
+                );
+                result
             },
         );
         values_output
@@ -615,8 +741,13 @@ mod tests {
             .zip(values_target)
             .enumerate()
             .for_each(|(index, (&value, target))| {
-                assert_eq!(value, target, "index: {index}");
+                assert_eq!(value, target, "value index: {index}");
             });
+        keys_output.iter().zip(keys_target).enumerate().for_each(
+            |(index, (&value, target))| {
+                assert_eq!(value, target, "key index: {index}");
+            },
+        );
     }
 
     #[test]
@@ -625,11 +756,10 @@ mod tests {
         use rayon::slice::ParallelSliceMut;
 
         let device = &Default::default();
-        Wgpu::seed(0);
 
         let keys = Tensor::<Wgpu, 1, Int>::random(
             [1 << 23],
-            burn::tensor::Distribution::Uniform(0.0, i32::MAX as f64),
+            burn::tensor::Distribution::Uniform(0.0, u32::MAX as f64),
             device,
         )
         .into_primitive();
@@ -661,9 +791,15 @@ mod tests {
             &values.client.read(values.handle.to_owned().binding());
         let values_output = bytemuck::cast_slice::<u8, u32>(values_output);
 
-        keys_output.iter().zip(keys_target).enumerate().for_each(
-            |(index, (&value, target))| {
-                assert_eq!(value, target, "index: {index}");
+        keys_output.iter().enumerate().try_fold(
+            keys_output.iter().next().unwrap(),
+            |previous, (index, current)| {
+                let result = (previous <= current).then_some(previous);
+                assert!(
+                    result.is_some(),
+                    "Key {previous} should be no more than {current}, index: {index}"
+                );
+                result
             },
         );
         values_output
@@ -671,8 +807,13 @@ mod tests {
             .zip(values_target)
             .enumerate()
             .for_each(|(index, (&value, target))| {
-                assert_eq!(value, target, "index: {index}");
+                assert_eq!(value, target, "value index: {index}");
             });
+        keys_output.iter().zip(keys_target).enumerate().for_each(
+            |(index, (&value, target))| {
+                assert_eq!(value, target, "key index: {index}");
+            },
+        );
     }
 
     #[test]
@@ -747,5 +888,21 @@ mod tests {
                 assert_eq!(output, target, "index: {index}");
             },
         );
+    }
+
+    #[test]
+    fn sort_stable_stress() {
+        (0..50000).for_each(|index| {
+            println!("index: {index}");
+            sort_stable_random();
+        });
+    }
+
+    #[test]
+    fn scan_add_stress() {
+        (0..50000).for_each(|index| {
+            println!("index: {index}");
+            scan_add_random();
+        });
     }
 }

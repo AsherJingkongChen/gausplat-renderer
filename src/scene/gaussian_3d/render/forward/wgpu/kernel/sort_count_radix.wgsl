@@ -41,7 +41,10 @@ fn main(
 
     // Specifying the parameters
 
-    counts_radix_in_group[local_index] = u32();
+    // N
+    let global_count = arrayLength(&keys_input);
+    counts_radix_in_group[local_index] = 0u;
+    workgroupBarrier();
 
     // Counting radix in the block of the group
 
@@ -50,13 +53,13 @@ fn main(
         // (0 ~ N' / G, 0 ~ N / N', 0 ~ G)
         let input_index =
             (group_index * arguments.block_count_group + block_index) * GROUP_SIZE + local_index;
-        if input_index < arrayLength(&keys_input) {
+        if input_index < global_count {
             // (0 ~ R)
             let radix = keys_input[input_index] >> arguments.radix_shift & RADIX_MASK;
             atomicAdd(&counts_radix_in_group[radix], 1u);
         }
     }
-    workgroupBarrier();
+    workgroupBarrier(); // TODO: Move
 
     // Specifying the result of radix count in the group
 

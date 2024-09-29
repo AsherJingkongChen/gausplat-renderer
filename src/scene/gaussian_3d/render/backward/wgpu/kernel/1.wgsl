@@ -83,7 +83,7 @@ fn main(
     let pixel = global_id.xy;
     // (0 ~ I_x * I_y)
     let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
-    // (0 ~ (I_x / T_x) * (I_y / T_y))
+    // (0 ~ (I_y / T_y) * (I_x / T_x))
     let tile_index = tile_id.y * tile_count.x + tile_id.x;
 
     // Specifying the parameters
