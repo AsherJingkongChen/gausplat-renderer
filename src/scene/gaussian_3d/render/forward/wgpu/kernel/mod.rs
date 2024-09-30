@@ -1,21 +1,17 @@
-pub use burn::backend::wgpu::WgpuRuntime;
 pub use burn_jit::{
-    cubecl::{client::ComputeClient, KernelId, Runtime},
+    cubecl::KernelId,
     template::{KernelSource, SourceTemplate},
 };
 pub use bytemuck::{Pod, Zeroable};
 
-pub type WgpuClient = ComputeClient<
-    <WgpuRuntime as Runtime>::Server,
-    <WgpuRuntime as Runtime>::Channel,
->;
-
-pub struct Kernel1WgslSource;
-pub struct Kernel3WgslSource;
-pub struct Kernel5WgslSource;
-pub struct Kernel6WgslSource;
-pub struct KernelScanAddExclusiveAdd;
-pub struct KernelScanAddExclusiveScan;
+impl_kernel_source!(Kernel1WgslSource, "./1.wgsl");
+impl_kernel_source!(Kernel3WgslSource, "./3.wgsl");
+impl_kernel_source!(Kernel5WgslSource, "./5.wgsl");
+impl_kernel_source!(Kernel6WgslSource, "./6.wgsl");
+impl_kernel_source!(KernelScanAddAdd, "./scan_add_add.wgsl");
+impl_kernel_source!(KernelScanAddScan, "./scan_add_scan.wgsl");
+impl_kernel_source!(KernelSortCountRadix, "./sort_count_radix.wgsl");
+impl_kernel_source!(KernelSortScatterKey, "./sort_scatter_key.wgsl");
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -57,13 +53,6 @@ pub struct Kernel3Arguments {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct Kernel5Arguments {
-    /// `T`
-    pub tile_touched_count: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Kernel6Arguments {
     /// `I_x`
     pub image_size_x: u32,
@@ -71,62 +60,29 @@ pub struct Kernel6Arguments {
     pub image_size_y: u32,
 }
 
-impl KernelSource for Kernel1WgslSource {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./1.wgsl"))
-    }
-
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct KernelSortArguments {
+    /// `N / N'`
+    pub block_count_group: u32,
+    /// `(0 ~ 32: +log2(R))`
+    pub radix_shift: u32,
 }
 
-impl KernelSource for Kernel3WgslSource {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./3.wgsl"))
-    }
+macro_rules! impl_kernel_source {
+    ($kernel:ident, $source_path:expr) => {
+        #[derive(Clone, Copy, Debug, Default)]
+        pub struct $kernel;
 
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
+        impl KernelSource for $kernel {
+            fn source(&self) -> SourceTemplate {
+                SourceTemplate::new(include_str!($source_path))
+            }
+
+            fn id(&self) -> KernelId {
+                KernelId::new::<Self>()
+            }
+        }
+    };
 }
-
-impl KernelSource for Kernel5WgslSource {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./5.wgsl"))
-    }
-
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
-}
-
-impl KernelSource for Kernel6WgslSource {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./6.wgsl"))
-    }
-
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
-}
-
-impl KernelSource for KernelScanAddExclusiveAdd {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./scan_add_exclusive_add.wgsl"))
-    }
-
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
-}
-
-impl KernelSource for KernelScanAddExclusiveScan {
-    fn source(&self) -> SourceTemplate {
-        SourceTemplate::new(include_str!("./scan_add_exclusive_scan.wgsl"))
-    }
-
-    fn id(&self) -> KernelId {
-        KernelId::new::<Self>()
-    }
-}
+use impl_kernel_source;

@@ -26,7 +26,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 
     fn render_backward(
         state: backward::RenderInput<B>,
-        colors_rgb_2d_grad: B::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: B::FloatTensorPrimitive,
     ) -> backward::RenderOutput<B>;
 }
 
@@ -44,9 +44,9 @@ pub struct RenderOutput<B: Backend> {
 }
 
 #[derive(Clone)]
-pub struct RenderOutputAutodiff<B: Backend> {
+pub struct RenderOutputAutodiff<AB: AutodiffBackend> {
     /// `[I_y, I_x, 3]`
-    pub colors_rgb_2d: Tensor<Autodiff<B>, 3>,
+    pub colors_rgb_2d: Tensor<AB, 3>,
 
     /// The shape of gradient is `[P]`
     ///
@@ -60,10 +60,10 @@ pub struct RenderOutputAutodiff<B: Backend> {
     /// let positions_2d_grad_norm =
     ///     positions_2d_grad_norm_ref.grad_remove(&mut grads);
     /// ```
-    pub positions_2d_grad_norm_ref: Tensor<Autodiff<B>, 1>,
+    pub positions_2d_grad_norm_ref: Tensor<AB, 1>,
 
     /// `[P]`
-    pub radii: Tensor<B, 1, Int>,
+    pub radii: Tensor<AB::InnerBackend, 1, Int>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -107,11 +107,12 @@ impl<B: Backend> Gaussian3dScene<Autodiff<B>>
 where
     Self: Gaussian3dRenderer<B>,
 {
+    #[must_use = "The gradients should be used"]
     pub fn render(
         &self,
         view: &View,
         options: &Gaussian3dRendererOptions,
-    ) -> RenderOutputAutodiff<B> {
+    ) -> RenderOutputAutodiff<Autodiff<B>> {
         let (colors_sh, device) = {
             let values = self.colors_sh();
             let device = values.device();
@@ -173,7 +174,7 @@ where
     }
 }
 
-impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
+impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
     for Gaussian3dRendererBackward<B, R>
 {
     type State = Gaussian3dRendererBackwardState<B>;
@@ -190,27 +191,31 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 3, 5>
             "Gaussian3dRendererBackward::backward",
         );
 
-        let colors_rgb_2d_grad = grads.consume::<B, 3>(&ops.node);
+        let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
+
+        if ops.parents.iter().all(Option::is_none) {
+            return;
+        }
 
         let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
 
         if let Some(node) = &ops.parents[0] {
-            grads.register::<B, 2>(node.id, output.colors_sh_grad);
+            grads.register::<B>(node.id, output.colors_sh_grad);
         }
         if let Some(node) = &ops.parents[1] {
-            grads.register::<B, 2>(node.id, output.opacities_grad);
+            grads.register::<B>(node.id, output.opacities_grad);
         }
         if let Some(node) = &ops.parents[2] {
-            grads.register::<B, 2>(node.id, output.positions_grad);
+            grads.register::<B>(node.id, output.positions_grad);
         }
         if let Some(node) = &ops.parents[3] {
-            grads.register::<B, 2>(node.id, output.rotations_grad);
+            grads.register::<B>(node.id, output.rotations_grad);
         }
         if let Some(node) = &ops.parents[4] {
-            grads.register::<B, 2>(node.id, output.scalings_grad);
+            grads.register::<B>(node.id, output.scalings_grad);
         }
 
-        grads.register::<B, 1>(
+        grads.register::<B>(
             ops.state.positions_2d_grad_norm_ref_id,
             output.positions_2d_grad_norm,
         );
@@ -235,7 +240,7 @@ impl<B: Backend> fmt::Debug for RenderOutput<B> {
     }
 }
 
-impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
+impl<AB: AutodiffBackend> fmt::Debug for RenderOutputAutodiff<AB> {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -243,7 +248,7 @@ impl<B: Backend> fmt::Debug for RenderOutputAutodiff<B> {
         let radii_dims = self.radii.dims();
         let positions_2d_grad_norm_dims = &radii_dims;
 
-        f.debug_struct(&format!("RenderOutputAutodiff<{}>", B::name()))
+        f.debug_struct(&format!("RenderOutputAutodiff<{}>", AB::name()))
             .field("colors_rgb_2d.dims()", &self.colors_rgb_2d.dims())
             .field(
                 "positions_2d_grad_norm.dims()",

@@ -5,16 +5,16 @@ pub use super::*;
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
     /// `[P, 3 (+ 1)]`
-    pub colors_rgb_3d: B::FloatTensorPrimitive<2>,
+    pub colors_rgb_3d: B::FloatTensorPrimitive,
     /// `[P, 16 * 3]`
-    pub colors_sh: B::FloatTensorPrimitive<2>,
+    pub colors_sh: B::FloatTensorPrimitive,
     pub colors_sh_degree_max: u32,
     /// `[P, 2, 2]`
-    pub conics: B::FloatTensorPrimitive<3>,
+    pub conics: B::FloatTensorPrimitive,
     /// `[P, 3 (+ 1), 3]`
-    pub covariances_3d: B::FloatTensorPrimitive<3>,
+    pub covariances_3d: B::FloatTensorPrimitive,
     /// `[P]`
-    pub depths: B::FloatTensorPrimitive<1>,
+    pub depths: B::FloatTensorPrimitive,
     pub focal_length_x: f64,
     pub focal_length_y: f64,
     /// `I_x`
@@ -22,57 +22,57 @@ pub struct RenderInput<B: Backend> {
     /// `I_y`
     pub image_size_y: u32,
     /// `[P, 3 (+ 1)]`
-    pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive<2>,
+    pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive,
     /// `[P, 1]`
-    pub opacities_3d: B::FloatTensorPrimitive<2>,
+    pub opacities_3d: B::FloatTensorPrimitive,
     /// `[T]`
-    pub point_indexes: B::IntTensorPrimitive<1>,
+    pub point_indices: B::IntTensorPrimitive,
     /// `[I_y, I_x]`
-    pub point_rendered_counts: B::IntTensorPrimitive<2>,
+    pub point_rendered_counts: B::IntTensorPrimitive,
     /// `[P, 2]`
-    pub positions_2d: B::FloatTensorPrimitive<2>,
+    pub positions_2d: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub positions_3d: B::FloatTensorPrimitive<2>,
+    pub positions_3d: B::FloatTensorPrimitive,
     /// `[P, 2]`
-    pub positions_3d_in_normalized: B::FloatTensorPrimitive<2>,
+    pub positions_3d_in_normalized: B::FloatTensorPrimitive,
     /// `[P, 2]`
-    pub positions_3d_in_normalized_clamped: B::FloatTensorPrimitive<2>,
+    pub positions_3d_in_normalized_clamped: B::FloatTensorPrimitive,
     /// `[P]`
-    pub radii: B::IntTensorPrimitive<1>,
+    pub radii: B::IntTensorPrimitive,
     /// `[P, 4]`
-    pub rotations: B::FloatTensorPrimitive<2>,
+    pub rotations: B::FloatTensorPrimitive,
     /// `[P, 3 (+ 1), 3]`
-    pub rotations_matrix: B::FloatTensorPrimitive<3>,
+    pub rotations_matrix: B::FloatTensorPrimitive,
     /// `[P, 3 (+ 1), 3]`
-    pub rotation_scalings: B::FloatTensorPrimitive<3>,
+    pub rotation_scalings: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub scalings: B::FloatTensorPrimitive<2>,
+    pub scalings: B::FloatTensorPrimitive,
     /// `[I_y / T_y, I_x / T_x, 2]`
-    pub tile_point_ranges: B::IntTensorPrimitive<3>,
+    pub tile_point_ranges: B::IntTensorPrimitive,
     /// `[P, 2, 3]`
-    pub transforms_2d: B::FloatTensorPrimitive<3>,
+    pub transforms_2d: B::FloatTensorPrimitive,
     /// `[I_y, I_x]`
-    pub transmittances: B::FloatTensorPrimitive<2>,
+    pub transmittances: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub view_directions: B::FloatTensorPrimitive<2>,
+    pub view_directions: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub view_offsets: B::FloatTensorPrimitive<2>,
+    pub view_offsets: B::FloatTensorPrimitive,
     /// `[3 (+ 1), 3]`
-    pub view_rotation: B::FloatTensorPrimitive<2>,
+    pub view_rotation: B::FloatTensorPrimitive,
 }
 
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
     /// `[P, 16 * 3]`
-    pub colors_sh_grad: B::FloatTensorPrimitive<2>,
+    pub colors_sh_grad: B::FloatTensorPrimitive,
     /// `[P, 1]`
-    pub opacities_grad: B::FloatTensorPrimitive<2>,
+    pub opacities_grad: B::FloatTensorPrimitive,
     /// `[P]`
-    pub positions_2d_grad_norm: B::FloatTensorPrimitive<1>,
+    pub positions_2d_grad_norm: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub positions_grad: B::FloatTensorPrimitive<2>,
+    pub positions_grad: B::FloatTensorPrimitive,
     /// `[P, 4]`
-    pub rotations_grad: B::FloatTensorPrimitive<2>,
+    pub rotations_grad: B::FloatTensorPrimitive,
     /// `[P, 3]`
-    pub scalings_grad: B::FloatTensorPrimitive<2>,
+    pub scalings_grad: B::FloatTensorPrimitive,
 }

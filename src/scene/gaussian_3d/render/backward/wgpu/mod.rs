@@ -3,7 +3,6 @@ mod kernel;
 pub use super::*;
 
 use crate::preset::render::*;
-use backend::Wgpu;
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     kernel::into_contiguous,
@@ -15,13 +14,15 @@ use kernel::*;
 pub fn render_gaussian_3d_scene(
     state: backward::RenderInput<Wgpu>,
     // [I_y, I_x, 3]
-    colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+    colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
 ) -> backward::RenderOutput<Wgpu> {
     #[cfg(debug_assertions)]
     log::debug!(
         target: "gausplat_renderer::scene",
         "Gaussian3dRenderer::<Wgpu>::render_backward",
     );
+
+    // Specifying the parameters
 
     let client = &state.colors_sh.client;
     let colors_rgb_2d_grad = into_contiguous(colors_rgb_2d_grad);
@@ -84,7 +85,7 @@ pub fn render_gaussian_3d_scene(
             colors_rgb_2d_grad.handle.binding(),
             state.colors_rgb_3d.handle.binding(),
             state.opacities_3d.handle.binding(),
-            state.point_indexes.handle.binding(),
+            state.point_indices.handle.binding(),
             state.point_rendered_counts.handle.binding(),
             state.positions_2d.handle.binding(),
             state.tile_point_ranges.handle.binding(),

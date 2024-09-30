@@ -1,16 +1,18 @@
 pub mod property;
 pub mod render;
 
-pub use crate::preset::backend;
+pub use crate::preset::backend::{self, *};
 pub use burn::{
-    module::{Module, Param},
-    tensor::{backend::Backend, Tensor, TensorData},
+    module::{AutodiffModule, Module, Param},
+    tensor::{
+        backend::{AutodiffBackend, Backend},
+        Tensor, TensorData,
+    },
 };
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
 use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
-use backend::*;
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt, mem::size_of};
@@ -214,7 +216,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,
@@ -234,7 +236,7 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive<3>,
+        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
         render::backward::wgpu::render_gaussian_3d_scene(
             state,

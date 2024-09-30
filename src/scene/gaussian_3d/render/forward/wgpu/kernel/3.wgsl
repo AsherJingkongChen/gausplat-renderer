@@ -4,10 +4,6 @@ struct Arguments {
     // I_x / T_x
     tile_count_x: u32,
 }
-struct PointInfo {
-    order: u32,
-    index: u32,
-}
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
@@ -27,9 +23,12 @@ var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 @group(0) @binding(5)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 
-// [T, 3]
+// [T]
 @group(0) @binding(6)
-var<storage, read_write> point_infos: array<PointInfo>;
+var<storage, read_write> point_indices: array<u32>;
+// [T]
+@group(0) @binding(7)
+var<storage, read_write> point_orders: array<u32>;
 
 // The difference in bits between depth to depth order
 const FACTOR_DEPTH_ORDER: u32 = (4u << 23) + 0xC0000000;
@@ -45,31 +44,31 @@ fn main(
     // Specifying the index
 
     // (0 ~ P)
-    let index = global_id.x;
-    if index >= arguments.point_count {
+    let global_index = global_id.x;
+    if global_index >= arguments.point_count {
         return;
     }
 
     // Leaving if the point is invisible
 
-    if radii[index] == 0u {
+    if radii[global_index] == 0u {
         return;
     }
 
     // Specifying the parameters
 
-    var offset = tile_touched_offsets[index];
-    let tile_touched_max = tiles_touched_max[index];
-    let tile_touched_min = tiles_touched_min[index];
+    var offset = tile_touched_offsets[global_index];
+    let tile_touched_max = tiles_touched_max[global_index];
+    let tile_touched_min = tiles_touched_min[global_index];
 
-    // Computing the orders and indexes of point
+    // Computing the orders and indices of point
 
     for (var tile_y = tile_touched_min.y; tile_y < tile_touched_max.y; tile_y++) {
         for (var tile_x = tile_touched_min.x; tile_x < tile_touched_max.x; tile_x++) {
             let tile_index = tile_y * arguments.tile_count_x + tile_x;
-            let depth = depths[index];
-            let order = make_point_order(tile_index, depth);
-            point_infos[offset] = PointInfo(order, index);
+            let depth = depths[global_index];
+            point_orders[offset] = make_point_order(tile_index, depth);
+            point_indices[offset] = global_index;
             offset++;
         }
     }
