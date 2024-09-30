@@ -548,6 +548,7 @@ pub fn scan_add(
     );
 
     // Recursing if there is more than one remaining group
+
     if count_next > 1 {
         let ScanAddOutput {
             sum,
@@ -592,7 +593,7 @@ pub fn sort_stable(
     values: <Wgpu as Backend>::IntTensorPrimitive,
 ) -> SortStableOutput {
     // K
-    const BLOCK_COUNT_GROUP_SHIFT: u32 = 18;
+    const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
     // G = R
     const GROUP_SIZE: u32 = RADIX_COUNT;
     // R
@@ -647,7 +648,6 @@ pub fn sort_stable(
             radix_shift,
         }));
 
-        client.sync(burn_jit::cubecl::client::SyncType::Wait);
         client.execute(
             Box::new(SourceKernel::new(KernelSortCountRadix, cube_dim)),
             cube_count.to_owned(),
@@ -658,7 +658,6 @@ pub fn sort_stable(
             ],
         );
 
-        client.sync(burn_jit::cubecl::client::SyncType::Wait);
         client.execute(
             Box::new(SourceKernel::new(KernelSortScatterKey, cube_dim)),
             cube_count.to_owned(),
@@ -675,7 +674,6 @@ pub fn sort_stable(
         (keys_input, keys_output) = (keys_output, keys_input);
         (values_input, values_output) = (values_output, values_input);
     }
-    client.sync(burn_jit::cubecl::client::SyncType::Wait);
 
     SortStableOutput {
         keys: keys_input,
@@ -736,52 +734,57 @@ mod tests {
                 result
             },
         );
+        keys_output.iter().zip(keys_target).enumerate().for_each(
+            |(index, (&output, target))| {
+                assert_eq!(output, target, "key index: {index}");
+            },
+        );
         values_output
             .iter()
             .zip(values_target)
             .enumerate()
-            .for_each(|(index, (&value, target))| {
-                assert_eq!(value, target, "value index: {index}");
+            .for_each(|(index, (&output, target))| {
+                assert_eq!(output, target, "value index: {index}");
             });
-        keys_output.iter().zip(keys_target).enumerate().for_each(
-            |(index, (&value, target))| {
-                assert_eq!(value, target, "key index: {index}");
-            },
-        );
     }
 
     #[test]
     fn sort_stable_random() {
         use super::*;
+        use rand::SeedableRng;
+        use rand::{rngs::StdRng, Rng};
         use rayon::slice::ParallelSliceMut;
 
+        let count = 1 << 23 | 2023;
         let device = &Default::default();
 
-        let keys = Tensor::<Wgpu, 1, Int>::random(
-            [1 << 23],
-            burn::tensor::Distribution::Uniform(0.0, u32::MAX as f64),
+        let keys_source =
+            StdRng::seed_from_u64(1) // from_entropy()
+                .sample_iter(rand_distr::Uniform::new(0, 1 << 8))
+                .take(count)
+                .collect::<Vec<_>>();
+        let values_source = (0..count as u32).collect::<Vec<_>>();
+
+        let keys = Tensor::<Wgpu, 1, Int>::from_data(
+            TensorData::new(keys_source.to_owned(), [count]),
             device,
         )
         .into_primitive();
-        let values = Tensor::<Wgpu, 1, Int>::arange(
-            0..keys.shape.dims[0] as i64,
+        let values = Tensor::<Wgpu, 1, Int>::from_data(
+            TensorData::new(values_source.to_owned(), [count]),
             device,
         )
         .into_primitive();
 
-        let keys_target = &keys.client.read(keys.handle.to_owned().binding());
-        let keys_target = bytemuck::cast_slice::<u8, u32>(keys_target);
-        let values_target =
-            &values.client.read(values.handle.to_owned().binding());
-        let values_target = bytemuck::cast_slice::<u8, u32>(values_target);
-        let mut items_target = keys_target
-            .iter()
-            .zip(values_target)
-            .map(|(&key, &value)| (key, value))
-            .collect::<Vec<_>>();
-        items_target.par_sort_by_key(|p| p.0);
-        let (keys_target, values_target) =
-            items_target.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+        let (keys_target, values_target) = {
+            let mut items_source = keys_source
+                .iter()
+                .zip(&values_source)
+                .map(|(&key, &value)| (key, value))
+                .collect::<Vec<_>>();
+            items_source.par_sort_by_key(|p| p.0);
+            items_source.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+        };
 
         let SortStableOutput { keys, values } = sort_stable(keys, values);
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
@@ -802,18 +805,18 @@ mod tests {
                 result
             },
         );
-        values_output
-            .iter()
-            .zip(values_target)
-            .enumerate()
-            .for_each(|(index, (&value, target))| {
-                assert_eq!(value, target, "value index: {index}");
-            });
-        keys_output.iter().zip(keys_target).enumerate().for_each(
-            |(index, (&value, target))| {
-                assert_eq!(value, target, "key index: {index}");
+        keys_output.iter().zip(&keys_target).enumerate().for_each(
+            |(index, (&output, &target))| {
+                assert_eq!(output, target, "key index: {index}");
             },
         );
+        values_output
+            .iter()
+            .zip(&values_target)
+            .enumerate()
+            .for_each(|(index, (&output, &target))| {
+                assert_eq!(output, target, "value index: {index}");
+            });
     }
 
     #[test]
@@ -850,22 +853,23 @@ mod tests {
     #[test]
     fn scan_add_random() {
         use super::*;
-        use burn::tensor::Distribution;
         use bytemuck::cast_slice;
+        use rand::{rngs::StdRng, Rng};
 
+        let count = 1 << 23 | 2023;
         let device = &Default::default();
 
-        let sums = Tensor::<Wgpu, 1, Int>::random(
-            [1 << 23],
-            Distribution::Uniform(0.0, 256.0),
+        let sums_source = StdRng::from_entropy()
+            .sample_iter(rand_distr::Uniform::new(0, 1 << 8))
+            .take(count)
+            .collect::<Vec<_>>();
+        let sums = Tensor::<Wgpu, 1, Int>::from_data(
+            TensorData::new(sums_source.to_owned(), [count]),
             device,
         )
         .into_primitive();
 
-        let sums_target = sums.client.read(sums.handle.to_owned().binding());
-        let sums_target = cast_slice::<u8, u32>(&sums_target);
-        let sum_target = sums_target.iter().sum::<u32>();
-        let sums_target = sums_target
+        let sums_target = sums_source
             .iter()
             .scan(0, |state, &sum| {
                 let output = *state;
@@ -873,6 +877,8 @@ mod tests {
                 Some(output)
             })
             .collect::<Vec<_>>();
+        let sum_target =
+            sums_target.last().unwrap() + sums_source.last().unwrap();
 
         let ScanAddOutput { sum, sums } = scan_add(sums);
         let sum_output = *from_bytes::<u32>(

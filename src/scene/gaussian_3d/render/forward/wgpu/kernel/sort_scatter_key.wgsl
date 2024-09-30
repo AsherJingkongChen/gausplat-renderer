@@ -32,7 +32,7 @@ var<workgroup>
 offsets_radix_group: array<atomic<u32>, RADIX_COUNT>;
 // [R, G / 32] (G / 32 (u32) <- G (bit))
 var<workgroup>
-masks_radix_in_group: array<array<atomic<u32>, GROUP_MASK_SIZE>, RADIX_COUNT>;
+masks_radix_in_block: array<array<atomic<u32>, GROUP_MASK_SIZE>, RADIX_COUNT>;
 
 // 32 - 1
 const DIV_32_MASK: u32 = (1u << 5u) - 1u;
@@ -55,8 +55,8 @@ fn main(
     @builtin(subgroup_invocation_id) lane_index: u32,
     // (0 ~ G)
     @builtin(local_invocation_index) local_index: u32,
-    // G'
-    @builtin(subgroup_size) subgroup_size: u32,
+    // (0 ~ G / G')
+    @builtin(subgroup_id) subgroup_index: u32,
 ) {
     // Specifying the index
 
@@ -64,10 +64,8 @@ fn main(
     let group_count = group_counts.x;
     // (0 ~ N' / G)
     let group_index = group_id.x;
-    // (0 ~ G / G')
-    let subgroup_index = local_index / subgroup_size;
 
-    // Scanning radix counts in all groups into global radix offsets of the group
+    // Scanning radix counts in all groups into radix offsets of the group
 
     // N
     let global_count = arrayLength(&keys_input);
@@ -77,7 +75,7 @@ fn main(
     // (0 ~ N' / G)
     for (var index = 0u; index < group_count; index++) {
         // [N' / G, R]
-        let count_radix_group = counts_radix_group[RADIX_COUNT * index + local_index];
+        let count_radix_group = counts_radix_group[index * RADIX_COUNT + local_index];
         if index == group_index {
             offset_radix_group = count_radix_groups;
         }
@@ -86,7 +84,6 @@ fn main(
 
     let count_radix_groups_subgroup = subgroupAdd(count_radix_groups);
     let offset_radix_groups_in_subgroup = subgroupExclusiveAdd(count_radix_groups);
-    workgroupBarrier();
     if lane_index == 0u {
         // [R / G']
         counts_radix_groups_subgroup[subgroup_index] = count_radix_groups_subgroup;
@@ -98,12 +95,10 @@ fn main(
         subgroupExclusiveAdd(counts_radix_groups_subgroup[lane_index]),
         subgroup_index,
     );
-    workgroupBarrier();
 
     // [R]
     let offset_radix_groups = offset_radix_groups_subgroup + offset_radix_groups_in_subgroup;
     offsets_radix_group[local_index] = offset_radix_groups + offset_radix_group;
-    workgroupBarrier(); // TODO: Remove this barrier
 
     // Scattering keys in the group blocks
 
@@ -124,9 +119,8 @@ fn main(
         // Initializing the mask
 
         // (0 ~ G / 32)
-        workgroupBarrier();
         for (var index = 0u; index < GROUP_MASK_SIZE; index++) {
-            masks_radix_in_group[local_index][index] = 0u;
+            masks_radix_in_block[local_index][index] = 0u;
         }
         workgroupBarrier();
 
@@ -138,43 +132,45 @@ fn main(
             radix = key_input >> arguments.radix_shift & RADIX_MASK;
             offset_radix_group = offsets_radix_group[radix];
             // [R, G / 32] <- [R, G]
-            atomicOr(&masks_radix_in_group[radix][mask_radix_index], mask_radix_local);
+            atomicOr(&masks_radix_in_block[radix][mask_radix_index], mask_radix_local);
         }
         workgroupBarrier();
 
-        // Scanning the radix offset in the group
 
         if is_input_index_valid {
-            var count_radix_in_group = 0u;
-            var offset_radix_in_group = 0u;
+            // Scanning the radix counts into offsets in the block
+
+            var count_radix_block = 0u;
+            var offset_radix_local = 0u;
             // (0 ~ G / 32)
             for (var index = 0u; index < GROUP_MASK_SIZE; index++) {
                 // [R, G / 32]
-                let mask_radix = masks_radix_in_group[radix][index];
+                let mask_radix = masks_radix_in_block[radix][index];
                 let count_radix = countOneBits(mask_radix);
-                let count_radix_local = countOneBits(mask_radix & (mask_radix_local - 1u));
 
                 if index < mask_radix_index {
-                    offset_radix_in_group += count_radix;
+                    offset_radix_local += count_radix;
                 }
+                count_radix_block += count_radix;
+
                 if index == mask_radix_index {
-                    offset_radix_in_group += count_radix_local;
+                    offset_radix_local +=
+                        countOneBits(mask_radix & (mask_radix_local - 1u));
                 }
-                count_radix_in_group += count_radix;
             }
 
             // Assigning the key to the new position
             // [N]
 
-            let position = offset_radix_group + offset_radix_in_group;
+            let position = offset_radix_group + offset_radix_local;
             keys_out[position] = key_input;
             values_out[position] = value_input;
 
-            // Incrementing the radix offset of the group
+            // Adding the radix count of the block to the radix offset of the group
             // [R]
 
-            if offset_radix_in_group + 1u == count_radix_in_group {
-                atomicAdd(&offsets_radix_group[radix], count_radix_in_group);
+            if offset_radix_local + 1u == count_radix_block {
+                atomicAdd(&offsets_radix_group[radix], count_radix_block);
             }
         }
         workgroupBarrier();

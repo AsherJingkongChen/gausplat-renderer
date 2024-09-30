@@ -4,7 +4,7 @@ var<storage, read_write> point_orders: array<u32>;
 
 // [I_y / T_y, I_x / T_x, 2]
 @group(0) @binding(1)
-var<storage, read_write> tile_point_ranges: array<array<atomic<u32>, 2>>;
+var<storage, read_write> tile_point_ranges: array<array<u32, 2>>;
 
 const GROUP_SIZE: u32 = 256;
 
@@ -30,19 +30,19 @@ fn main(
 
     let tile_index_current = point_orders[global_index] >> 16;
 
+    // Specifying the range of the first point tile
 
     if global_index == 0 {
-        // Specifying the range of the first point tile
-
         tile_point_ranges[tile_index_current][0] = 0u;
-    } else {
-        // Finding the ranges of each point tile
+        return;
+    }
 
-        let tile_index_previous = point_orders[global_index - 1] >> 16;
-        if tile_index_current != tile_index_previous {
-            tile_point_ranges[tile_index_previous][1] = global_index;
-            tile_point_ranges[tile_index_current][0] = global_index;
-        }
+    // Finding the ranges of each point tile
+
+    let tile_index_previous = point_orders[global_index - 1] >> 16;
+    if tile_index_current != tile_index_previous {
+        tile_point_ranges[tile_index_previous][1] = global_index;
+        tile_point_ranges[tile_index_current][0] = global_index;
     }
 
     // Specifying the range of the last point tile

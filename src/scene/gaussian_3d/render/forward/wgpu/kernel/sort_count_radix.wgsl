@@ -59,7 +59,7 @@ fn main(
             atomicAdd(&counts_radix_in_group[radix], 1u);
         }
     }
-    workgroupBarrier(); // TODO: Move
+    workgroupBarrier();
 
     // Specifying the result of radix count in the group
 
