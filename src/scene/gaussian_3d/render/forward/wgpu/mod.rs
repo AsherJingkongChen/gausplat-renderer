@@ -3,7 +3,6 @@ mod kernel;
 pub use super::*;
 
 use crate::preset::render::*;
-use burn::tensor::Shape;
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     kernel::into_contiguous,
@@ -11,24 +10,6 @@ use burn_jit::{
 };
 use bytemuck::{bytes_of, from_bytes};
 use kernel::*;
-
-fn is_sorted<T: IntoIterator>(t: T) -> bool
-where
-    <T as IntoIterator>::Item: std::cmp::PartialOrd + std::fmt::Debug,
-{
-    let mut iter = t.into_iter();
-    iter.next()
-        .map(|first| {
-            iter.try_fold(first, |previous, current| {
-                if !(previous <= current) {
-                    println!("Is not sorted: !({previous:?} <= {current:?})");
-                }
-                (previous <= current).then_some(previous)
-            })
-            .is_some()
-        })
-        .unwrap_or(true)
-}
 
 pub fn render_gaussian_3d_scene(
     input: forward::RenderInput<Wgpu>,
@@ -238,6 +219,7 @@ pub fn render_gaussian_3d_scene(
     } = scan_add(tile_touched_counts);
 
     // T
+    // NOTE: The value may be abnormal when GPU usage is at maximum.
     let tile_touched_count =
         *from_bytes::<u32>(&client.read(tile_touched_count.handle.binding()));
     debug_assert_ne!(tile_touched_count, 0);
@@ -289,66 +271,8 @@ pub fn render_gaussian_3d_scene(
         values: point_indices,
     } = sort_stable(point_orders, point_indices);
 
-    if !is_sorted(
-        bytemuck::cast_slice::<u8, u32>(
-            &client.read(point_orders.handle.to_owned().binding()),
-        )
-        .iter()
-        .map(|&value| value >> 16),
-    ) {
-        println!("[1] point_tile_indices is not sorted");
-    }
-
-    {
-        let point_orders =
-            &client.read(point_orders.handle.to_owned().binding());
-        let point_orders = bytemuck::cast_slice::<u8, u32>(point_orders);
-        let point_tile_index_max =
-            point_orders.iter().map(|&value| value >> 16).max().unwrap();
-
-        assert!(
-            point_tile_index_max < tile_count_y * tile_count_x,
-            "[2] tile index max {point_tile_index_max} should be no more than {}",
-            tile_count_y * tile_count_x,
-        );
-    }
-
     // Performing the forward pass #5
 
-    // let tile_point_ranges = {
-    //     let shape =
-    //         Shape::new([tile_count_y as usize, tile_count_x as usize, 2]);
-    //     let mut tile_point_ranges = vec![0_u32; shape.num_elements()];
-
-    //     let global_count = point_orders.len();
-    //     (0..global_count).for_each(|global_index| {
-    //         let tile_index_current = point_orders[global_index] as usize >> 16;
-
-    //         if global_index == 0 {
-    //             tile_point_ranges[tile_index_current * 2 + 0] = 0;
-    //         } else {
-    //             let tile_index_previous =
-    //                 point_orders[global_index - 1] as usize >> 16;
-    //             if tile_index_current != tile_index_previous {
-    //                 tile_point_ranges[tile_index_previous * 2 + 1] =
-    //                     global_index as u32;
-    //                 tile_point_ranges[tile_index_current * 2 + 0] =
-    //                     global_index as u32;
-    //             }
-    //         }
-
-    //         if global_index + 1 == global_count {
-    //             tile_point_ranges[tile_index_current * 2 + 1] =
-    //                 global_count as u32;
-    //         }
-    //     });
-
-    //     Tensor::<Wgpu, 3, Int>::from_data(
-    //         TensorData::new(tile_point_ranges, shape),
-    //         device,
-    //     )
-    //     .into_primitive()
-    // };
     // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = Tensor::<Wgpu, 3, Int>::zeros(
         [tile_count_y as usize, tile_count_x as usize, 2],
@@ -377,53 +301,13 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    {
-        let tile_point_ranges =
-            &client.read(tile_point_ranges.handle.to_owned().binding());
-        let tile_point_ranges_tuple =
-            bytemuck::cast_slice::<u8, [u32; 2]>(tile_point_ranges);
-        let tile_point_ranges_linear =
-            bytemuck::cast_slice::<u8, u32>(tile_point_ranges);
-
-        assert!(
-            is_sorted(tile_point_ranges_linear),
-            "[3] Linear range is not sorted"
-        );
-
-        tile_point_ranges_tuple
-            .iter()
-            .enumerate()
-            .for_each(|(index, range)| {
-                let start = range[0];
-                let end = range[1];
-                assert!(
-                    start <= end,
-                    "[4] Illegal range: [{start}, {end}), index: {index}, others: {:?}",
-                    &tile_point_ranges_tuple[0..10],
-                );
-                assert!(
-                    end <= tile_touched_count,
-                    "[5] {end} > {tile_touched_count}, index: {index}"
-                );
-                let range_size = end - start;
-                if range_size > (10000) {
-                    println!(
-                        "Large range: [{start}, {end}) = ({range_size}), index: {index}"
-                    );
-                    if range_size > (50000) {
-                        panic!("Super large range: [{start}, {end}) = ({range_size}), index: {index}");
-                    }
-                }
-            });
-    }
-
     // Performing the forward pass #6
 
+    let image_size = [image_size_y as usize, image_size_x as usize];
     let arguments = client.create(bytes_of(&Kernel6Arguments {
         image_size_x,
         image_size_y,
     }));
-    let image_size = [image_size_y as usize, image_size_x as usize];
     let colors_rgb_2d =
         Tensor::<Wgpu, 3>::empty([image_size[0], image_size[1], 3], device)
             .into_primitive()
@@ -458,7 +342,7 @@ pub fn render_gaussian_3d_scene(
         ],
     );
 
-    // Specifying the results
+    // Specifying the results of forward rendering
 
     forward::RenderOutput {
         colors_rgb_2d,

@@ -80,9 +80,12 @@ fn main(
 
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let position_pixel = vec2<f32>(pixel);
-    let tile_point_range = tile_point_ranges[tile_index];
+    let point_range = tile_point_ranges[tile_index];
     // R
-    var tile_point_count = tile_point_range.y - tile_point_range.x;
+    var tile_point_count = 0u;
+    if tile_index < arrayLength(&tile_point_ranges) && point_range.y >= point_range.x {
+        tile_point_count = point_range.y - point_range.x;
+    }
     // R / (T_x * T_y)
     let batch_count = (tile_point_count + BATCH_SIZE - 1) / BATCH_SIZE;
     var color_rgb_2d = vec3<f32>();
@@ -115,8 +118,8 @@ fn main(
 
         // Specifying the parameters in the batch
 
-        let index = tile_point_range.x + batch_index * BATCH_SIZE + local_index;
-        if index < tile_point_range.y {
+        let index = point_range.x + batch_index * BATCH_SIZE + local_index;
+        if index < point_range.y {
             let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
             conics_in_batch[local_index] = conics[point_index];
