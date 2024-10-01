@@ -1,7 +1,7 @@
 pub mod property;
 pub mod render;
 
-pub use crate::preset::backend::{self, *};
+pub use crate::preset::backend::*;
 pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{

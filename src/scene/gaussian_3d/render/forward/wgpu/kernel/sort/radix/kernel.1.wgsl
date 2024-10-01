@@ -25,7 +25,7 @@ const RADIX_COUNT: u32 = 1u << RADIX_COUNT_SHIFT;
 const RADIX_COUNT_SHIFT: u32 = 8u;
 // R - 1
 const RADIX_MASK: u32 = RADIX_COUNT - 1u;
-// G = R
+// G <- R
 const GROUP_SIZE: u32 = RADIX_COUNT;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)

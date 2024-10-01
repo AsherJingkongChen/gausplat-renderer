@@ -51,13 +51,13 @@ const OPACITY_2D_MAX: f32 = 1.0 - 5.0 * OPACITY_2D_MIN;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
 const TRANSMITTANCE_MIN: f32 = pow(5.0 * OPACITY_2D_MIN, 2.0);
 // T_x * T_y
-const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
+const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
 // T_x
-const GROUP_SIZE_X: u32 = 16;
+const TILE_SIZE_X: u32 = 16;
 // T_y
-const GROUP_SIZE_Y: u32 = 16;
+const TILE_SIZE_Y: u32 = 16;
 
-@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
+@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     // (0 ~ T_x * T_y)
@@ -80,23 +80,26 @@ fn main(
 
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let position_pixel = vec2<f32>(pixel);
-    let point_range = tile_point_ranges[tile_index];
+    var point_range = vec2<u32>();
     // R
     var tile_point_count = 0u;
-    if tile_index < arrayLength(&tile_point_ranges) && point_range.y >= point_range.x {
-        tile_point_count = point_range.y - point_range.x;
+    if tile_index < arrayLength(&tile_point_ranges) {
+        point_range = tile_point_ranges[tile_index];
+        if point_range.y >= point_range.x {
+            tile_point_count = point_range.y - point_range.x;
+        }
     }
     // R / (T_x * T_y)
     let batch_count = (tile_point_count + BATCH_SIZE - 1) / BATCH_SIZE;
     var color_rgb_2d = vec3<f32>();
     var is_pixel_done = !is_pixel_valid;
+    if local_index == 0 {
+        pixel_done_count = 0u;
+    }
     var point_rendered_count = 0u;
     var point_rendered_state = 0u;
     var transmittance_state = 1.0;
     var was_pixel_done = false;
-    if local_index == 0 {
-        pixel_done_count = 0u;
-    }
 
     // Processing batches of points of the tile
     // (0 ~ R / (T_x * T_y))

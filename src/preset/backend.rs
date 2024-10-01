@@ -1,6 +1,6 @@
-pub use burn::backend::wgpu::WgpuDevice;
+pub use burn::backend::wgpu::{WgpuDevice, WgpuRuntime};
 
-use burn::backend::{autodiff, wgpu};
+use burn::backend::autodiff;
 
 pub type Autodiff<B> = autodiff::Autodiff<B>;
-pub type Wgpu = burn_jit::JitBackend<wgpu::WgpuRuntime, f32, i32>;
+pub type Wgpu = burn_jit::JitBackend<WgpuRuntime, f32, i32>;

@@ -38,14 +38,14 @@ masks_radix_in_block: array<array<atomic<u32>, GROUP_MASK_SIZE>, RADIX_COUNT>;
 const DIV_32_MASK: u32 = (1u << 5u) - 1u;
 // G / 32
 const GROUP_MASK_SIZE: u32 = GROUP_SIZE >> 5u;
-// G = R
-const GROUP_SIZE: u32 = RADIX_COUNT;
 // R
 const RADIX_COUNT: u32 = 1u << RADIX_COUNT_SHIFT;
 // log2(R)
 const RADIX_COUNT_SHIFT: u32 = 8u;
 // R - 1
 const RADIX_MASK: u32 = RADIX_COUNT - 1u;
+// G <- R
+const GROUP_SIZE: u32 = RADIX_COUNT;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(

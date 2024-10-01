@@ -1,9 +1,10 @@
 // [N]
 @group(0) @binding(0) var<storage, read_write>
-sums: array<u32>;
+values: array<u32>;
+
 // [N']
 @group(0) @binding(1) var<storage, read_write>
-sums_next: array<u32>;
+values_next: array<u32>;
 
 // N / N'
 const GROUP_SIZE: u32 = 256u;
@@ -19,12 +20,11 @@ fn main(
     let global_index = global_id.x;
     // (0 ~ N')
     let group_index = group_id.x;
-
-    if global_index >= arrayLength(&sums) {
+    if global_index >= arrayLength(&values) {
         return;
     }
 
-    // Adding sums back
+    // Propagating values backwards
 
-    sums[global_index] += sums_next[group_index];
+    values[global_index] += values_next[group_index];
 }

@@ -32,10 +32,7 @@ var<storage, read_write> point_orders: array<u32>;
 
 // The difference in bits between depth to depth order
 const FACTOR_DEPTH_ORDER: u32 = (4u << 23) + 0xC0000000;
-
-const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
-const GROUP_SIZE_X: u32 = 16;
-const GROUP_SIZE_Y: u32 = 16;
+const GROUP_SIZE: u32 = 256;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(

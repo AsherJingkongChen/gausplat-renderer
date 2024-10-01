@@ -1,12 +1,12 @@
 struct Arguments {
+    // (0 ~ 3)
     colors_sh_degree_max: u32,
+    // C_f (Constant)
     filter_low_pass: f32,
+    // f_x <- I_x / tan(fov_x / 2) / 2
     focal_length_x: f32,
+    // f_y <- I_x / tan(fov_y / 2) / 2
     focal_length_y: f32,
-    // I_x
-    image_size_x: u32,
-    // I_y
-    image_size_y: u32,
     // I_x / 2
     image_size_half_x: f32,
     // I_y / 2
@@ -17,11 +17,9 @@ struct Arguments {
     tile_count_x: u32,
     // I_y / T_y
     tile_count_y: u32,
-    // T_x
-    tile_size_x: u32,
-    // T_y
-    tile_size_y: u32,
+    // tan(fov_x / 2) * (1 + C_f)
     view_bound_x: f32,
+    // tan(fov_y / 2) * (1 + C_f)
     view_bound_y: f32,
 }
 struct ViewTransform {
@@ -131,13 +129,13 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 // The depth range is restricted by 16-bit depth order for sorting
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
-
 // The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
 const FACTOR_RADIUS: f32 = 3.0961087;
-
-const GROUP_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
-const GROUP_SIZE_X: u32 = 16;
-const GROUP_SIZE_Y: u32 = 16;
+// T_x
+const TILE_SIZE_X: f32 = 16.0;
+// T_y
+const TILE_SIZE_Y: f32 = 16.0;
+const GROUP_SIZE: u32 = 256;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
@@ -244,8 +242,8 @@ fn main(
     //
     // J = [[f.x / Pv.z, 0,          -f.x * Pv.x / Pv.z^2]
     //      [0,          f.y / Pv.z, -f.y * Pv.y / Pv.z^2]]
-    // F = [[0.3, 0  ]
-    //      [0,   0.3]]
+    // F = [[C_f, 0  ]
+    //      [0,   C_f]]
     //
     // Pv.x and Pv.y are the clamped
 
@@ -282,7 +280,7 @@ fn main(
     // 
     // ** Advanced **
     // 
-    // This is derived from the Eigendecomposition of the 2D covariance matrix:
+    // This is derived from the eigendecomposition of the 2D covariance matrix:
     // 
     // Σ' = [[a, b]
     //       [b, c]]
@@ -312,33 +310,29 @@ fn main(
 
     // Checking the tiles touched
 
-    let tile_size_f32 = vec2<f32>(
-        f32(arguments.tile_size_x),
-        f32(arguments.tile_size_y),
-    );
     let tile_touched_max = clamp(
         vec2<u32>(
-            u32((position_2d.x + radius + tile_size_f32.x - 1.0) / tile_size_f32.x),
-            u32((position_2d.y + radius + tile_size_f32.y - 1.0) / tile_size_f32.y),
+            u32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
+            u32((position_2d.y + radius + TILE_SIZE_Y - 1.0) / TILE_SIZE_Y),
         ),
         vec2<u32>(),
         vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
     );
     let tile_touched_min = clamp(
         vec2<u32>(
-            u32((position_2d.x - radius) / tile_size_f32.x),
-            u32((position_2d.y - radius) / tile_size_f32.y),
+            u32((position_2d.x - radius) / TILE_SIZE_X),
+            u32((position_2d.y - radius) / TILE_SIZE_Y),
         ),
         vec2<u32>(),
         vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
     );
-    let tile_touched_count =
+    let tile_point_count =
         (tile_touched_max.x - tile_touched_min.x) *
         (tile_touched_max.y - tile_touched_min.y);
 
     // Leaving if no tile is touched
 
-    if tile_touched_count == 0 {
+    if tile_point_count == 0 {
         return;
     }
 
@@ -448,7 +442,7 @@ fn main(
     // [P, 3 (+ 1), 3]
     rotation_scalings[index] = rotation_scaling;
     // [P]
-    tile_touched_counts[index] = tile_touched_count;
+    tile_touched_counts[index] = tile_point_count;
     // [P, 2]
     tiles_touched_max[index] = tile_touched_max;
     // [P, 2]

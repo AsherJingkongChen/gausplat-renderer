@@ -73,6 +73,7 @@ fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     // (0 ~ T_x * T_y)
     @builtin(local_invocation_index) local_index: u32,
+    // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
     @builtin(workgroup_id) tile_id: vec3<u32>,
     // (I_x / T_x, I_y / T_y)
     @builtin(num_workgroups) tile_count: vec3<u32>,
@@ -90,24 +91,28 @@ fn main(
 
     let is_pixel_valid = pixel.x < arguments.image_size_x && pixel.y < arguments.image_size_y;
     let position_pixel = vec2<f32>(pixel);
-    // (0 ~ I_x / T_x, 0 ~ I_y / T_y)
-    let tile_point_range = tile_point_ranges[tile_index];
-    let batch_count = (tile_point_range.y - tile_point_range.x + BATCH_SIZE - 1) / BATCH_SIZE;
+    var point_range = vec2<u32>();
+    // R
+    var tile_point_count = 0u;
+    if tile_index < arrayLength(&tile_point_ranges) {
+        point_range = tile_point_ranges[tile_index];
+        if point_range.y >= point_range.x {
+            tile_point_count = point_range.y - point_range.x;
+        }
+    }
+    // R / (T_x * T_y)
+    let batch_count = (tile_point_count + BATCH_SIZE - 1) / BATCH_SIZE;
     let color_rgb_2d_grad = vec3<f32>(
         colors_rgb_2d_grad[pixel_index][0],
         colors_rgb_2d_grad[pixel_index][1],
         colors_rgb_2d_grad[pixel_index][2],
     );
-    var point_rendered_count = u32();
-
-    // R
-    var tile_point_count = tile_point_range.y - tile_point_range.x;
     var color_rgb_2d_state = vec3<f32>();
     var color_rgb_3d_state = vec3<f32>();
     var opacity_2d_state = 0.0;
+    var point_rendered_count = u32();
     var point_rendered_state = tile_point_count;
     var transmittance_state = f32();
-
     if is_pixel_valid {
         point_rendered_count = point_rendered_counts[pixel_index];
         transmittance_state = transmittances[pixel_index];
@@ -120,8 +125,8 @@ fn main(
         // Specifying the batch parameters
 
         workgroupBarrier();
-        let index = tile_point_range.y - batch_index * BATCH_SIZE - local_index - 1;
-        if index >= tile_point_range.x {
+        let index = point_range.y - batch_index * BATCH_SIZE - local_index - 1;
+        if index >= point_range.x {
             let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
             conics_in_batch[local_index] = conics[point_index];
