@@ -7,15 +7,15 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [P, 2, 2] (Symmetric)
-@group(0) @binding(1)
-var<storage, read_write> conics: array<mat2x2<f32>>;
 // [I_y, I_x, 3]
-@group(0) @binding(2)
+@group(0) @binding(1)
 var<storage, read_write> colors_rgb_2d_grad: array<array<f32, 3>>;
 // [P, 3 (+ 1)] (0.0 ~ 1.0)
-@group(0) @binding(3)
+@group(0) @binding(2)
 var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
+// [P, 2, 2] (Symmetric)
+@group(0) @binding(3)
+var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(4)
 var<storage, read_write> opacities_3d: array<f32>;
@@ -62,13 +62,13 @@ var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 const OPACITY_2D_MAX: f32 = 1.0 - 5.0 / 255.0;
 const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
 // T_x * T_y
-const BATCH_SIZE: u32 = GROUP_SIZE_X * GROUP_SIZE_Y;
+const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
 // T_x
-const GROUP_SIZE_X: u32 = 16;
+const TILE_SIZE_X: u32 = 16;
 // T_y
-const GROUP_SIZE_Y: u32 = 16;
+const TILE_SIZE_Y: u32 = 16;
 
-@compute @workgroup_size(GROUP_SIZE_X, GROUP_SIZE_Y, 1)
+@compute @workgroup_size(TILE_SIZE_X, TILE_SIZE_Y, 1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     // (0 ~ T_x * T_y)

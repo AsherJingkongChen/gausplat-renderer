@@ -1,11 +1,9 @@
 struct Arguments {
     // (0 ~ 3)
     colors_sh_degree_max: u32,
-    // C_f (Constant)
-    filter_low_pass: f32,
-    // f_x <- I_x / tan(fov_x / 2) / 2
+    // F_x <- I_x / tan(Fov_x / 2) / 2
     focal_length_x: f32,
-    // f_y <- I_x / tan(fov_y / 2) / 2
+    // F_y <- I_y / tan(Fov_y / 2) / 2
     focal_length_y: f32,
     // I_x / 2
     image_size_half_x: f32,
@@ -17,9 +15,9 @@ struct Arguments {
     tile_count_x: u32,
     // I_y / T_y
     tile_count_y: u32,
-    // tan(fov_x / 2) * (1 + C_f)
+    // tan(Fov_x / 2) * (C_f + 1)
     view_bound_x: f32,
-    // tan(fov_y / 2) * (1 + C_f)
+    // tan(Fov_y / 2) * (C_f + 1)
     view_bound_y: f32,
 }
 struct ViewTransform {
@@ -131,6 +129,8 @@ const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
 // The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
 const FACTOR_RADIUS: f32 = 3.0961087;
+// C_f
+const FILTER_LOW_PASS: f32 = 0.3;
 // T_x
 const TILE_SIZE_X: f32 = 16.0;
 // T_y
@@ -260,8 +260,8 @@ fn main(
     );
     let transform_2d = projection_affine * view_rotation;
     let covariance_2d = transform_2d * covariance_3d * transpose(transform_2d) + mat2x2<f32>(
-        arguments.filter_low_pass, 0.0,
-        0.0, arguments.filter_low_pass,
+        FILTER_LOW_PASS, 0.0,
+        0.0, FILTER_LOW_PASS,
     );
 
     // Computing the inverse of the 2D covariance matrix
@@ -299,7 +299,7 @@ fn main(
 
     let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
     let eigenvalue_difference = max(
-        arguments.filter_low_pass,
+        FILTER_LOW_PASS,
         sqrt(covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det),
     );
     let eigenvalue_max = max(

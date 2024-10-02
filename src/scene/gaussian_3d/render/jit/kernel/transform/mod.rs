@@ -9,11 +9,9 @@ use bytemuck::bytes_of;
 pub struct Arguments {
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
-    /// `C_f (Constant)`
-    pub filter_low_pass: f32,
-    /// `f_x <- I_x / tan(fov_x / 2) / 2`
+    /// `f_x <- I_x / tan(Fov_x / 2) / 2`
     pub focal_length_x: f32,
-    /// `f_y <- I_x / tan(fov_y / 2) / 2`
+    /// `f_y <- I_y / tan(Fov_y / 2) / 2`
     pub focal_length_y: f32,
     /// `I_x / 2`
     pub image_size_half_x: f32,
@@ -25,9 +23,9 @@ pub struct Arguments {
     pub tile_count_x: u32,
     /// `I_y / T_y`
     pub tile_count_y: u32,
-    /// `tan(fov_x / 2) * (1 + C_f)`
+    /// `tan(Fov_x / 2) * (C_f + 1)`
     pub view_bound_x: f32,
-    /// `tan(fov_y / 2) * (1 + C_f)`
+    /// `tan(Fov_y / 2) * (C_f + 1)`
     pub view_bound_y: f32,
 }
 
@@ -43,7 +41,7 @@ pub struct Inputs<R: JitRuntime, F: FloatElement> {
     pub scalings: JitTensor<R, F>,
     /// `[3]`
     pub view_position: JitTensor<R, F>,
-    /// `[4, 4]`
+    /// `[3 (+ 1), 4]`
     pub view_transform: JitTensor<R, F>,
 }
 
@@ -85,6 +83,8 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub view_offsets: JitTensor<R, F>,
 }
 
+/// `C_f`
+pub const FILTER_LOW_PASS: f64 = 0.3;
 pub const GROUP_SIZE: u32 = 256;
 
 /// Transforming the points.

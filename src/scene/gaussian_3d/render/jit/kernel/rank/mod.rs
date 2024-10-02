@@ -39,6 +39,7 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
 }
 
 pub const GROUP_SIZE: u32 = 256;
+pub const TILE_COUNT_MAX: u32 = 1 << 16;
 
 /// Ranking the points.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
@@ -55,15 +56,11 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let tile_point_count = arguments.tile_point_count as usize;
 
     // [T]
-    let point_indices = JitBackend::<R, F, I>::int_empty(
-        [tile_point_count].into(),
-        device,
-    );
+    let point_indices =
+        JitBackend::<R, F, I>::int_empty([tile_point_count].into(), device);
     // [T]
-    let point_orders = JitBackend::<R, F, I>::int_empty(
-        [tile_point_count].into(),
-        device,
-    );
+    let point_orders =
+        JitBackend::<R, F, I>::int_empty([tile_point_count].into(), device);
 
     // Launching the kernel
 
@@ -93,5 +90,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         ],
     );
 
-    Outputs { point_indices, point_orders }
+    Outputs {
+        point_indices,
+        point_orders,
+    }
 }

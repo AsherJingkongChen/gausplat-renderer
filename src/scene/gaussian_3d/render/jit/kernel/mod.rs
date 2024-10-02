@@ -1,22 +1,22 @@
 pub mod rank;
 pub mod rasterize;
+pub mod rasterize_backward;
 pub mod scan;
 pub mod segment;
 pub mod sort;
 pub mod transform;
+pub mod transform_backward;
 
 pub use burn_jit::{
     cubecl::KernelId,
-    element::{FloatElement, IntElement},
     template::{KernelSource, SourceTemplate},
     tensor::JitTensor,
-    JitRuntime,
+    FloatElement, IntElement, JitBackend, JitRuntime,
 };
 
 use burn_jit::{
     cubecl::{CubeCount, CubeDim},
     template::SourceKernel,
-    JitBackend,
 };
 
 macro_rules! impl_kernel_source {

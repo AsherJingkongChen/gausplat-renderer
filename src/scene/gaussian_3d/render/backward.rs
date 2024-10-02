@@ -1,13 +1,12 @@
-pub mod wgpu;
-
 pub use super::*;
 
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
     /// `[P, 3 (+ 1)]`
     pub colors_rgb_3d: B::FloatTensorPrimitive,
-    /// `[P, 16 * 3]`
+    /// `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
+    /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
     /// `[P, 2, 2]`
     pub conics: B::FloatTensorPrimitive,
@@ -15,16 +14,24 @@ pub struct RenderInput<B: Backend> {
     pub covariances_3d: B::FloatTensorPrimitive,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive,
-    pub focal_length_x: f64,
-    pub focal_length_y: f64,
+    /// `f_x <- I_x / tan(Fov_x / 2) / 2`
+    pub focal_length_x: f32,
+    /// `f_y <- I_y / tan(Fov_y / 2) / 2`
+    pub focal_length_y: f32,
+    /// `I_x / 2`
+    pub image_size_half_x: f32,
+    /// `I_y / 2`
+    pub image_size_half_y: f32,
     /// `I_x`
     pub image_size_x: u32,
     /// `I_y`
     pub image_size_y: u32,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive,
-    /// `[P, 1]`
+    /// `[P]`
     pub opacities_3d: B::FloatTensorPrimitive,
+    /// `P`
+    pub point_count: u32,
     /// `[T]`
     pub point_indices: B::IntTensorPrimitive,
     /// `[I_y, I_x]`
@@ -47,15 +54,19 @@ pub struct RenderInput<B: Backend> {
     pub rotation_scalings: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,
+    /// `I_x / T_x`
+    pub tile_count_x: u32,
+    /// `I_y / T_y`
+    pub tile_count_y: u32,
     /// `[I_y / T_y, I_x / T_x, 2]`
     pub tile_point_ranges: B::IntTensorPrimitive,
     /// `[P, 2, 3]`
     pub transforms_2d: B::FloatTensorPrimitive,
     /// `[I_y, I_x]`
     pub transmittances: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// `[P, 3 (+ 1)]`
     pub view_directions: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// `[P, 3 (+ 1)]`
     pub view_offsets: B::FloatTensorPrimitive,
     /// `[3 (+ 1), 3]`
     pub view_rotation: B::FloatTensorPrimitive,
@@ -63,9 +74,9 @@ pub struct RenderInput<B: Backend> {
 
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
-    /// `[P, 16 * 3]`
+    /// `[P, 16, 3]`
     pub colors_sh_grad: B::FloatTensorPrimitive,
-    /// `[P, 1]`
+    /// `[P]`
     pub opacities_grad: B::FloatTensorPrimitive,
     /// `[P]`
     pub positions_2d_grad_norm: B::FloatTensorPrimitive,

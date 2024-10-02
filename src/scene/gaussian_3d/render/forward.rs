@@ -1,12 +1,13 @@
-pub mod wgpu;
-
 pub use super::*;
 
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
-    /// `[P, 16 * 3]`
+    pub device: B::Device,
+    /// `P`
+    pub point_count: u64,
+    /// `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
-    /// `[P, 1]`
+    /// `[P]`
     pub opacities: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub positions: B::FloatTensorPrimitive,

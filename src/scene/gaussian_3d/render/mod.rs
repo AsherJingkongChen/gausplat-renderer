@@ -1,5 +1,6 @@
 pub mod backward;
 pub mod forward;
+pub mod jit;
 
 pub use super::*;
 pub use burn::{config::Config, record::Record, tensor::Int};
@@ -38,13 +39,13 @@ pub struct Gaussian3dRendererOptions {
 }
 
 #[derive(Clone)]
-pub struct RenderOutput<B: Backend> {
+pub struct Gaussian3dRenderOutput<B: Backend> {
     /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
 }
 
 #[derive(Clone)]
-pub struct RenderOutputAutodiff<AB: AutodiffBackend> {
+pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
     /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: Tensor<AB, 3>,
 
@@ -85,8 +86,10 @@ where
         &self,
         view: &View,
         options: &Gaussian3dRendererOptions,
-    ) -> RenderOutput<B> {
+    ) -> Gaussian3dRenderOutput<B> {
         let input = forward::RenderInput {
+            device: self.device(),
+            point_count: self.point_count() as u64,
             colors_sh: self.colors_sh().into_primitive().tensor(),
             opacities: self.opacities().into_primitive().tensor(),
             positions: self.positions().into_primitive().tensor(),
@@ -99,7 +102,7 @@ where
         let colors_rgb_2d =
             Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
 
-        RenderOutput { colors_rgb_2d }
+        Gaussian3dRenderOutput { colors_rgb_2d }
     }
 }
 
@@ -112,12 +115,9 @@ where
         &self,
         view: &View,
         options: &Gaussian3dRendererOptions,
-    ) -> RenderOutputAutodiff<Autodiff<B>> {
-        let (colors_sh, device) = {
-            let values = self.colors_sh();
-            let device = values.device();
-            (values.into_primitive().tensor(), device)
-        };
+    ) -> Gaussian3dRenderOutputAutodiff<Autodiff<B>> {
+        let device = self.device();
+        let colors_sh = self.colors_sh().into_primitive().tensor();
         let opacities = self.opacities().into_primitive().tensor();
         let positions = self.positions().into_primitive().tensor();
         let rotations = self.rotations().into_primitive().tensor();
@@ -133,6 +133,8 @@ where
             .id;
 
         let input = forward::RenderInput {
+            device,
+            point_count: self.point_count() as u64,
             colors_sh: colors_sh.primitive,
             opacities: opacities.primitive,
             positions: positions.primitive,
@@ -166,7 +168,7 @@ where
             },
         ));
 
-        RenderOutputAutodiff {
+        Gaussian3dRenderOutputAutodiff {
             colors_rgb_2d,
             positions_2d_grad_norm_ref,
             radii,
@@ -229,7 +231,7 @@ impl Default for Gaussian3dRendererOptions {
     }
 }
 
-impl<B: Backend> fmt::Debug for RenderOutput<B> {
+impl<B: Backend> fmt::Debug for Gaussian3dRenderOutput<B> {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -240,7 +242,7 @@ impl<B: Backend> fmt::Debug for RenderOutput<B> {
     }
 }
 
-impl<AB: AutodiffBackend> fmt::Debug for RenderOutputAutodiff<AB> {
+impl<AB: AutodiffBackend> fmt::Debug for Gaussian3dRenderOutputAutodiff<AB> {
     fn fmt(
         &self,
         f: &mut fmt::Formatter<'_>,
