@@ -1,4 +1,7 @@
-pub use burn::backend::wgpu::{WgpuDevice, WgpuRuntime};
+pub use burn::{
+    backend::wgpu::{WgpuDevice, WgpuRuntime},
+    tensor::backend::Backend,
+};
 
 use burn::backend::autodiff;
 

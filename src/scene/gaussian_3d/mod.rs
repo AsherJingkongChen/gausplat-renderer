@@ -1,7 +1,9 @@
 pub mod property;
-pub mod render;
 
-pub use crate::preset::backend;
+pub use crate::{
+    preset::backend::{self, *},
+    render::gaussian_3d as render,
+};
 pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{
@@ -13,7 +15,6 @@ pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
 use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
-use backend::*;
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt, mem::size_of};
@@ -265,9 +266,25 @@ impl<B: Backend> Default for Gaussian3dScene<B> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    const VIEW: View = View {
+        field_of_view_x: 1.39,
+        field_of_view_y: 0.88,
+        image_height: 600,
+        image_width: 900,
+        view_id: 0,
+        view_position: [1.86, 0.45, 2.92],
+        view_transform: [
+            [-0.99, 0.08, -0.10, 0.00],
+            [0.06, 0.99, 0.05, 0.00],
+            [0.10, 0.05, -0.99, 0.00],
+            [1.47, -0.69, 3.08, 1.00],
+        ],
+    };
+
     #[test]
     fn init() {
-        use super::*;
         use burn::backend::NdArray;
 
         let device = Default::default();
@@ -301,5 +318,18 @@ mod tests {
 
         assert_eq!(scene.point_count(), 2);
         assert_eq!(scene.size(), (2 * 48 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
+    }
+
+    #[test]
+    fn default_render_wgpu() {
+        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
+    }
+
+    #[test]
+    fn default_render_wgpu_autodiff() {
+        Gaussian3dScene::<Autodiff<Wgpu>>::default()
+            .render(&VIEW, &Default::default())
+            .colors_rgb_2d
+            .backward();
     }
 }

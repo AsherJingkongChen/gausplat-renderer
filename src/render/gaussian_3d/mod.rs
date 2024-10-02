@@ -2,7 +2,10 @@ pub mod backward;
 pub mod forward;
 pub mod jit;
 
-pub use super::{Gaussian3dScene, View};
+pub use crate::{
+    preset::backend::{self, Autodiff},
+    scene::gaussian_3d::{Gaussian3dScene, View},
+};
 pub use burn::{
     config::Config,
     record::Record,
@@ -18,7 +21,7 @@ use burn::{
         checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
         grads::Gradients,
         ops::{Backward, Ops, OpsKind},
-        Autodiff, NodeID,
+        NodeID,
     },
     tensor::TensorPrimitive,
 };
@@ -266,42 +269,5 @@ impl<AB: AutodiffBackend> fmt::Debug for Gaussian3dRenderOutputAutodiff<AB> {
             )
             .field("radii.dims()", &radii_dims)
             .finish()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const VIEW: View = View {
-        field_of_view_x: 1.39,
-        field_of_view_y: 0.88,
-        image_height: 600,
-        image_width: 900,
-        view_id: 0,
-        view_position: [1.86, 0.45, 2.92],
-        view_transform: [
-            [-0.99, 0.08, -0.10, 0.00],
-            [0.06, 0.99, 0.05, 0.00],
-            [0.10, 0.05, -0.99, 0.00],
-            [1.47, -0.69, 3.08, 1.00],
-        ],
-    };
-
-    #[test]
-    fn default_render_wgpu() {
-        use crate::preset::backend::Wgpu;
-
-        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
-    }
-
-    #[test]
-    fn default_render_wgpu_autodiff() {
-        use crate::preset::backend::Wgpu;
-
-        Gaussian3dScene::<Autodiff<Wgpu>>::default()
-            .render(&VIEW, &Default::default())
-            .colors_rgb_2d
-            .backward();
     }
 }
