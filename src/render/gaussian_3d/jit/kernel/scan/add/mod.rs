@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn scan_add_small() {
         use super::*;
-        use crate::preset::backend::{Wgpu, WgpuDevice, WgpuRuntime};
+        use crate::backend::{Wgpu, WgpuDevice, WgpuRuntime};
         use burn::tensor::TensorData;
         use bytemuck::{cast_slice, from_bytes};
 
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn scan_add_random() {
         use super::*;
-        use crate::preset::backend::{Wgpu, WgpuDevice, WgpuRuntime};
+        use crate::backend::{Wgpu, WgpuDevice, WgpuRuntime};
         use burn::tensor::TensorData;
         use bytemuck::{cast_slice, from_bytes};
         use rand::{rngs::StdRng, Rng, SeedableRng};

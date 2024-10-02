@@ -3,7 +3,7 @@ pub mod forward;
 pub mod jit;
 
 pub use crate::{
-    preset::backend::{self, Autodiff},
+    backend::{self, Autodiff},
     scene::gaussian_3d::{Gaussian3dScene, View},
 };
 pub use burn::{
@@ -15,7 +15,7 @@ pub use burn::{
     },
 };
 
-use crate::preset::spherical_harmonics::SH_DEGREE_MAX;
+use crate::spherical_harmonics::SH_DEGREE_MAX;
 use burn::{
     backend::autodiff::{
         checkpoint::{base::Checkpointer, strategy::NoCheckpointing},

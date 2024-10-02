@@ -1,7 +1,7 @@
 pub mod property;
 
 pub use crate::{
-    preset::backend::{self, *},
+    backend::{self, *},
     render::gaussian_3d as render,
 };
 pub use burn::{
@@ -14,7 +14,7 @@ pub use burn::{
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
 
-use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
+use crate::spherical_harmonics::SH_C;
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt, mem::size_of};
@@ -32,6 +32,8 @@ pub struct Gaussian3dScene<B: Backend> {
     /// `[P, 3]`
     pub scalings: Param<Tensor<B, 2>>,
 }
+
+pub const SEED_INIT: u64 = 0x3D65;
 
 impl<B: Backend> Gaussian3dScene<B> {
     pub fn init(
@@ -159,7 +161,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             "Gaussian3dScene::scalings".into(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
-                let samples = StdRng::seed_from_u64(SEED)
+                let samples = StdRng::seed_from_u64(SEED_INIT)
                     .sample_iter(
                         rand_distr::LogNormal::new(0.0, std::f32::consts::E)
                             .expect("Unreachable"),

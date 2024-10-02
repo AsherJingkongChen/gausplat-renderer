@@ -1,4 +1,5 @@
 pub mod error;
-pub mod preset;
+pub mod backend;
 pub mod render;
 pub mod scene;
+pub mod spherical_harmonics;
