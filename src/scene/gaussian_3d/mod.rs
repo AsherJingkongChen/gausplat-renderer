@@ -6,10 +6,7 @@ pub use crate::{
 };
 pub use burn::{
     module::{AutodiffModule, Module, Param},
-    tensor::{
-        backend::{AutodiffBackend, Backend},
-        Tensor, TensorData,
-    },
+    tensor::{Tensor, TensorData},
 };
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
@@ -208,36 +205,42 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
+impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
+    Gaussian3dRenderer<JitBackend<R, F, I>>
+    for Gaussian3dScene<JitBackend<R, F, I>>
+{
     fn render_forward(
-        input: render::forward::RenderInput<Wgpu>,
+        input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &View,
         options: &render::Gaussian3dRendererOptions,
-    ) -> render::forward::RenderOutput<Wgpu> {
+    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::forward(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<Wgpu> {
+        state: render::backward::RenderInput<JitBackend<R, F, I>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
+impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
+    Gaussian3dRenderer<JitBackend<R, F, I>>
+    for Gaussian3dScene<Autodiff<JitBackend<R, F, I>>>
+{
     fn render_forward(
-        input: render::forward::RenderInput<Wgpu>,
+        input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &View,
         options: &render::Gaussian3dRendererOptions,
-    ) -> render::forward::RenderOutput<Wgpu> {
+    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::forward(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<Wgpu> {
+        state: render::backward::RenderInput<JitBackend<R, F, I>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::backward(state, colors_rgb_2d_grad)
     }
 }

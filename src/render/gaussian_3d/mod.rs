@@ -3,28 +3,23 @@ pub mod forward;
 pub mod jit;
 
 pub use crate::{
-    backend::{self, Autodiff},
+    backend::{self, *},
     scene::gaussian_3d::{Gaussian3dScene, View},
 };
 pub use burn::{
     config::Config,
     record::Record,
-    tensor::{
-        backend::{AutodiffBackend, Backend},
-        Int, Tensor,
-    },
+    tensor::{Int, Tensor},
 };
 
 use crate::spherical_harmonics::SH_DEGREE_MAX;
-use burn::{
-    backend::autodiff::{
-        checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
-        grads::Gradients,
-        ops::{Backward, Ops, OpsKind},
-        NodeID,
-    },
-    tensor::TensorPrimitive,
+use autodiff::{
+    checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
+    grads::Gradients,
+    ops::{Backward, Ops, OpsKind},
+    NodeID,
 };
+use burn::tensor::TensorPrimitive;
 use std::{fmt, marker};
 
 pub trait Gaussian3dRenderer<B: Backend>:

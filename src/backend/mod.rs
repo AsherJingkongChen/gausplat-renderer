@@ -1,9 +1,16 @@
+/// Types and traits of JIT backend.
+pub mod jit {
+    pub use burn_jit::{FloatElement, IntElement, JitBackend, JitRuntime};
+}
+
+pub use burn::backend::wgpu::{self, WgpuDevice, WgpuRuntime};
 pub use burn::{
-    backend::wgpu::{WgpuDevice, WgpuRuntime},
-    tensor::backend::Backend,
+    backend::autodiff,
+    tensor::backend::{AutodiffBackend, Backend},
 };
+pub use jit::JitBackend;
 
-use burn::backend::autodiff;
-
+/// The backend marker to enable autodiff.
 pub type Autodiff<B> = autodiff::Autodiff<B>;
-pub type Wgpu = burn_jit::JitBackend<WgpuRuntime, f32, i32>;
+/// The JIT backend using [`WgpuRuntime`].
+pub type Wgpu = JitBackend<WgpuRuntime, f32, i32>;
