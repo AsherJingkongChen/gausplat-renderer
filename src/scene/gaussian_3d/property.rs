@@ -6,7 +6,7 @@ use burn::tensor::activation;
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
     ///
-    /// `[P, 16 * 3]`
+    /// `[P, 48] <- [P, 16, 3]`
     #[inline]
     pub fn colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())
@@ -160,6 +160,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 /// Inner value setters
 impl<B: Backend> Gaussian3dScene<B> {
     /// Setting inner values for [`Gaussian3dScene::colors_sh`]
+    #[inline]
     pub fn set_inner_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 2>,
@@ -170,6 +171,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Setting inner values for [`Gaussian3dScene::opacities`]
+    #[inline]
     pub fn set_inner_opacities(
         &mut self,
         opacities: Tensor<B, 2>,
@@ -180,6 +182,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Setting inner values for [`Gaussian3dScene::positions`]
+    #[inline]
     pub fn set_inner_positions(
         &mut self,
         positions: Tensor<B, 2>,
@@ -190,6 +193,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Setting inner values for [`Gaussian3dScene::rotations`]
+    #[inline]
     pub fn set_inner_rotations(
         &mut self,
         rotations: Tensor<B, 2>,
@@ -200,6 +204,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// Setting inner values for [`Gaussian3dScene::scalings`]
+    #[inline]
     pub fn set_inner_scalings(
         &mut self,
         scalings: Tensor<B, 2>,
@@ -211,6 +216,11 @@ impl<B: Backend> Gaussian3dScene<B> {
 }
 
 impl<B: Backend> Gaussian3dScene<B> {
+    #[inline]
+    pub fn device(&self) -> B::Device {
+        self.positions.val().device()
+    }
+
     #[inline]
     pub fn point_count(&self) -> usize {
         debug_assert_eq!(
@@ -230,7 +240,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             self.scalings.val().dims()[0]
         );
 
-        self.colors_sh.val().dims()[0]
+        self.positions.val().dims()[0]
     }
 
     #[inline]
@@ -249,7 +259,7 @@ mod tests {
         let device = Default::default();
 
         let input_colors_sh = Tensor::<NdArray<f32>, 2>::random(
-            [10, 16 * 3],
+            [10, 48],
             Distribution::Default,
             &device,
         );

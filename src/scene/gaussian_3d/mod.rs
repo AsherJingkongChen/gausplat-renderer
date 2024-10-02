@@ -1,25 +1,28 @@
 pub mod property;
-pub mod render;
+pub mod spherical_harmonics;
 
-pub use crate::preset::backend::{self, *};
+pub use crate::{
+    backend::{self, *},
+    render::gaussian_3d as render,
+};
 pub use burn::{
     module::{AutodiffModule, Module, Param},
-    tensor::{
-        backend::{AutodiffBackend, Backend},
-        Tensor, TensorData,
-    },
+    tensor::{Tensor, TensorData},
 };
 pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
 pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
+pub use spherical_harmonics::SH_DEGREE_MAX;
 
-use crate::preset::{gaussian_3d::*, spherical_harmonics::*};
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use spherical_harmonics::{SH_C, SH_COUNT};
 use std::{fmt, mem::size_of};
+
+pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT * 3;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
-    /// `[P, 16 * 3]`
+    /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: Param<Tensor<B, 2>>,
     /// `[P, 1]`
     pub opacities: Param<Tensor<B, 2>>,
@@ -30,6 +33,8 @@ pub struct Gaussian3dScene<B: Backend> {
     /// `[P, 3]`
     pub scalings: Param<Tensor<B, 2>>,
 }
+
+pub const SEED_INIT: u64 = 0x3D65;
 
 impl<B: Backend> Gaussian3dScene<B> {
     pub fn init(
@@ -52,12 +57,14 @@ impl<B: Backend> Gaussian3dScene<B> {
             .flat_map(|point| point.position)
             .collect::<Vec<_>>();
 
-        // [P, 16 * 3]
+        // [P, 48] <- [P, 16, 3]
         let colors_sh = Param::uninitialized(
             "Gaussian3dScene::colors_sh".into(),
             move |device, is_require_grad| {
-                let mut colors_sh =
-                    Tensor::zeros([point_count, 16 * 3], device);
+                let mut colors_sh = Tensor::zeros(
+                    [point_count, COLORS_SH_FEATURE_COUNT],
+                    device,
+                );
                 let colors_rgb = Tensor::from_data(
                     TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,
@@ -158,7 +165,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             "Gaussian3dScene::scalings".into(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
-                let samples = StdRng::seed_from_u64(SEED)
+                let samples = StdRng::seed_from_u64(SEED_INIT)
                     .sample_iter(
                         rand_distr::LogNormal::new(0.0, std::f32::consts::E)
                             .expect("Unreachable"),
@@ -205,43 +212,43 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
+impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
+    Gaussian3dRenderer<JitBackend<R, F, I>>
+    for Gaussian3dScene<JitBackend<R, F, I>>
+{
     fn render_forward(
-        input: render::forward::RenderInput<Wgpu>,
+        input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &View,
         options: &render::Gaussian3dRendererOptions,
-    ) -> render::forward::RenderOutput<Wgpu> {
-        render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
+    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
+        render::jit::forward(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<Wgpu> {
-        render::backward::wgpu::render_gaussian_3d_scene(
-            state,
-            colors_rgb_2d_grad,
-        )
+        state: render::backward::RenderInput<JitBackend<R, F, I>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
+        render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 
-impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
+impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
+    Gaussian3dRenderer<JitBackend<R, F, I>>
+    for Gaussian3dScene<Autodiff<JitBackend<R, F, I>>>
+{
     fn render_forward(
-        input: render::forward::RenderInput<Wgpu>,
+        input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &View,
         options: &render::Gaussian3dRendererOptions,
-    ) -> render::forward::RenderOutput<Wgpu> {
-        render::forward::wgpu::render_gaussian_3d_scene(input, view, options)
+    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
+        render::jit::forward(input, view, options)
     }
 
     fn render_backward(
-        state: render::backward::RenderInput<Wgpu>,
-        colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<Wgpu> {
-        render::backward::wgpu::render_gaussian_3d_scene(
-            state,
-            colors_rgb_2d_grad,
-        )
+        state: render::backward::RenderInput<JitBackend<R, F, I>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
+        render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 
@@ -252,6 +259,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
     ) -> fmt::Result {
         f.debug_struct(&format!("Gaussian3dScene<{}>", B::name()))
             .field("devices", &self.devices())
+            .field("point_count", &self.point_count())
             .field("size", &format_size(self.size(), BINARY))
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
@@ -271,9 +279,25 @@ impl<B: Backend> Default for Gaussian3dScene<B> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    const VIEW: View = View {
+        field_of_view_x: 1.39,
+        field_of_view_y: 0.88,
+        image_height: 600,
+        image_width: 900,
+        view_id: 0,
+        view_position: [1.86, 0.45, 2.92],
+        view_transform: [
+            [-0.99, 0.08, -0.10, 0.00],
+            [0.06, 0.99, 0.05, 0.00],
+            [0.10, 0.05, -0.99, 0.00],
+            [1.47, -0.69, 3.08, 1.00],
+        ],
+    };
+
     #[test]
     fn init() {
-        use super::*;
         use burn::backend::NdArray;
 
         let device = Default::default();
@@ -291,7 +315,7 @@ mod tests {
         let scene = Gaussian3dScene::<NdArray<f32>>::init(&device, priors);
 
         let colors_sh = scene.colors_sh();
-        assert_eq!(colors_sh.dims(), [2, 16 * 3]);
+        assert_eq!(colors_sh.dims(), [2, 48]);
 
         let opacities = scene.opacities();
         assert_eq!(opacities.dims(), [2, 1]);
@@ -305,7 +329,20 @@ mod tests {
         let scalings = scene.scalings();
         assert_eq!(scalings.dims(), [2, 3]);
 
-        let size = scene.size();
-        assert_eq!(size, (2 * 16 * 3 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
+        assert_eq!(scene.point_count(), 2);
+        assert_eq!(scene.size(), (2 * 48 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
+    }
+
+    #[test]
+    fn default_render_wgpu() {
+        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
+    }
+
+    #[test]
+    fn default_render_wgpu_autodiff() {
+        Gaussian3dScene::<Autodiff<Wgpu>>::default()
+            .render(&VIEW, &Default::default())
+            .colors_rgb_2d
+            .backward();
     }
 }
