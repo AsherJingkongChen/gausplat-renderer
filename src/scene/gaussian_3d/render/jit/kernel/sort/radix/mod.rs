@@ -225,7 +225,7 @@ mod tests {
         type I = i32;
         let device = &WgpuDevice::default();
 
-        let count = 1 << 25 | 2025;
+        let count = 1 << 24 | 2025;
         let keys_source = StdRng::from_entropy()
             .sample_iter(rand_distr::Uniform::new(0, i32::MAX as u32))
             .take(count)

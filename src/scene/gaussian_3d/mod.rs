@@ -211,17 +211,14 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Wgpu> {
         view: &View,
         options: &render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
-        render::forward::jit::render_gaussian_3d_scene(input, view, options)
+        render::jit::forward(input, view, options)
     }
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
         colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
-        render::backward::jit::render_gaussian_3d_scene(
-            state,
-            colors_rgb_2d_grad,
-        )
+        render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 
@@ -231,17 +228,14 @@ impl Gaussian3dRenderer<Wgpu> for Gaussian3dScene<Autodiff<Wgpu>> {
         view: &View,
         options: &render::Gaussian3dRendererOptions,
     ) -> render::forward::RenderOutput<Wgpu> {
-        render::forward::jit::render_gaussian_3d_scene(input, view, options)
+        render::jit::forward(input, view, options)
     }
 
     fn render_backward(
         state: render::backward::RenderInput<Wgpu>,
         colors_rgb_2d_grad: <Wgpu as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<Wgpu> {
-        render::backward::jit::render_gaussian_3d_scene(
-            state,
-            colors_rgb_2d_grad,
-        )
+        render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 

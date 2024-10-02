@@ -1,11 +1,12 @@
 pub mod kernel;
 
-pub use super::*;
+pub use super::{backward, forward, Gaussian3dRendererOptions, View};
 pub use kernel::{FloatElement, IntElement, JitBackend, JitRuntime};
 pub use rank::TILE_COUNT_MAX;
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 pub use transform::FILTER_LOW_PASS;
 
+use crate::preset::spherical_harmonics::SH_DEGREE_MAX;
 use burn::tensor::ops::FloatTensorOps;
 use burn_jit::kernel::into_contiguous;
 use bytemuck::from_bytes;

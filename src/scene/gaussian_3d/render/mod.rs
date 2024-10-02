@@ -2,15 +2,23 @@ pub mod backward;
 pub mod forward;
 pub mod jit;
 
-pub use super::*;
-pub use burn::{config::Config, record::Record, tensor::Int};
+pub use super::{Gaussian3dScene, View};
+pub use burn::{
+    config::Config,
+    record::Record,
+    tensor::{
+        backend::{AutodiffBackend, Backend},
+        Int, Tensor,
+    },
+};
 
+use crate::preset::spherical_harmonics::SH_DEGREE_MAX;
 use burn::{
     backend::autodiff::{
         checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
         grads::Gradients,
         ops::{Backward, Ops, OpsKind},
-        NodeID,
+        Autodiff, NodeID,
     },
     tensor::TensorPrimitive,
 };
@@ -282,14 +290,14 @@ mod tests {
 
     #[test]
     fn default_render_wgpu() {
-        use super::*;
+        use crate::preset::backend::Wgpu;
 
         Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
     }
 
     #[test]
     fn default_render_wgpu_autodiff() {
-        use super::*;
+        use crate::preset::backend::Wgpu;
 
         Gaussian3dScene::<Autodiff<Wgpu>>::default()
             .render(&VIEW, &Default::default())
