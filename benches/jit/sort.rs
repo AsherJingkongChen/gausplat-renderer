@@ -36,7 +36,7 @@ fn sort_on_jit(bencher: Bencher) {
                 keys: k.to_owned().into_primitive(),
                 values: v.to_owned().into_primitive(),
             });
-            Wgpu::sync(&Default::default(), SyncType::Flush);
+            Wgpu::sync(&Default::default(), SyncType::Wait);
         });
 }
 
