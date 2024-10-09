@@ -1,6 +1,6 @@
 pub mod kernel;
 
-pub use super::{backward, forward, Gaussian3dRendererOptions, View};
+pub use super::{backward, forward, Gaussian3dRenderOptions, View};
 pub use crate::{
     backend::jit::{FloatElement, IntElement, JitBackend, JitRuntime},
     scene::gaussian_3d::SH_DEGREE_MAX,
@@ -19,7 +19,7 @@ pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     mut input: forward::RenderInput<JitBackend<R, F, I>>,
     view: &View,
-    options: &Gaussian3dRendererOptions,
+    options: &Gaussian3dRenderOptions,
 ) -> forward::RenderOutput<JitBackend<R, F, I>> {
     #[cfg(debug_assertions)]
     log::debug!(target: "gausplat::render::gaussian_3d::forward", "start");
@@ -246,7 +246,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
 /// ## Arguments
 ///
-/// * `colors_rgb_2d_grad`: `[I_y, I_x, 3]`
+/// * `colors_rgb_2d_grad` - `[I_y, I_x, 3]`
 pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     state: backward::RenderInput<JitBackend<R, F, I>>,
     mut colors_rgb_2d_grad: JitTensor<R, F>,

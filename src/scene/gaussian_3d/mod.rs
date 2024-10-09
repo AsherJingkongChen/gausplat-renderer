@@ -1,6 +1,6 @@
 pub mod property;
-pub mod spherical_harmonics;
 
+pub use crate::spherical_harmonics::SH_DEGREE_MAX;
 pub use crate::{
     backend::{self, *},
     render::gaussian_3d as render,
@@ -9,14 +9,23 @@ pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{Tensor, TensorData},
 };
-pub use gausplat_importer::dataset::gaussian_3d::{Point, Points, View};
-pub use render::{Gaussian3dRenderer, Gaussian3dRendererOptions};
-pub use spherical_harmonics::SH_DEGREE_MAX;
+pub use gausplat_importer::dataset::gaussian_3d::{Point, Points};
+pub use render::{
+    Gaussian3dRenderOptions, Gaussian3dRenderOutput,
+    Gaussian3dRenderOutputAutodiff, Gaussian3dRenderer,
+};
 
+use crate::spherical_harmonics::{SH_C, SH_COUNT};
+use autodiff::{
+    checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
+    grads::Gradients,
+    ops::{Backward, Ops, OpsKind},
+    NodeID,
+};
+use burn::tensor::TensorPrimitive;
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use spherical_harmonics::{SH_C, SH_COUNT};
-use std::{fmt, mem::size_of};
+use std::{fmt, marker, mem::size_of};
 
 pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT * 3;
 
@@ -32,6 +41,17 @@ pub struct Gaussian3dScene<B: Backend> {
     pub rotations: Param<Tensor<B, 2>>,
     /// `[P, 3]`
     pub scalings: Param<Tensor<B, 2>>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct Gaussian3dRenderBackward<B: Backend, R: Gaussian3dRenderer<B>> {
+    __: marker::PhantomData<(B, R)>,
+}
+
+#[derive(Clone, Debug)]
+struct Gaussian3dRenderBackwardState<B: Backend> {
+    pub inner: render::backward::RenderInput<B>,
+    pub positions_2d_grad_norm_ref_id: NodeID,
 }
 
 pub const SEED_INIT: u64 = 0x3D65;
@@ -59,7 +79,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 48] <- [P, 16, 3]
         let colors_sh = Param::uninitialized(
-            "Gaussian3dScene::colors_sh".into(),
+            Default::default(),
             move |device, is_require_grad| {
                 let mut colors_sh = Tensor::zeros(
                     [point_count, COLORS_SH_FEATURE_COUNT],
@@ -92,7 +112,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 1]
         let opacities = Param::uninitialized(
-            "Gaussian3dScene::opacities".into(),
+            Default::default(),
             move |device, is_require_grad| {
                 let opacities = Self::make_inner_opacities(Tensor::full(
                     [point_count, 1],
@@ -115,7 +135,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 3]
         let positions = Param::uninitialized(
-            "Gaussian3dScene::positions".into(),
+            Default::default(),
             move |device, is_require_grad| {
                 let positions = Self::make_inner_positions(Tensor::from_data(
                     TensorData::new(positions.to_owned(), [point_count, 3]),
@@ -137,7 +157,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 4] (x, y, z, w)
         let rotations = Param::uninitialized(
-            "Gaussian3dScene::rotations".into(),
+            Default::default(),
             move |device, is_require_grad| {
                 let rotations = Self::make_inner_rotations(Tensor::from_data(
                     TensorData::new(
@@ -162,7 +182,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         // [P, 3]
         let scalings = Param::uninitialized(
-            "Gaussian3dScene::scalings".into(),
+            Default::default(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
                 let samples = StdRng::seed_from_u64(SEED_INIT)
@@ -218,8 +238,8 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
 {
     fn render_forward(
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
-        view: &View,
-        options: &render::Gaussian3dRendererOptions,
+        view: &render::View,
+        options: &render::Gaussian3dRenderOptions,
     ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::forward(input, view, options)
     }
@@ -238,8 +258,8 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
 {
     fn render_forward(
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
-        view: &View,
-        options: &render::Gaussian3dRendererOptions,
+        view: &render::View,
+        options: &render::Gaussian3dRenderOptions,
     ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::forward(input, view, options)
     }
@@ -249,6 +269,159 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
         colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
     ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
         render::jit::backward(state, colors_rgb_2d_grad)
+    }
+}
+
+impl<B: Backend> Gaussian3dScene<B>
+where
+    Self: Gaussian3dRenderer<B>,
+{
+    pub fn render(
+        &self,
+        view: &render::View,
+        options: &Gaussian3dRenderOptions,
+    ) -> Gaussian3dRenderOutput<B> {
+        let input = render::forward::RenderInput {
+            device: self.device(),
+            point_count: self.point_count() as u64,
+            colors_sh: self.colors_sh().into_primitive().tensor(),
+            opacities: self.opacities().into_primitive().tensor(),
+            positions: self.positions().into_primitive().tensor(),
+            rotations: self.rotations().into_primitive().tensor(),
+            scalings: self.scalings().into_primitive().tensor(),
+        };
+
+        let output = Self::render_forward(input, view, options);
+
+        let colors_rgb_2d =
+            Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
+
+        Gaussian3dRenderOutput { colors_rgb_2d }
+    }
+}
+
+impl<B: Backend> Gaussian3dScene<Autodiff<B>>
+where
+    Self: Gaussian3dRenderer<B>,
+{
+    #[must_use = "The gradients should be used"]
+    pub fn render(
+        &self,
+        view: &render::View,
+        options: &Gaussian3dRenderOptions,
+    ) -> Gaussian3dRenderOutputAutodiff<Autodiff<B>> {
+        let device = self.device();
+        let colors_sh = self.colors_sh().into_primitive().tensor();
+        let opacities = self.opacities().into_primitive().tensor();
+        let positions = self.positions().into_primitive().tensor();
+        let rotations = self.rotations().into_primitive().tensor();
+        let scalings = self.scalings().into_primitive().tensor();
+
+        let positions_2d_grad_norm_ref =
+            Tensor::<Autodiff<B>, 1>::empty([1], &device);
+        let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
+            .to_owned()
+            .into_primitive()
+            .tensor()
+            .node
+            .id;
+
+        let input = render::forward::RenderInput {
+            device,
+            point_count: self.point_count() as u64,
+            colors_sh: colors_sh.primitive,
+            opacities: opacities.primitive,
+            positions: positions.primitive,
+            rotations: rotations.primitive,
+            scalings: scalings.primitive,
+        };
+
+        let output = Self::render_forward(input, view, options);
+
+        let radii = Tensor::new(output.state.radii.to_owned());
+        let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
+            match Gaussian3dRenderBackward::<B, Self>::default()
+                .prepare::<NoCheckpointing>([
+                    colors_sh.node,
+                    opacities.node,
+                    positions.node,
+                    rotations.node,
+                    scalings.node,
+                ])
+                .compute_bound()
+                .stateful()
+            {
+                OpsKind::Tracked(prep) => {
+                    #[cfg(debug_assertions)]
+                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "track");
+
+                    prep.finish(
+                        Gaussian3dRenderBackwardState {
+                            inner: output.state,
+                            positions_2d_grad_norm_ref_id,
+                        },
+                        output.colors_rgb_2d,
+                    )
+                },
+                OpsKind::UnTracked(prep) => {
+                    #[cfg(debug_assertions)]
+                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "untrack");
+
+                    prep.finish(output.colors_rgb_2d)
+                },
+            },
+        ));
+
+        Gaussian3dRenderOutputAutodiff {
+            colors_rgb_2d,
+            positions_2d_grad_norm_ref,
+            radii,
+        }
+    }
+}
+
+impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
+    for Gaussian3dRenderBackward<B, R>
+{
+    type State = Gaussian3dRenderBackwardState<B>;
+
+    fn backward(
+        self,
+        ops: Ops<Self::State, 5>,
+        grads: &mut Gradients,
+        _checkpointer: &mut Checkpointer,
+    ) {
+        #[cfg(debug_assertions)]
+        log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "backward");
+
+        let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
+
+        if ops.parents.iter().all(Option::is_none) {
+            return;
+        }
+
+        let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
+
+        if let Some(node) = &ops.parents[0] {
+            grads.register::<B>(node.id, output.colors_sh_grad);
+        }
+        if let Some(node) = &ops.parents[1] {
+            grads.register::<B>(node.id, output.opacities_grad);
+        }
+        if let Some(node) = &ops.parents[2] {
+            grads.register::<B>(node.id, output.positions_grad);
+        }
+        if let Some(node) = &ops.parents[3] {
+            grads.register::<B>(node.id, output.rotations_grad);
+        }
+        if let Some(node) = &ops.parents[4] {
+            grads.register::<B>(node.id, output.scalings_grad);
+        }
+
+        grads.register::<B>(
+            ops.state.positions_2d_grad_norm_ref_id,
+            output.positions_2d_grad_norm,
+        );
     }
 }
 
@@ -281,7 +454,7 @@ impl<B: Backend> Default for Gaussian3dScene<B> {
 mod tests {
     use super::*;
 
-    const VIEW: View = View {
+    const VIEW: render::View = render::View {
         field_of_view_x: 1.39,
         field_of_view_y: 0.88,
         image_height: 600,
