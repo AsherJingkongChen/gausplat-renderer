@@ -1,5 +1,6 @@
 pub mod property;
 
+pub use super::point::*;
 pub use crate::spherical_harmonics::SH_DEGREE_MAX;
 pub use crate::{
     backend::{self, *},
@@ -9,7 +10,6 @@ pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{Tensor, TensorData},
 };
-pub use gausplat_importer::dataset::gaussian_3d::{Point, Points};
 pub use render::{
     Gaussian3dRenderOptions, Gaussian3dRenderOutput,
     Gaussian3dRenderOutputAutodiff, Gaussian3dRenderer,
