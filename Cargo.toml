@@ -8,7 +8,7 @@ readme = "README.md"
 version.workspace = true
 
 [dependencies]
-gausplat-importer = {workspace = true}
+gausplat-loader = {workspace = true}
 
 burn = {workspace = true, features = ["autodiff", "default", "template", "wgpu"]}
 burn-jit = {workspace = true}

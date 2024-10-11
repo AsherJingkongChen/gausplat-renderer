@@ -124,9 +124,6 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let outputs_scan = scan::add::main::<R, F, I>(scan::add::Inputs {
         values: outputs_transform.tile_touched_counts,
     });
-    #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "scan");
-
     // T
     let tile_point_count = *from_bytes::<u32>(
         &outputs_scan
