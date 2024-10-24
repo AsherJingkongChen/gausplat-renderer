@@ -27,7 +27,9 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
     pub tile_point_ranges: JitTensor<R, I>,
 }
 
+/// `G`
 pub const GROUP_SIZE: u32 = 256;
+/// `G ^ 2`
 pub const GROUP_SIZE2: u32 = GROUP_SIZE * GROUP_SIZE;
 
 /// Segmenting the points into tiles.

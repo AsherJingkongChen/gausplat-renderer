@@ -71,7 +71,7 @@ fn main(
 
     // (0 ~ I_x, 0 ~ I_y)
     let pixel = global_id.xy;
-    // (0 ~ I_x * I_y)
+    // (0 ~ I_y * I_x)
     let pixel_index = pixel.y * arguments.image_size_x + pixel.x;
     // (0 ~ (I_y / T_y) * (I_x / T_x))
     let tile_index = tile_id.y * tile_count.x + tile_id.x;
@@ -85,7 +85,7 @@ fn main(
     var tile_point_count = 0u;
     if tile_index < arrayLength(&tile_point_ranges) {
         point_range = tile_point_ranges[tile_index];
-        if point_range.y >= point_range.x {
+        if point_range.y > point_range.x {
             tile_point_count = point_range.y - point_range.x;
         }
     }

@@ -15,7 +15,7 @@ pub use render::{
     Gaussian3dRenderOutputAutodiff, Gaussian3dRenderer,
 };
 
-use crate::spherical_harmonics::{SH_C, SH_COUNT};
+use crate::spherical_harmonics::{SH_C, SH_COUNT_MAX};
 use autodiff::{
     checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
     grads::Gradients,
@@ -27,7 +27,7 @@ use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt, marker, mem::size_of};
 
-pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT * 3;
+pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT_MAX * 3;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {

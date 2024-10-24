@@ -14,6 +14,7 @@ use burn_jit::kernel::into_contiguous;
 use bytemuck::from_bytes;
 use kernel::*;
 
+/// Maximum of `I_y * I_x`
 pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 
 pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(

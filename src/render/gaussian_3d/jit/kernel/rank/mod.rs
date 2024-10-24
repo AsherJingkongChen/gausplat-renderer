@@ -39,6 +39,7 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
 }
 
 pub const GROUP_SIZE: u32 = 256;
+/// Maximum of `(I_y / T_y) * (I_x / T_x)`
 pub const TILE_COUNT_MAX: u32 = 1 << 16;
 
 /// Ranking the points.

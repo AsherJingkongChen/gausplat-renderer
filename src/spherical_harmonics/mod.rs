@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::f64::consts::PI;
 
 /// The count of spherical harmonics coefficients
-pub const SH_COUNT: usize = (SH_DEGREE_MAX as usize + 1).pow(2);
+pub const SH_COUNT_MAX: usize = (SH_DEGREE_MAX as usize + 1).pow(2);
 
 /// The maximum degree of spherical harmonics
 pub const SH_DEGREE_MAX: u32 = 3;
