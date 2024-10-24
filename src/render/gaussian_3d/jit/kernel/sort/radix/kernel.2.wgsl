@@ -21,13 +21,13 @@ var<workgroup>
 counts_radix_in_group: array<atomic<u32>, RADIX_COUNT>;
 
 // log2(N')
-const BLOCK_COUNT_GROUP_SHIFT = 14u;
+const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
 // R
 const RADIX_COUNT: u32 = 1u << RADIX_COUNT_SHIFT;
 // log2(R)
-const RADIX_COUNT_SHIFT: u32 = 8u;
+const RADIX_COUNT_SHIFT: u32 = 8;
 // R - 1
-const RADIX_MASK: u32 = RADIX_COUNT - 1u;
+const RADIX_MASK: u32 = RADIX_COUNT - 1;
 // G <- R
 const GROUP_SIZE: u32 = RADIX_COUNT;
 

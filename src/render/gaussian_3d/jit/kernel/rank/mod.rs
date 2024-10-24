@@ -39,7 +39,7 @@ pub const GROUP_SIZE: u32 = 256;
 /// Maximum of `(I_y / T_y) * (I_x / T_x)`
 pub const TILE_COUNT_MAX: u32 = 1 << 16;
 /// `E[T / P]`
-pub const FACTOR_TILE_POINT_COUNT: u32 = 12;
+pub const FACTOR_TILE_POINT_COUNT: u32 = 15;
 
 /// Ranking the points.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(

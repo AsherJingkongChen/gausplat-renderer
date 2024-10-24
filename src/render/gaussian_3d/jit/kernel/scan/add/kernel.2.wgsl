@@ -7,7 +7,7 @@ values: array<u32>;
 values_next: array<u32>;
 
 // N / N'
-const GROUP_SIZE: u32 = 256u;
+const GROUP_SIZE: u32 = 256;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
