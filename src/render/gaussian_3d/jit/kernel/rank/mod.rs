@@ -74,7 +74,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             },
         )),
         CubeCount::Static(
-            (arguments.point_count + GROUP_SIZE - 1) / GROUP_SIZE,
+            arguments.point_count.div_ceil(GROUP_SIZE),
             1,
             1,
         ),

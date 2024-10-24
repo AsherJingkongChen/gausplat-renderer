@@ -117,7 +117,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             },
         )),
         CubeCount::Static(
-            (point_count as u32 + GROUP_SIZE - 1) / GROUP_SIZE,
+            (point_count as u32).div_ceil(GROUP_SIZE),
             1,
             1,
         ),

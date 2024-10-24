@@ -22,7 +22,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     options: &Gaussian3dRenderOptions,
 ) -> forward::RenderOutput<JitBackend<R, F, I>> {
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "start");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "start");
 
     // Specifying the arguments
 
@@ -52,9 +52,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     // T_y
     let tile_size_y = TILE_SIZE_Y;
     // I_x / T_x
-    let tile_count_x = (image_size_x + tile_size_x - 1) / tile_size_x;
+    let tile_count_x = image_size_x.div_ceil(tile_size_x);
     // I_y / T_y
-    let tile_count_y = (image_size_y + tile_size_y - 1) / tile_size_y;
+    let tile_count_y = image_size_y.div_ceil(tile_size_y);
     // tan(Fov_x / 2) * (C_f + 1)
     let view_bound_x =
         (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
@@ -117,7 +117,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "transform");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "transform");
 
     // Scanning the counts of the touched tiles into offsets
 
@@ -133,7 +133,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     );
     #[cfg(debug_assertions)]
     log::info!(
-        target: "gausplat::render::gaussian_3d::forward",
+        target: "gausplat::renderer::gaussian_3d::forward",
         "scan > tile_point_count ({tile_point_count})",
     );
 
@@ -154,7 +154,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "rank");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "rank");
 
     // Sorting the points by its tile index and depth
 
@@ -163,7 +163,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         values: outputs_rank.point_indices,
     });
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "sort");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "sort");
 
     let outputs_segment = segment::main::<R, F, I>(
         segment::Arguments {
@@ -176,7 +176,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "segment");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "segment");
 
     let outputs_rasterize = rasterize::main::<R, F, I>(
         rasterize::Arguments {
@@ -195,7 +195,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::forward", "rasterize");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "rasterize");
 
     forward::RenderOutput {
         colors_rgb_2d: outputs_rasterize.colors_rgb_2d,
@@ -249,7 +249,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     mut colors_rgb_2d_grad: JitTensor<R, F>,
 ) -> backward::RenderOutput<JitBackend<R, F, I>> {
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::backward", "start");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "start");
 
     // Specifying the inputs
 
@@ -278,7 +278,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::backward", "rasterize_backward");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "rasterize_backward");
 
     let outputs_transform_backward = transform_backward::main(
         transform_backward::Arguments {
@@ -313,7 +313,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
     );
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::render::gaussian_3d::backward", "transform_backward");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "transform_backward");
 
     backward::RenderOutput {
         colors_sh_grad: outputs_transform_backward.colors_sh_grad,

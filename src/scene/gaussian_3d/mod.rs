@@ -100,8 +100,8 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 #[cfg(debug_assertions)]
                 log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::init > colors_sh",
+                    target: "gausplat::renderer::gaussian_3d::scene",
+                    "init > colors_sh",
                 );
 
                 colors_sh
@@ -123,8 +123,8 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 #[cfg(debug_assertions)]
                 log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::init > opacities",
+                    target: "gausplat::renderer::gaussian_3d::scene",
+                    "init > opacities",
                 );
 
                 opacities
@@ -145,8 +145,8 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 #[cfg(debug_assertions)]
                 log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::init > positions",
+                    target: "gausplat::renderer::gaussian_3d::scene",
+                    "init > positions",
                 );
 
                 positions
@@ -170,8 +170,8 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 #[cfg(debug_assertions)]
                 log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::init > rotations",
+                    target: "gausplat::renderer::gaussian_3d::scene",
+                    "init > rotations",
                 );
 
                 rotations
@@ -212,8 +212,8 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 #[cfg(debug_assertions)]
                 log::debug!(
-                    target: "gausplat_renderer::scene",
-                    "Gaussian3dScene::init > scalings",
+                    target: "gausplat::renderer::gaussian_3d::scene",
+                    "init > scalings",
                 );
 
                 scalings
