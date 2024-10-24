@@ -60,7 +60,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     // G * N / N'
     let block_size = block_count_group * GROUP_SIZE;
     // N' / G <- N / (G * N / N')
-    let group_count = (count as u32 + block_size - 1) / block_size;
+    let group_count = (count as u32).div_ceil(block_size);
 
     let mut arguments = Arguments {
         block_count_group,
@@ -225,7 +225,7 @@ mod tests {
         type I = i32;
         let device = &WgpuDevice::default();
 
-        let count = 1 << 24 | 2025;
+        let count = (1 << 23) - 1;
         let keys_source = StdRng::from_entropy()
             .sample_iter(rand_distr::Uniform::new(0, i32::MAX as u32))
             .take(count)

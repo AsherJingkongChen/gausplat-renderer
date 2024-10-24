@@ -2,23 +2,18 @@ pub mod backward;
 pub mod forward;
 pub mod jit;
 
+pub use super::view::*;
 pub use crate::{
     backend::{autodiff, Autodiff, AutodiffBackend, Backend},
-    scene::gaussian_3d::{Gaussian3dScene, View, SH_DEGREE_MAX},
+    spherical_harmonics::SH_DEGREE_MAX,
 };
-use autodiff::{
-    checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
-    grads::Gradients,
-    ops::{Backward, Ops, OpsKind},
-    NodeID,
-};
-use burn::tensor::TensorPrimitive;
 pub use burn::{
     config::Config,
     record::Record,
     tensor::{Int, Tensor},
 };
-use std::{fmt, marker};
+
+use std::fmt;
 
 pub trait Gaussian3dRenderer<B: Backend>:
     'static + Send + Sized + fmt::Debug
@@ -26,7 +21,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     fn render_forward(
         input: forward::RenderInput<B>,
         view: &View,
-        options: &Gaussian3dRendererOptions,
+        options: &Gaussian3dRenderOptions,
     ) -> forward::RenderOutput<B>;
 
     fn render_backward(
@@ -36,7 +31,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
 }
 
 #[derive(Config, Debug, Record)]
-pub struct Gaussian3dRendererOptions {
+pub struct Gaussian3dRenderOptions {
     #[config(default = "SH_DEGREE_MAX")]
     /// It should be no more than [`SH_DEGREE_MAX`].
     pub colors_sh_degree_max: u32,
@@ -71,164 +66,7 @@ pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
     pub radii: Tensor<AB::InnerBackend, 1, Int>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct Gaussian3dRendererBackward<B: Backend, R: Gaussian3dRenderer<B>> {
-    __: marker::PhantomData<(B, R)>,
-}
-
-#[derive(Clone, Debug)]
-struct Gaussian3dRendererBackwardState<B: Backend> {
-    pub inner: backward::RenderInput<B>,
-    pub positions_2d_grad_norm_ref_id: NodeID,
-}
-
-impl<B: Backend> Gaussian3dScene<B>
-where
-    Self: Gaussian3dRenderer<B>,
-{
-    pub fn render(
-        &self,
-        view: &View,
-        options: &Gaussian3dRendererOptions,
-    ) -> Gaussian3dRenderOutput<B> {
-        let input = forward::RenderInput {
-            device: self.device(),
-            point_count: self.point_count() as u64,
-            colors_sh: self.colors_sh().into_primitive().tensor(),
-            opacities: self.opacities().into_primitive().tensor(),
-            positions: self.positions().into_primitive().tensor(),
-            rotations: self.rotations().into_primitive().tensor(),
-            scalings: self.scalings().into_primitive().tensor(),
-        };
-
-        let output = Self::render_forward(input, view, options);
-
-        let colors_rgb_2d =
-            Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
-
-        Gaussian3dRenderOutput { colors_rgb_2d }
-    }
-}
-
-impl<B: Backend> Gaussian3dScene<Autodiff<B>>
-where
-    Self: Gaussian3dRenderer<B>,
-{
-    #[must_use = "The gradients should be used"]
-    pub fn render(
-        &self,
-        view: &View,
-        options: &Gaussian3dRendererOptions,
-    ) -> Gaussian3dRenderOutputAutodiff<Autodiff<B>> {
-        let device = self.device();
-        let colors_sh = self.colors_sh().into_primitive().tensor();
-        let opacities = self.opacities().into_primitive().tensor();
-        let positions = self.positions().into_primitive().tensor();
-        let rotations = self.rotations().into_primitive().tensor();
-        let scalings = self.scalings().into_primitive().tensor();
-
-        let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device).require_grad();
-        let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
-            .to_owned()
-            .into_primitive()
-            .tensor()
-            .node
-            .id;
-
-        let input = forward::RenderInput {
-            device,
-            point_count: self.point_count() as u64,
-            colors_sh: colors_sh.primitive,
-            opacities: opacities.primitive,
-            positions: positions.primitive,
-            rotations: rotations.primitive,
-            scalings: scalings.primitive,
-        };
-
-        let output = Self::render_forward(input, view, options);
-
-        let radii = Tensor::new(output.state.radii.to_owned());
-        let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
-            match Gaussian3dRendererBackward::<B, Self>::default()
-                .prepare::<NoCheckpointing>([
-                    colors_sh.node,
-                    opacities.node,
-                    positions.node,
-                    rotations.node,
-                    scalings.node,
-                ])
-                .compute_bound()
-                .stateful()
-            {
-                OpsKind::Tracked(prep) => prep.finish(
-                    Gaussian3dRendererBackwardState {
-                        inner: output.state,
-                        positions_2d_grad_norm_ref_id,
-                    },
-                    output.colors_rgb_2d,
-                ),
-                OpsKind::UnTracked(prep) => prep.finish(output.colors_rgb_2d),
-            },
-        ));
-
-        Gaussian3dRenderOutputAutodiff {
-            colors_rgb_2d,
-            positions_2d_grad_norm_ref,
-            radii,
-        }
-    }
-}
-
-impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
-    for Gaussian3dRendererBackward<B, R>
-{
-    type State = Gaussian3dRendererBackwardState<B>;
-
-    fn backward(
-        self,
-        ops: Ops<Self::State, 5>,
-        grads: &mut Gradients,
-        _checkpointer: &mut Checkpointer,
-    ) {
-        #[cfg(debug_assertions)]
-        log::debug!(
-            target: "gausplat_renderer::scene",
-            "Gaussian3dRendererBackward::backward",
-        );
-
-        let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
-
-        if ops.parents.iter().all(Option::is_none) {
-            return;
-        }
-
-        let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
-
-        if let Some(node) = &ops.parents[0] {
-            grads.register::<B>(node.id, output.colors_sh_grad);
-        }
-        if let Some(node) = &ops.parents[1] {
-            grads.register::<B>(node.id, output.opacities_grad);
-        }
-        if let Some(node) = &ops.parents[2] {
-            grads.register::<B>(node.id, output.positions_grad);
-        }
-        if let Some(node) = &ops.parents[3] {
-            grads.register::<B>(node.id, output.rotations_grad);
-        }
-        if let Some(node) = &ops.parents[4] {
-            grads.register::<B>(node.id, output.scalings_grad);
-        }
-
-        grads.register::<B>(
-            ops.state.positions_2d_grad_norm_ref_id,
-            output.positions_2d_grad_norm,
-        );
-    }
-}
-
-impl Default for Gaussian3dRendererOptions {
+impl Default for Gaussian3dRenderOptions {
     #[inline]
     fn default() -> Self {
         Self::new()

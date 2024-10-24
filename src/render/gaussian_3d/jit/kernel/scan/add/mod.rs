@@ -35,7 +35,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     // N
     let count = values.shape.dims[0] as u32;
     // N'
-    let count_next = (count + GROUP_SIZE - 1) / GROUP_SIZE;
+    let count_next = count.div_ceil(GROUP_SIZE);
 
     // [N']
     let values_next =

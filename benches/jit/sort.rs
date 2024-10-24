@@ -6,7 +6,6 @@
 //! cargo bench jit_sort
 //! ```
 
-use burn_jit::cubecl::client::SyncType;
 use divan::Bencher;
 use gausplat_renderer::{
     backend::{Backend, Wgpu, WgpuRuntime},
@@ -36,7 +35,7 @@ fn sort_on_jit(bencher: Bencher) {
                 keys: k.to_owned().into_primitive(),
                 values: v.to_owned().into_primitive(),
             });
-            Wgpu::sync(&Default::default(), SyncType::Wait);
+            Wgpu::sync(&Default::default());
         });
 }
 
@@ -72,7 +71,7 @@ mod data {
                 ),
                 Tensor::arange(0..SIZE as i64, &Default::default()),
             );
-            Wgpu::sync(&Default::default(), SyncType::Wait);
+            Wgpu::sync(&Default::default());
             result
         }
     }

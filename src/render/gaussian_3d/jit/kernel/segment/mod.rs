@@ -27,7 +27,9 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
     pub tile_point_ranges: JitTensor<R, I>,
 }
 
+/// `G`
 pub const GROUP_SIZE: u32 = 256;
+/// `G ^ 2`
 pub const GROUP_SIZE2: u32 = GROUP_SIZE * GROUP_SIZE;
 
 /// Segmenting the points into tiles.
@@ -65,7 +67,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             },
         )),
         CubeCount::Static(
-            (arguments.tile_point_count + GROUP_SIZE2 - 1) / (GROUP_SIZE2),
+            arguments.tile_point_count.div_ceil(GROUP_SIZE2),
             GROUP_SIZE,
             1,
         ),
