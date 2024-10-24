@@ -30,7 +30,7 @@ var<storage, read_write> point_indices: array<u32>;
 @group(0) @binding(7)
 var<storage, read_write> point_orders: array<u32>;
 
-// The difference in bits between depth to depth order
+// The difference in bits between depth to depth order (before shifting).
 const FACTOR_DEPTH_ORDER: u32 = (4u << 23) + 0xC0000000;
 const GROUP_SIZE: u32 = 256;
 
@@ -87,9 +87,9 @@ fn main(
 // 
 // * Tile order:
 // 
-// | Tile index | 0b llll_llll_llll_llll_rrrr_rrrr_rrrr_rrrr |
-// | Shifting   | << 16                                      |
-// | Tile order | 0b rrrr_rrrr_rrrr_rrrr_0000_0000_0000_0000 |
+// | Tile index |       |   0b llll_llll_llll_llll_rrrr_rrrr_rrrr_rrrr |
+// | Shifting   | << 16 |                                              |
+// | Tile order |       | = 0b rrrr_rrrr_rrrr_rrrr_0000_0000_0000_0000 |
 // 
 // * Depth order range:
 // 
@@ -101,18 +101,17 @@ fn main(
 // | Depth order min |   2^1  |   0b 0_1000_0000_000_0000_0000_0000_0000_0000 |
 // | Depth order max |   2^17 |   0b 0_1001_0000_000_0000_0000_0000_0000_0000 |
 // | Multiplying     | * 2^-4 | - 0b 0_0000_0100_000_0000_0000_0000_0000_0000 |
-// | Depth min       |   2^-3 |   0b 0_0111_1100_000_0000_0000_0000_0000_0000 |
-// | Depth max       |   2^13 |   0b 0_1000_1100_000_0000_0000_0000_0000_0000 |
+// | Depth min       |   2^-3 | = 0b 0_0111_1100_000_0000_0000_0000_0000_0000 |
+// | Depth max       |   2^13 | = 0b 0_1000_1100_000_0000_0000_0000_0000_0000 |
 // 
 // * Depth order:
 // 
 // | Depth       |       |   0b 0_xxxx_xxxx_nnn_nnnn_nnnn_nnnn_nnnn_nnnn |
 // | Multiplying | * 2^4 | + 0b 0_0000_0100_000_0000_0000_0000_0000_0000 |
-// | Depth order |       |   0b 0_1000_xxxx_nnn_nnnn_nnnn_nnnn_nnnn_nnnn |
+// | Depth order |       | = 0b 0_1000_xxxx_nnn_nnnn_nnnn_nnnn_nnnn_nnnn |
 // | Unsetting   |       | + 0b 1_1000_0000_000_0000_0000_0000_0000_0000 |
-// | Depth order |       |   0b 0_0000_xxxx_nnn_nnnn_nnnn_nnnn_nnnn_nnnn |
 // | Shifting    | >> 11 |                                               |
-// | Depth order |       |   0b 0_0000_0000_000_0000_xxxx_nnnn_nnnn_nnnn |
+// | Depth order |       | = 0b 0_0000_0000_000_0000_xxxx_nnnn_nnnn_nnnn |
 // 
 fn make_point_order(tile_index: u32, depth: f32) -> u32 {
     return (tile_index << 16) | (bitcast<u32>(depth) + FACTOR_DEPTH_ORDER >> 11);

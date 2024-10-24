@@ -152,11 +152,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
                 z: 1,
             },
         )),
-        CubeCount::Static(
-            arguments.point_count.div_ceil(GROUP_SIZE),
-            1,
-            1,
-        ),
+        CubeCount::Static(arguments.point_count.div_ceil(GROUP_SIZE), 1, 1),
         vec![
             client.create(bytes_of(&arguments)).binding(),
             inputs.colors_sh.handle.binding(),

@@ -32,6 +32,11 @@ fn sort_on_jit(bencher: Bencher) {
         .with_inputs(data::random_tensor_u32_tensor_u32())
         .bench_local_refs(|(k, v)| {
             main::<WgpuRuntime, f32, i32>(Inputs {
+                count: Tensor::<Wgpu, 1, Int>::from_data(
+                    [k.shape().num_elements()],
+                    &k.device(),
+                )
+                .into_primitive(),
                 keys: k.to_owned().into_primitive(),
                 values: v.to_owned().into_primitive(),
             });

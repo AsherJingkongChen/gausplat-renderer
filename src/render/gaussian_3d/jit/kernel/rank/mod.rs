@@ -11,9 +11,6 @@ pub struct Arguments {
     pub point_count: u32,
     /// `I_x / T_x`
     pub tile_count_x: u32,
-
-    /// `T`
-    pub tile_point_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +38,8 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
 pub const GROUP_SIZE: u32 = 256;
 /// Maximum of `(I_y / T_y) * (I_x / T_x)`
 pub const TILE_COUNT_MAX: u32 = 1 << 16;
+/// `E[T / P]`
+pub const FACTOR_TILE_POINT_COUNT: u32 = 12;
 
 /// Ranking the points.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
@@ -53,15 +52,21 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     let client = &inputs.depths.client;
     let device = &inputs.depths.device;
-    // T
-    let tile_point_count = arguments.tile_point_count as usize;
+    // E[T]
+    // HACK: The actual tile point count should be less than the estimated value.
+    let tile_point_count_estimated =
+        (arguments.point_count * FACTOR_TILE_POINT_COUNT) as usize;
 
     // [T]
-    let point_indices =
-        JitBackend::<R, F, I>::int_empty([tile_point_count].into(), device);
+    let point_indices = JitBackend::<R, F, I>::int_empty(
+        [tile_point_count_estimated].into(),
+        device,
+    );
     // [T]
-    let point_orders =
-        JitBackend::<R, F, I>::int_empty([tile_point_count].into(), device);
+    let point_orders = JitBackend::<R, F, I>::int_empty(
+        [tile_point_count_estimated].into(),
+        device,
+    );
 
     // Launching the kernel
 
@@ -74,11 +79,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
                 z: 1,
             },
         )),
-        CubeCount::Static(
-            arguments.point_count.div_ceil(GROUP_SIZE),
-            1,
-            1,
-        ),
+        CubeCount::Static(arguments.point_count.div_ceil(GROUP_SIZE), 1, 1),
         vec![
             client.create(bytes_of(&arguments)).binding(),
             inputs.depths.handle.binding(),

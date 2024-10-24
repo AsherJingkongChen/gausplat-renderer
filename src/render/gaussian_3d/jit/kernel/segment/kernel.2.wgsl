@@ -1,17 +1,13 @@
-struct Arguments {
-    // T
-    tile_point_count: u32,
-}
+// T
+@group(0) @binding(0) var<storage, read_write>
+tile_point_count: u32;
 
-@group(0) @binding(0)
-var<storage, read> arguments: Arguments;
 // [T] (0 ~ (I_y / T_y) * (I_x / T_x) in high order bits)
-@group(0) @binding(1)
-var<storage, read_write> point_orders: array<u32>;
-
+@group(0) @binding(1) var<storage, read_write>
+point_orders: array<u32>;
 // [I_y / T_y, I_x / T_x, 2]
-@group(0) @binding(2)
-var<storage, read_write> tile_point_ranges: array<array<u32, 2>>;
+@group(0) @binding(2) var<storage, read_write>
+tile_point_ranges: array<array<u32, 2>>;
 
 const GROUP_SIZE: u32 = 256;
 
@@ -25,7 +21,7 @@ fn main(
 
     // (0 ~ T)
     let global_index = (group_id.y * group_count.x + group_id.x) * GROUP_SIZE + local_index;
-    if global_index >= arguments.tile_point_count {
+    if global_index >= tile_point_count {
         return;
     }
 
@@ -50,7 +46,7 @@ fn main(
 
     // Specifying the range of the last point tile
 
-    if global_index + 1 == arguments.tile_point_count {
-        tile_point_ranges[tile_index_current][1] = arguments.tile_point_count;
+    if global_index + 1 == tile_point_count {
+        tile_point_ranges[tile_index_current][1] = tile_point_count;
     }
 }

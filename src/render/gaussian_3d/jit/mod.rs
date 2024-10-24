@@ -11,7 +11,6 @@ pub use transform::FILTER_LOW_PASS;
 
 use burn::tensor::ops::FloatTensorOps;
 use burn_jit::kernel::into_contiguous;
-use bytemuck::from_bytes;
 use kernel::*;
 
 /// Maximum of `I_y * I_x`
@@ -63,6 +62,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let view_bound_y =
         (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
 
+    // TODO: These should be errors, not panics.
     debug_assert!(
         colors_sh_degree_max <= SH_DEGREE_MAX,
         "colors_sh_degree_max should be no more than {SH_DEGREE_MAX}",
@@ -125,26 +125,14 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let outputs_scan = scan::add::main::<R, F, I>(scan::add::Inputs {
         values: outputs_transform.tile_touched_counts,
     });
-    // T
-    let tile_point_count = *from_bytes::<u32>(
-        &outputs_scan
-            .total
-            .client
-            .read(outputs_scan.total.handle.binding()),
-    );
-    #[cfg(debug_assertions)]
-    log::info!(
-        target: "gausplat::renderer::gaussian_3d::forward",
-        "scan > tile_point_count ({tile_point_count})",
-    );
 
-    debug_assert_ne!(tile_point_count, 0);
+    #[cfg(debug_assertions)]
+    log::info!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
 
     let outputs_rank = rank::main::<R, F, I>(
         rank::Arguments {
             point_count,
             tile_count_x,
-            tile_point_count,
         },
         rank::Inputs {
             depths: outputs_transform.depths.to_owned(),
@@ -160,6 +148,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     // Sorting the points by its tile index and depth
 
     let outputs_sort = sort::radix::main::<R, F, I>(sort::radix::Inputs {
+        count: outputs_scan.total.to_owned(),
         keys: outputs_rank.point_orders,
         values: outputs_rank.point_indices,
     });
@@ -170,10 +159,10 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         segment::Arguments {
             tile_count_x,
             tile_count_y,
-            tile_point_count,
         },
         segment::Inputs {
             point_orders: outputs_sort.keys,
+            tile_point_count: outputs_scan.total,
         },
     );
     #[cfg(debug_assertions)]

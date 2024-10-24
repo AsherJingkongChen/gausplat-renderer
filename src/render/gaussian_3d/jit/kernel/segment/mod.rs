@@ -2,13 +2,10 @@ pub use super::*;
 pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::IntTensorOps;
-use bytemuck::bytes_of;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
-    /// `T`
-    pub tile_point_count: u32,
     /// `I_x / T_x`
     pub tile_count_x: u32,
     /// `I_y / T_y`
@@ -19,6 +16,8 @@ pub struct Arguments {
 pub struct Inputs<R: JitRuntime, I: IntElement> {
     /// `[T]`
     pub point_orders: JitTensor<R, I>,
+    /// `T`
+    pub tile_point_count: JitTensor<R, I>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,13 +36,16 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     arguments: Arguments,
     inputs: Inputs<R, I>,
 ) -> Outputs<R, I> {
-    impl_kernel_source!(Kernel, "kernel.wgsl");
+    impl_kernel_source!(Kernel1, "kernel.1.wgsl");
+    impl_kernel_source!(Kernel2, "kernel.2.wgsl");
 
     // Specifying the parameters
 
     let client = &inputs.point_orders.client;
     let device = &inputs.point_orders.device;
 
+    // (T / G^2, G, 1)
+    let group_count = JitBackend::<R, F, I>::int_empty([3].into(), device);
     // [I_y / T_y, I_x / T_x, 2]
     let tile_point_ranges = JitBackend::<R, F, I>::int_zeros(
         [
@@ -55,24 +57,31 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         device,
     );
 
-    // Launching the kernel
+    // Launching the kernel 1
+
+    client.execute(
+        Box::new(SourceKernel::new(Kernel1, CubeDim { x: 1, y: 1, z: 1 })),
+        CubeCount::Static(1, 1, 1),
+        vec![
+            inputs.tile_point_count.handle.to_owned().binding(),
+            group_count.handle.to_owned().binding(),
+        ],
+    );
+
+    // Launching the kernel 2
 
     client.execute(
         Box::new(SourceKernel::new(
-            Kernel,
+            Kernel2,
             CubeDim {
                 x: GROUP_SIZE,
                 y: 1,
                 z: 1,
             },
         )),
-        CubeCount::Static(
-            arguments.tile_point_count.div_ceil(GROUP_SIZE2),
-            GROUP_SIZE,
-            1,
-        ),
+        CubeCount::Dynamic(group_count.handle.binding()),
         vec![
-            client.create(bytes_of(&arguments)).binding(),
+            inputs.tile_point_count.handle.binding(),
             inputs.point_orders.handle.binding(),
             tile_point_ranges.handle.to_owned().binding(),
         ],

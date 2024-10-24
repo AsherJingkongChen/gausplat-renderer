@@ -8,14 +8,14 @@ use std::mem::swap;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
-    /// `N / N'`
-    pub block_count_group: u32,
     /// `(0 ~ 32: +log2(R))`
     pub radix_shift: u32,
 }
 
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime, I: IntElement> {
+    /// The count of items to sort.
+    pub count: JitTensor<R, I>,
     /// The keys of items to sort.
     pub keys: JitTensor<R, I>,
     /// The values of items to sort.
@@ -30,12 +30,17 @@ pub struct Outputs<R: JitRuntime, I: IntElement> {
     pub values: JitTensor<R, I>,
 }
 
-/// `K`
+/// `log2(N')`
+// HACK: Empirically determined
 pub const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
+/// `2 * N' / G >= N / (N / N' * G)`
+pub const GROUP_COUNT_MAX: u32 = (2 << BLOCK_COUNT_GROUP_SHIFT) / GROUP_SIZE;
 /// `G <- R`
-pub const GROUP_SIZE: u32 = RADIX_COUNT;
+pub const GROUP_SIZE: u32 = RADIX_COUNT as u32;
+/// `|Key|`
+pub const KEY_BIT_COUNT: usize = size_of::<u32>() << 3;
 /// `R`
-pub const RADIX_COUNT: u32 = 1 << RADIX_COUNT_SHIFT;
+pub const RADIX_COUNT: usize = 1 << RADIX_COUNT_SHIFT;
 /// `log2(R)`
 pub const RADIX_COUNT_SHIFT: u32 = 8;
 
@@ -43,8 +48,11 @@ pub const RADIX_COUNT_SHIFT: u32 = 8;
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     inputs: Inputs<R, I>
 ) -> Outputs<R, I> {
+    debug_assert_eq!(size_of::<I>(), KEY_BIT_COUNT >> 3);
+
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");
     impl_kernel_source!(Kernel2, "kernel.2.wgsl");
+    impl_kernel_source!(Kernel3, "kernel.3.wgsl");
 
     // Specifying the parameters
 
@@ -52,58 +60,47 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let mut keys_input = inputs.keys;
     // [N]
     let mut values_input = inputs.values;
-    let device = &keys_input.device.to_owned();
     // N
     let count = keys_input.shape.dims[0];
-    // N / N' <- N / 2^K
-    let block_count_group = (count as u32 >> BLOCK_COUNT_GROUP_SHIFT).max(1);
-    // G * N / N'
-    let block_size = block_count_group * GROUP_SIZE;
-    // N' / G <- N / (G * N / N')
-    let group_count = (count as u32).div_ceil(block_size);
+    let device = &keys_input.device.to_owned();
 
-    let mut arguments = Arguments {
-        block_count_group,
-        radix_shift: 0,
-    };
+    let mut arguments = Arguments { radix_shift: 0 };
+    // (N' / G, 1, 1)
+    let group_count = JitBackend::<R, F, I>::int_empty([3].into(), device);
     // [N]
     let mut keys_output =
         JitBackend::<R, F, I>::int_empty([count].into(), device);
     // [N]
     let mut values_output =
         JitBackend::<R, F, I>::int_empty([count].into(), device);
-    // [N' / G, R]
+    // [2 * N' / G, R]
     let counts_radix_group = JitBackend::<R, F, I>::int_empty(
-        [group_count as usize, RADIX_COUNT as usize].into(),
+        [GROUP_COUNT_MAX as usize, RADIX_COUNT].into(),
         device,
     );
 
-    let pass = |radix_shift: u32| {
+    // Launching the kernel 1
+
+    keys_input.client.execute(
+        Box::new(SourceKernel::new(Kernel1, CubeDim { x: 1, y: 1, z: 1 })),
+        CubeCount::Static(1, 1, 1),
+        vec![
+            inputs.count.handle.to_owned().binding(),
+            group_count.handle.to_owned().binding(),
+        ],
+    );
+
+    // Launching the kernel 2 and 3 iteratively
+
+    for radix_shift in
+        (0..KEY_BIT_COUNT as u32).step_by(RADIX_COUNT_SHIFT as usize)
+    {
         // Specifying the parameters for the pass
 
         arguments.radix_shift = radix_shift;
 
         let client = &keys_input.client;
         let arguments = client.create(bytes_of(&arguments));
-
-        // Launching the kernel 1
-
-        client.execute(
-            Box::new(SourceKernel::new(
-                Kernel1,
-                CubeDim {
-                    x: GROUP_SIZE,
-                    y: 1,
-                    z: 1,
-                },
-            )),
-            CubeCount::Static(group_count, 1, 1),
-            vec![
-                arguments.to_owned().binding(),
-                keys_input.handle.to_owned().binding(),
-                counts_radix_group.handle.to_owned().binding(),
-            ],
-        );
 
         // Launching the kernel 2
 
@@ -116,9 +113,30 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
                     z: 1,
                 },
             )),
-            CubeCount::Static(group_count, 1, 1),
+            CubeCount::Dynamic(group_count.handle.to_owned().binding()),
+            vec![
+                arguments.to_owned().binding(),
+                inputs.count.handle.to_owned().binding(),
+                keys_input.handle.to_owned().binding(),
+                counts_radix_group.handle.to_owned().binding(),
+            ],
+        );
+
+        // Launching the kernel 3
+
+        client.execute(
+            Box::new(SourceKernel::new(
+                Kernel3,
+                CubeDim {
+                    x: GROUP_SIZE,
+                    y: 1,
+                    z: 1,
+                },
+            )),
+            CubeCount::Dynamic(group_count.handle.to_owned().binding()),
             vec![
                 arguments.binding(),
+                inputs.count.handle.to_owned().binding(),
                 counts_radix_group.handle.to_owned().binding(),
                 keys_input.handle.to_owned().binding(),
                 values_input.handle.to_owned().binding(),
@@ -131,9 +149,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
         swap(&mut keys_input, &mut keys_output);
         swap(&mut values_input, &mut values_output);
-    };
-
-    (0..32).step_by(RADIX_COUNT_SHIFT as usize).for_each(pass);
+    }
 
     Outputs {
         keys: keys_input,
@@ -178,7 +194,12 @@ mod tests {
             B::int_from_data(TensorData::new(keys_source, [count]), device);
         let values =
             B::int_from_data(TensorData::new(values_source, [count]), device);
-        let Outputs { keys, values } = main::<R, F, I>(Inputs { keys, values });
+        let count = B::int_from_data([count].into(), device);
+        let Outputs { keys, values } = main::<R, F, I>(Inputs {
+            count,
+            keys,
+            values,
+        });
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
         let keys_output = cast_slice::<u8, u32>(keys_output);
         let values_output =
@@ -246,7 +267,12 @@ mod tests {
             B::int_from_data(TensorData::new(keys_source, [count]), device);
         let values =
             B::int_from_data(TensorData::new(values_source, [count]), device);
-        let Outputs { keys, values } = main::<R, F, I>(Inputs { keys, values });
+        let count = B::int_from_data([count].into(), device);
+        let Outputs { keys, values } = main::<R, F, I>(Inputs {
+            count,
+            keys,
+            values,
+        });
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
         let keys_output = cast_slice::<u8, u32>(keys_output);
         let values_output =
