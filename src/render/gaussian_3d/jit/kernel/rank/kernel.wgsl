@@ -17,9 +17,11 @@ var<storage, read_write> radii: array<u32>;
 @group(0) @binding(3)
 var<storage, read_write> tile_touched_offsets: array<u32>;
 // [P, 2]
+// TODO: Merge group 6
 @group(0) @binding(4)
 var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
 // [P, 2]
+// TODO: Merge group 6
 @group(0) @binding(5)
 var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
 

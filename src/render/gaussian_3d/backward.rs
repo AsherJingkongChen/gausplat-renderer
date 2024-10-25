@@ -10,8 +10,6 @@ pub struct RenderInput<B: Backend> {
     pub colors_sh_degree_max: u32,
     /// `[P, 2, 2]`
     pub conics: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub covariances_3d: B::FloatTensorPrimitive,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive,
     /// `f_x <- I_x / tan(Fov_x / 2) / 2`
@@ -40,18 +38,10 @@ pub struct RenderInput<B: Backend> {
     pub positions_2d: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub positions_3d: B::FloatTensorPrimitive,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized: B::FloatTensorPrimitive,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized_clamped: B::FloatTensorPrimitive,
     /// `[P]`
     pub radii: B::IntTensorPrimitive,
     /// `[P, 4]`
     pub rotations: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotations_matrix: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotation_scalings: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,
     /// `I_x / T_x`
@@ -70,6 +60,10 @@ pub struct RenderInput<B: Backend> {
     pub view_offsets: B::FloatTensorPrimitive,
     /// `[3 (+ 1), 3]`
     pub view_rotation: B::FloatTensorPrimitive,
+    /// `tan(Fov_x / 2) * (C_f + 1)`
+    pub view_bound_x: f32,
+    /// `tan(Fov_y / 2) * (C_f + 1)`
+    pub view_bound_y: f32,
 }
 
 #[derive(Clone, Debug)]

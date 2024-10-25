@@ -39,9 +39,7 @@ pub struct Inputs<R: JitRuntime, F: FloatElement> {
     pub rotations: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,
-    /// `[3]`
-    pub view_position: JitTensor<R, F>,
-    /// `[3 (+ 1), 4]`
+    /// `[3 (+ 1), 3 + 1 + 1]`
     pub view_transform: JitTensor<R, F>,
 }
 
@@ -51,24 +49,14 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub colors_rgb_3d: JitTensor<R, F>,
     /// `[P, 2, 2]`
     pub conics: JitTensor<R, F>,
-    /// `[P, 3 (+ 1), 3]`
-    pub covariances_3d: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
     /// `[P, 2]`
     pub positions_2d: JitTensor<R, F>,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized: JitTensor<R, F>,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized_clamped: JitTensor<R, F>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotations_matrix: JitTensor<R, F>,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotation_scalings: JitTensor<R, F>,
     /// `[P]`
     pub tile_touched_counts: JitTensor<R, I>,
     /// `[P, 2]`
@@ -105,29 +93,13 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
     let conics =
         JitBackend::<R, F, I>::float_empty([point_count, 2, 2].into(), device);
-    let covariances_3d = JitBackend::<R, F, I>::float_empty(
-        [point_count, 3 + 1, 3].into(),
-        device,
-    );
     let depths =
         JitBackend::<R, F, I>::float_empty([point_count].into(), device);
     let is_colors_rgb_3d_not_clamped =
         JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
     let positions_2d =
         JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
-    let positions_3d_in_normalized =
-        JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
-    let positions_3d_in_normalized_clamped =
-        JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
     let radii = JitBackend::<R, F, I>::int_empty([point_count].into(), device);
-    let rotations_matrix = JitBackend::<R, F, I>::float_empty(
-        [point_count, 3 + 1, 3].into(),
-        device,
-    );
-    let rotation_scalings = JitBackend::<R, F, I>::float_empty(
-        [point_count, 3 + 1, 3].into(),
-        device,
-    );
     let tile_touched_counts =
         JitBackend::<R, F, I>::int_empty([point_count].into(), device);
     let tiles_touched_max =
@@ -159,22 +131,13 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.positions_3d.handle.binding(),
             inputs.rotations.handle.binding(),
             inputs.scalings.handle.binding(),
-            inputs.view_position.handle.binding(),
             inputs.view_transform.handle.binding(),
             colors_rgb_3d.handle.to_owned().binding(),
             conics.handle.to_owned().binding(),
-            covariances_3d.handle.to_owned().binding(),
             depths.handle.to_owned().binding(),
             is_colors_rgb_3d_not_clamped.handle.to_owned().binding(),
             positions_2d.handle.to_owned().binding(),
-            positions_3d_in_normalized.handle.to_owned().binding(),
-            positions_3d_in_normalized_clamped
-                .handle
-                .to_owned()
-                .binding(),
             radii.handle.to_owned().binding(),
-            rotations_matrix.handle.to_owned().binding(),
-            rotation_scalings.handle.to_owned().binding(),
             tile_touched_counts.handle.to_owned().binding(),
             tiles_touched_max.handle.to_owned().binding(),
             tiles_touched_min.handle.to_owned().binding(),
@@ -187,15 +150,10 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     Outputs {
         colors_rgb_3d,
         conics,
-        covariances_3d,
         depths,
         is_colors_rgb_3d_not_clamped,
         positions_2d,
-        positions_3d_in_normalized,
-        positions_3d_in_normalized_clamped,
         radii,
-        rotations_matrix,
-        rotation_scalings,
         tile_touched_counts,
         tiles_touched_max,
         tiles_touched_min,

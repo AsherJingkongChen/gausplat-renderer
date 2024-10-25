@@ -19,6 +19,10 @@ pub struct Arguments {
     pub image_size_half_y: f32,
     /// `P`
     pub point_count: u32,
+    /// `tan(Fov_x / 2) * (C_f + 1)`
+    pub view_bound_x: f32,
+    /// `tan(Fov_y / 2) * (C_f + 1)`
+    pub view_bound_y: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -31,26 +35,18 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub conics: JitTensor<R, F>,
     /// `[P, 2, 2]`
     pub conics_grad: JitTensor<R, F>,
-    /// `[P, 3 (+ 1)]`
-    pub covariances_3d: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,
     /// `[P, 3 (+ 1)]`
     pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
     /// `[P, 2]`
     pub positions_2d_grad: JitTensor<R, F>,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized: JitTensor<R, F>,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized_clamped: JitTensor<R, F>,
+    /// `[P, 3]`
+    pub positions_3d: JitTensor<R, F>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
     /// `[P, 4]`
     pub rotations: JitTensor<R, F>,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotations_matrix: JitTensor<R, F>,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotation_scalings: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,
     /// `[P, 2, 3]`
@@ -123,16 +119,12 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.colors_sh.handle.binding(),
             inputs.conics.handle.binding(),
             inputs.conics_grad.handle.binding(),
-            inputs.covariances_3d.handle.binding(),
             inputs.depths.handle.binding(),
             inputs.is_colors_rgb_3d_not_clamped.handle.binding(),
             inputs.positions_2d_grad.handle.binding(),
-            inputs.positions_3d_in_normalized.handle.binding(),
-            inputs.positions_3d_in_normalized_clamped.handle.binding(),
+            inputs.positions_3d.handle.binding(),
             inputs.radii.handle.binding(),
             inputs.rotations.handle.binding(),
-            inputs.rotations_matrix.handle.binding(),
-            inputs.rotation_scalings.handle.binding(),
             inputs.scalings.handle.binding(),
             inputs.transforms_2d.handle.binding(),
             inputs.view_directions.handle.binding(),

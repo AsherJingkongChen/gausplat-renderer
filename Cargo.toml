@@ -5,6 +5,7 @@ license-file = "LICENSE"
 name = "gausplat-renderer"
 publish = false
 readme = "README.md"
+rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
