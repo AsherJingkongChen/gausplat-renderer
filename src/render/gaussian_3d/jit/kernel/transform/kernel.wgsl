@@ -68,18 +68,6 @@ var<storage, read_write> tile_touched_counts: array<u32>;
 // [P, 4] (x max, x min, y max, y min)
 @group(0) @binding(13)
 var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
-// [P, 2, 3]
-// TODO: Reduce group 7
-@group(0) @binding(14)
-var<storage, read_write> transforms_2d: array<mat3x2<f32>>;
-// [P, 3 (+ 1)]
-// TODO: Reduce group 8
-@group(0) @binding(15)
-var<storage, read_write> view_directions: array<vec3<f32>>;
-// [P, 3 (+ 1)]
-// TODO: Reduce group 8
-@group(0) @binding(16)
-var<storage, read_write> view_offsets: array<vec3<f32>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -142,8 +130,7 @@ fn main(
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
     let view_rotation = view_transform.rotation;
-    let view_translation = view_transform.translation;
-    let position_3d_in_view = view_rotation * position_3d + view_translation;
+    let position_3d_in_view = view_rotation * position_3d + view_transform.translation;
     let depth = position_3d_in_view.z;
 
     // Performing viewing-frustum culling
@@ -151,19 +138,6 @@ fn main(
     if depth < DEPTH_MIN || depth >= DEPTH_MAX {
         return;
     }
-
-    // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // Pv'[2, 1] <- Pv[3, 1]
-    // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
-    //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
-
-    let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
-    let position_3d_in_normalized = position_3d_in_view.xy / depth;
-    let position_3d_in_clip = position_3d_in_normalized * focal_length;
-    let position_2d = position_3d_in_clip + vec2<f32>(
-        arguments.image_size_half_x,
-        arguments.image_size_half_y,
-    ) - 0.5;
 
     // Converting the quaternion to rotation matrix
     // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
@@ -218,6 +192,19 @@ fn main(
         rotation_matrix[2] * scaling[2],
     );
     let covariance_3d = rotation_scaling * transpose(rotation_scaling);
+
+    // Transforming the 3D position to 2D position (view => normalized => clip => screen)
+    // Pv'[2, 1] <- Pv[3, 1]
+    // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
+    //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
+
+    let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
+    let position_3d_in_normalized = position_3d_in_view.xy / depth;
+    let position_3d_in_clip = position_3d_in_normalized * focal_length;
+    let position_2d = position_3d_in_clip + vec2<f32>(
+        arguments.image_size_half_x,
+        arguments.image_size_half_y,
+    ) - 0.5;
 
     // Projecting the 3D covariance matrix into 2D covariance matrix
     // T[2, 3] = J[2, 3] * Rv[3, 3]
@@ -417,12 +404,6 @@ fn main(
     tile_touched_counts[index] = tile_point_count;
     // [P, 4]
     tiles_touched_bound[index] = tile_touched_bound;
-    // [P, 2, 3]
-    transforms_2d[index] = transform_2d;
-    // [P, 3 (+ 1)]
-    view_directions[index] = view_direction;
-    // [P, 3 (+ 1)]
-    view_offsets[index] = view_offset;
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

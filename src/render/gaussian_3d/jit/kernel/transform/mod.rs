@@ -61,12 +61,6 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub tile_touched_counts: JitTensor<R, I>,
     /// `[P, 4]`
     pub tiles_touched_bound: JitTensor<R, I>,
-    /// `[P, 2, 3]`
-    pub transforms_2d: JitTensor<R, F>,
-    /// `[P, 3 (+ 1)]`
-    pub view_directions: JitTensor<R, F>,
-    /// `[P, 3 (+ 1)]`
-    pub view_offsets: JitTensor<R, F>,
 }
 
 /// `C_f`
@@ -102,12 +96,6 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         JitBackend::<R, F, I>::int_empty([point_count].into(), device);
     let tiles_touched_bound =
         JitBackend::<R, F, I>::int_empty([point_count, 4].into(), device);
-    let transforms_2d =
-        JitBackend::<R, F, I>::float_empty([point_count, 2, 3].into(), device);
-    let view_directions =
-        JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
-    let view_offsets =
-        JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
 
     // Launching the kernel
 
@@ -136,9 +124,6 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             radii.handle.to_owned().binding(),
             tile_touched_counts.handle.to_owned().binding(),
             tiles_touched_bound.handle.to_owned().binding(),
-            transforms_2d.handle.to_owned().binding(),
-            view_directions.handle.to_owned().binding(),
-            view_offsets.handle.to_owned().binding(),
         ],
     );
 
@@ -151,8 +136,5 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         radii,
         tile_touched_counts,
         tiles_touched_bound,
-        transforms_2d,
-        view_directions,
-        view_offsets,
     }
 }

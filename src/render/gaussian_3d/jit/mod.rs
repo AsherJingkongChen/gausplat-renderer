@@ -218,13 +218,10 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             tile_count_x,
             tile_count_y,
             tile_point_ranges: outputs_segment.tile_point_ranges,
-            transforms_2d: outputs_transform.transforms_2d,
             transmittances: outputs_rasterize.transmittances,
             view_bound_x,
             view_bound_y,
-            view_directions: outputs_transform.view_directions,
-            view_offsets: outputs_transform.view_offsets,
-            view_rotation: view_transform,
+            view_transform: view_transform,
         },
     }
 }
@@ -291,10 +288,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             radii: state.radii,
             rotations: state.rotations,
             scalings: state.scalings,
-            transforms_2d: state.transforms_2d,
-            view_directions: state.view_directions,
-            view_offsets: state.view_offsets,
-            view_rotation: state.view_rotation,
+            view_transform: state.view_transform,
         },
     );
     #[cfg(debug_assertions)]
