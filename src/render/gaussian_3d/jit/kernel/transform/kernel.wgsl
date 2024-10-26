@@ -11,10 +11,10 @@ struct Arguments {
     image_size_half_y: f32,
     // P
     point_count: u32,
-    // I_x / T_x
-    tile_count_x: u32,
-    // I_y / T_y
-    tile_count_y: u32,
+    // I_x / T_x (0 ~ )
+    tile_count_x: i32,
+    // I_y / T_y (0 ~ )
+    tile_count_y: i32,
     // tan(Fov_x / 2) * (C_f + 1)
     view_bound_x: f32,
     // tan(Fov_y / 2) * (C_f + 1)
@@ -50,7 +50,7 @@ var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(7)
 var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P]
+// [P] (0 ~ )
 @group(0) @binding(8)
 var<storage, read_write> depths: array<f32>;
 // [P, 3 (+ 1)] (0.0, 1.0)
@@ -65,25 +65,20 @@ var<storage, read_write> radii: array<u32>;
 // [P]
 @group(0) @binding(12)
 var<storage, read_write> tile_touched_counts: array<u32>;
-// [P, 2]
-// TODO: Merge group 6
+// [P, 4] (x max, x min, y max, y min)
 @group(0) @binding(13)
-var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
-// [P, 2]
-// TODO: Merge group 6
-@group(0) @binding(14)
-var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
+var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
 // [P, 2, 3]
 // TODO: Reduce group 7
-@group(0) @binding(15)
+@group(0) @binding(14)
 var<storage, read_write> transforms_2d: array<mat3x2<f32>>;
 // [P, 3 (+ 1)]
 // TODO: Reduce group 8
-@group(0) @binding(16)
+@group(0) @binding(15)
 var<storage, read_write> view_directions: array<vec3<f32>>;
 // [P, 3 (+ 1)]
 // TODO: Reduce group 8
-@group(0) @binding(17)
+@group(0) @binding(16)
 var<storage, read_write> view_offsets: array<vec3<f32>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
@@ -286,10 +281,9 @@ fn main(
     // r = √λ_max
 
     let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
-    let eigenvalue_difference = max(
-        FILTER_LOW_PASS,
-        sqrt(covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det),
-    );
+    let eigenvalue_difference2 =
+        covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det;
+    let eigenvalue_difference = sqrt(max(eigenvalue_difference2, 0.09));
     let eigenvalue_max = max(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
@@ -297,26 +291,26 @@ fn main(
     let radius = ceil(sqrt(eigenvalue_max) * FACTOR_RADIUS);
 
     // Checking the tiles touched
+    // (x max, x min, y max, y min)
 
-    let tile_touched_max = clamp(
-        vec2<u32>(
-            u32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
-            u32((position_2d.y + radius + TILE_SIZE_Y - 1.0) / TILE_SIZE_Y),
-        ),
-        vec2<u32>(),
-        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
-    );
-    let tile_touched_min = clamp(
-        vec2<u32>(
-            u32((position_2d.x - radius) / TILE_SIZE_X),
-            u32((position_2d.y - radius) / TILE_SIZE_Y),
-        ),
-        vec2<u32>(),
-        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
+    let tile_touched_bound = bitcast<vec4<u32>>(
+        clamp(
+            vec4<i32>(
+                i32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
+                i32((position_2d.x - radius) / TILE_SIZE_X),
+                i32((position_2d.y + radius + TILE_SIZE_Y - 1.0) / TILE_SIZE_Y),
+                i32((position_2d.y - radius) / TILE_SIZE_Y),
+            ),
+            vec4<i32>(),
+            vec4<i32>(
+                arguments.tile_count_x, arguments.tile_count_x,
+                arguments.tile_count_y, arguments.tile_count_y,
+            ),
+        )
     );
     let tile_point_count =
-        (tile_touched_max.x - tile_touched_min.x) *
-        (tile_touched_max.y - tile_touched_min.y);
+        (tile_touched_bound[0] - tile_touched_bound[1]) *
+        (tile_touched_bound[2] - tile_touched_bound[3]);
 
     // Leaving if no tile is touched
 
@@ -421,10 +415,8 @@ fn main(
     radii[index] = u32(radius);
     // [P]
     tile_touched_counts[index] = tile_point_count;
-    // [P, 2]
-    tiles_touched_max[index] = tile_touched_max;
-    // [P, 2]
-    tiles_touched_min[index] = tile_touched_min;
+    // [P, 4]
+    tiles_touched_bound[index] = tile_touched_bound;
     // [P, 2, 3]
     transforms_2d[index] = transform_2d;
     // [P, 3 (+ 1)]

@@ -21,10 +21,8 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub radii: JitTensor<R, I>,
     /// `[P]`
     pub tile_touched_offsets: JitTensor<R, I>,
-    /// `[P, 2]`
-    pub tiles_touched_max: JitTensor<R, I>,
-    /// `[P, 2]`
-    pub tiles_touched_min: JitTensor<R, I>,
+    /// `[P, 4]`
+    pub tiles_touched_bound: JitTensor<R, I>,
 }
 
 #[derive(Clone, Debug)]
@@ -85,8 +83,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.depths.handle.binding(),
             inputs.radii.handle.binding(),
             inputs.tile_touched_offsets.handle.binding(),
-            inputs.tiles_touched_max.handle.binding(),
-            inputs.tiles_touched_min.handle.binding(),
+            inputs.tiles_touched_bound.handle.binding(),
             point_indices.handle.to_owned().binding(),
             point_orders.handle.to_owned().binding(),
         ],

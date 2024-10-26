@@ -20,9 +20,9 @@ pub struct Arguments {
     /// `P`
     pub point_count: u32,
     /// `I_x / T_x`
-    pub tile_count_x: u32,
+    pub tile_count_x: i32,
     /// `I_y / T_y`
-    pub tile_count_y: u32,
+    pub tile_count_y: i32,
     /// `tan(Fov_x / 2) * (C_f + 1)`
     pub view_bound_x: f32,
     /// `tan(Fov_y / 2) * (C_f + 1)`
@@ -59,10 +59,8 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub radii: JitTensor<R, I>,
     /// `[P]`
     pub tile_touched_counts: JitTensor<R, I>,
-    /// `[P, 2]`
-    pub tiles_touched_max: JitTensor<R, I>,
-    /// `[P, 2]`
-    pub tiles_touched_min: JitTensor<R, I>,
+    /// `[P, 4]`
+    pub tiles_touched_bound: JitTensor<R, I>,
     /// `[P, 2, 3]`
     pub transforms_2d: JitTensor<R, F>,
     /// `[P, 3 (+ 1)]`
@@ -102,10 +100,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let radii = JitBackend::<R, F, I>::int_empty([point_count].into(), device);
     let tile_touched_counts =
         JitBackend::<R, F, I>::int_empty([point_count].into(), device);
-    let tiles_touched_max =
-        JitBackend::<R, F, I>::int_empty([point_count, 2].into(), device);
-    let tiles_touched_min =
-        JitBackend::<R, F, I>::int_empty([point_count, 2].into(), device);
+    let tiles_touched_bound =
+        JitBackend::<R, F, I>::int_empty([point_count, 4].into(), device);
     let transforms_2d =
         JitBackend::<R, F, I>::float_empty([point_count, 2, 3].into(), device);
     let view_directions =
@@ -139,8 +135,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             positions_2d.handle.to_owned().binding(),
             radii.handle.to_owned().binding(),
             tile_touched_counts.handle.to_owned().binding(),
-            tiles_touched_max.handle.to_owned().binding(),
-            tiles_touched_min.handle.to_owned().binding(),
+            tiles_touched_bound.handle.to_owned().binding(),
             transforms_2d.handle.to_owned().binding(),
             view_directions.handle.to_owned().binding(),
             view_offsets.handle.to_owned().binding(),
@@ -155,8 +150,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         positions_2d,
         radii,
         tile_touched_counts,
-        tiles_touched_max,
-        tiles_touched_min,
+        tiles_touched_bound,
         transforms_2d,
         view_directions,
         view_offsets,

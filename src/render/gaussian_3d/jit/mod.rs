@@ -108,8 +108,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             image_size_half_x,
             image_size_half_y,
             point_count,
-            tile_count_x,
-            tile_count_y,
+            tile_count_x: tile_count_x as i32,
+            tile_count_y: tile_count_y as i32,
             view_bound_x,
             view_bound_y,
         },
@@ -142,8 +142,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             depths: outputs_transform.depths.to_owned(),
             radii: outputs_transform.radii.to_owned(),
             tile_touched_offsets: outputs_scan.values,
-            tiles_touched_max: outputs_transform.tiles_touched_max,
-            tiles_touched_min: outputs_transform.tiles_touched_min,
+            tiles_touched_bound: outputs_transform.tiles_touched_bound,
         },
     );
     #[cfg(debug_assertions)]
