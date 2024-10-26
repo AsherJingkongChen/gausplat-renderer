@@ -2,7 +2,7 @@ pub use super::*;
 
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub colors_rgb_3d: B::FloatTensorPrimitive,
     /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
@@ -24,7 +24,7 @@ pub struct RenderInput<B: Backend> {
     pub image_size_x: u32,
     /// `I_y`
     pub image_size_y: u32,
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive,
     /// `[P]`
     pub opacities_3d: B::FloatTensorPrimitive,

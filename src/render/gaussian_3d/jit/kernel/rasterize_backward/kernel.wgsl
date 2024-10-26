@@ -10,9 +10,9 @@ var<storage, read_write> arguments: Arguments;
 // [I_y, I_x, 3]
 @group(0) @binding(1)
 var<storage, read_write> colors_rgb_2d_grad: array<array<f32, 3>>;
-// [P, 3 (+ 1)] (0.0 ~ 1.0)
+// [P, 3] (0.0 ~ 1.0)
 @group(0) @binding(2)
-var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(3)
 var<storage, read_write> conics: array<mat2x2<f32>>;
@@ -35,7 +35,7 @@ var<storage, read_write> tile_point_ranges: array<vec2<u32>>;
 @group(0) @binding(9)
 var<storage, read_write> transmittances: array<f32>;
 
-// [P, 3 (+ 1)]
+// [P, 3]
 @group(0) @binding(10)
 var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
 // [P, 2, 2] (Symmetric)
@@ -128,7 +128,7 @@ fn main(
         let index = point_range.y - batch_index * BATCH_SIZE - local_index - 1;
         if index >= point_range.x {
             let point_index = point_indices[index];
-            colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
+            colors_rgb_3d_in_batch[local_index] = vec_from_array_f32_3(colors_rgb_3d[point_index]);
             conics_in_batch[local_index] = conics[point_index];
             opacities_3d_in_batch[local_index] = opacities_3d[point_index];
             point_indices_in_batch[local_index] = point_index;
@@ -254,10 +254,10 @@ fn main(
 
             let point_index = point_indices_in_batch[batch_index];
 
-            // [P, 3 (+ 1)]
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 0], color_rgb_3d_grad[0]);
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 1], color_rgb_3d_grad[1]);
-            atomicAdd(&colors_rgb_3d_grad[4 * point_index + 2], color_rgb_3d_grad[2]);
+            // [P, 3]
+            atomicAdd(&colors_rgb_3d_grad[3 * point_index + 0], color_rgb_3d_grad[0]);
+            atomicAdd(&colors_rgb_3d_grad[3 * point_index + 1], color_rgb_3d_grad[1]);
+            atomicAdd(&colors_rgb_3d_grad[3 * point_index + 2], color_rgb_3d_grad[2]);
             // [P, 2, 2]
             atomicAdd(&conics_grad[4 * point_index + 0], conic_grad[0][0]);
             atomicAdd(&conics_grad[4 * point_index + 1], conic_grad[0][1]);
@@ -272,4 +272,8 @@ fn main(
 
         tile_point_count -= batch_point_count;
     }
+}
+
+fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {
+    return vec3<f32>(a[0], a[1], a[2]);
 }

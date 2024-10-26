@@ -44,18 +44,18 @@ var<storage, read_write> scalings: array<array<f32, 3>>;
 @group(0) @binding(5)
 var<storage, read_write> view_transform: ViewTransform;
 
-// [P, 3 (+ 1)] (0.0, 1.0)
+// [P, 3] (0.0, 1.0)
 @group(0) @binding(6)
-var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(7)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P] (0 ~ )
 @group(0) @binding(8)
 var<storage, read_write> depths: array<f32>;
-// [P, 3 (+ 1)] (0.0, 1.0)
+// [P, 3] (0.0, 1.0)
 @group(0) @binding(9)
-var<storage, read_write> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
+var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
 // [P, 2]
 @group(0) @binding(10)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
@@ -388,14 +388,16 @@ fn main(
 
     // Specifying the results
 
-    // [P, 3 (+ 1)]
-    colors_rgb_3d[index] = color_rgb_3d;
+    // [P, 3]
+    colors_rgb_3d[index] = array_from_vec3_f32(color_rgb_3d);
     // [P, 2, 2]
     conics[index] = conic;
     // [P]
     depths[index] = depth;
-    // [P, 3 (+ 1)]
-    is_colors_rgb_3d_not_clamped[index] = vec3<f32>(is_color_rgb_3d_not_clamped);
+    // [P, 3]
+    is_colors_rgb_3d_not_clamped[index] = array_from_vec3_f32(
+        vec3<f32>(is_color_rgb_3d_not_clamped)
+    );
     // [P, 2]
     positions_2d[index] = position_2d;
     // [P]
@@ -404,6 +406,10 @@ fn main(
     tile_touched_counts[index] = tile_point_count;
     // [P, 4]
     tiles_touched_bound[index] = tile_touched_bound;
+}
+
+fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
+    return array<f32, 3>(v[0], v[1], v[2]);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

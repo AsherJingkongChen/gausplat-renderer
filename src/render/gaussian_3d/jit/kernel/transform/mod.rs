@@ -45,13 +45,13 @@ pub struct Inputs<R: JitRuntime, F: FloatElement> {
 
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub colors_rgb_3d: JitTensor<R, F>,
     /// `[P, 2, 2]`
     pub conics: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
     /// `[P, 2]`
     pub positions_2d: JitTensor<R, F>,
@@ -82,13 +82,13 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let point_count = arguments.point_count as usize;
 
     let colors_rgb_3d =
-        JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
+        JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
     let conics =
         JitBackend::<R, F, I>::float_empty([point_count, 2, 2].into(), device);
     let depths =
         JitBackend::<R, F, I>::float_empty([point_count].into(), device);
     let is_colors_rgb_3d_not_clamped =
-        JitBackend::<R, F, I>::float_empty([point_count, 3 + 1].into(), device);
+        JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
     let positions_2d =
         JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
     let radii = JitBackend::<R, F, I>::int_empty([point_count].into(), device);

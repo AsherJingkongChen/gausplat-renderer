@@ -27,7 +27,7 @@ pub struct Arguments {
 
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub colors_rgb_3d_grad: JitTensor<R, F>,
     /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: JitTensor<R, F>,
@@ -37,7 +37,7 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub conics_grad: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
     /// `[P, 2]`
     pub positions_2d_grad: JitTensor<R, F>,

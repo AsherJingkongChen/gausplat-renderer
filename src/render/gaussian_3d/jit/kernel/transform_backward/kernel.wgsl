@@ -24,9 +24,9 @@ struct ViewTransform {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [P, 3 (+ 1)]
+// [P, 3]
 @group(0) @binding(1)
-var<storage, read_write> colors_rgb_3d_grad: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d_grad: array<array<f32, 3>>;
 // [P, 16, 3]
 @group(0) @binding(2)
 var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
@@ -39,9 +39,9 @@ var<storage, read_write> conics_grad: array<mat2x2<f32>>;
 // [P] (0 ~ )
 @group(0) @binding(5)
 var<storage, read_write> depths: array<f32>;
-// [P, 3 (+ 1)] (0.0, 1.0)
+// [P, 3] (0.0, 1.0)
 @group(0) @binding(6)
-var<storage, read_write> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
+var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
 // [P, 2]
 @group(0) @binding(7)
 var<storage, read_write> positions_2d_grad: array<vec2<f32>>;
@@ -446,7 +446,9 @@ fn main(
     );
 
     // ∂L/∂C_rgb[1, 3]
-    let color_rgb_3d_grad = colors_rgb_3d_grad[index] * is_colors_rgb_3d_not_clamped[index];
+    let color_rgb_3d_grad =
+        vec_from_array_f32_3(colors_rgb_3d_grad[index]) *
+        vec_from_array_f32_3(is_colors_rgb_3d_not_clamped[index]);
     // ∂L/∂C_sh[16, 3]
     var color_sh_grad = array<vec3<f32>, 16>();
     // ∂C_rgb/∂Dv[3, 3]
