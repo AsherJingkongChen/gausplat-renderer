@@ -318,7 +318,7 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device).set_require_grad(true);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -462,8 +462,8 @@ mod tests {
         view_id: 0,
         view_position: [1.86, 0.45, 2.92],
         view_transform: [
-            [-0.99, 0.08, -0.10, 0.00],
-            [0.06, 0.99, 0.05, 0.00],
+            [-0.99, 0.08, -0.10, 0.0],
+            [0.06, 0.99, 0.05, 0.000],
             [0.10, 0.05, -0.99, 0.00],
             [1.47, -0.69, 3.08, 1.00],
         ],

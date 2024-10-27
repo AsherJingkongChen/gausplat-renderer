@@ -221,7 +221,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             transmittances: outputs_rasterize.transmittances,
             view_bound_x,
             view_bound_y,
-            view_transform: view_transform,
+            view_transform,
         },
     }
 }
