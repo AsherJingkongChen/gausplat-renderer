@@ -27,5 +27,5 @@ divan = {workspace = true, features = ["default"]}
 
 [[bench]]
 harness = false
-name = "jit_sort"
-path = "benches/jit/sort.rs"
+name = "jit-kernel"
+path = "benches/jit_kernel.rs"
