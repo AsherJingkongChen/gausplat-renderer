@@ -281,6 +281,12 @@ where
         view: &render::View,
         options: &Gaussian3dRenderOptions,
     ) -> Gaussian3dRenderOutput<B> {
+        #[cfg(debug_assertions)]
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "render > autodiff disabled",
+        );
+
         let input = render::forward::RenderInput {
             device: self.device(),
             point_count: self.point_count() as u64,
@@ -353,7 +359,10 @@ where
             {
                 OpsKind::Tracked(prep) => {
                     #[cfg(debug_assertions)]
-                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "track");
+                    log::debug!(
+                        target: "gausplat::renderer::gaussian_3d::scene",
+                        "render > autodiff tracked",
+                    );
 
                     prep.finish(
                         Gaussian3dRenderBackwardState {
@@ -365,7 +374,10 @@ where
                 },
                 OpsKind::UnTracked(prep) => {
                     #[cfg(debug_assertions)]
-                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "untrack");
+                    log::debug!(
+                        target: "gausplat::renderer::gaussian_3d::scene",
+                        "render > autodiff untracked",
+                    );
 
                     prep.finish(output.colors_rgb_2d)
                 },
@@ -392,7 +404,10 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
         _checkpointer: &mut Checkpointer,
     ) {
         #[cfg(debug_assertions)]
-        log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "backward");
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "render > backward",
+        );
 
         let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
 

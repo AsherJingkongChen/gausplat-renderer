@@ -131,7 +131,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     });
 
     #[cfg(debug_assertions)]
-    log::info!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
 
     let outputs_rank = rank::main::<R, F, I>(
         rank::Arguments {
