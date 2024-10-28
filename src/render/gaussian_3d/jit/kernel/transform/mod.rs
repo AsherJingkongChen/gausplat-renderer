@@ -3,7 +3,6 @@ pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::{
     ops::{FloatTensorOps, IntTensorOps},
-    Int, Tensor,
 };
 use bytemuck::bytes_of;
 

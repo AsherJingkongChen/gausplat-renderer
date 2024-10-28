@@ -98,8 +98,8 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 // The depth range is restricted by 16-bit depth order for sorting
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
-// The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const FACTOR_RADIUS: f32 = 3.0961087;
+// The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
+const FACTOR_RADIUS: f32 = 2.5826694;
 // C_f
 const FILTER_LOW_PASS: f32 = 0.3;
 // T_x
@@ -238,9 +238,11 @@ fn main(
     // Σ'^-1[2, 2] (Symmetric) <- Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
-    let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det != 0.0);
+    if covariance_2d_det == 0.0 {
+        return;
+    }
     let covariance_2d_01_n = -covariance_2d[0][1];
-    let conic = covariance_2d_det_inv * mat2x2<f32>(
+    let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,
         covariance_2d_01_n, covariance_2d[0][0],
     );
@@ -270,7 +272,7 @@ fn main(
     let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
     let eigenvalue_difference2 =
         covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det;
-    let eigenvalue_difference = sqrt(max(eigenvalue_difference2, 0.09));
+    let eigenvalue_difference = sqrt(max(eigenvalue_difference2, 0.0));
     let eigenvalue_max = max(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
