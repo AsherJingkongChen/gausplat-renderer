@@ -6,7 +6,7 @@ use burn::tensor::ops::FloatTensorOps;
 use bytemuck::bytes_of;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Arguments {
     /// `I_x`
     pub image_size_x: u32,

@@ -5,7 +5,7 @@ use burn::tensor::ops::IntTensorOps;
 use bytemuck::bytes_of;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Arguments {
     /// `P`
     pub point_count: u32,

@@ -4,7 +4,7 @@ pub use bytemuck::{Pod, Zeroable};
 use burn::tensor::ops::IntTensorOps;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Arguments {
     /// `I_x / T_x`
     pub tile_count_x: u32,

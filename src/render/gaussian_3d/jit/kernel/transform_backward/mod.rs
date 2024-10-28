@@ -5,7 +5,7 @@ use burn::tensor::ops::FloatTensorOps;
 use bytemuck::bytes_of;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Arguments {
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,

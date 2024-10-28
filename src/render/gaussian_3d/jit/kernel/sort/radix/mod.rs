@@ -6,7 +6,7 @@ use bytemuck::bytes_of;
 use std::mem::swap;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Arguments {
     /// `(0 ~ 32: +log2(R))`
     pub radix_shift: u32,
