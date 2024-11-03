@@ -19,11 +19,12 @@ struct Arguments {
     view_bound_x: f32,
     // tan(Fov_y / 2) * (C_f + 1)
     view_bound_y: f32,
-}
-struct ViewTransform {
-    rotation: mat3x3<f32>,
-    translation: vec3<f32>,
-    position: vec3<f32>,
+    // V[3]
+    view_position: vec3<f32>,
+    // Rv[3, 3]
+    view_rotation: mat3x3<f32>,
+    // Tv[3, 1]
+    view_translation: vec3<f32>,
 }
 
 @group(0) @binding(0)
@@ -40,33 +41,30 @@ var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3]
 @group(0) @binding(4)
 var<storage, read_write> scalings: array<array<f32, 3>>;
-// [3 (+ 1), 3 + 1 + 1]
-@group(0) @binding(5)
-var<storage, read_write> view_transform: ViewTransform;
 
 // [P, 3] (0.0, 1.0)
-@group(0) @binding(6)
+@group(0) @binding(5)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
-@group(0) @binding(7)
+@group(0) @binding(6)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P] (0 ~ )
-@group(0) @binding(8)
+@group(0) @binding(7)
 var<storage, read_write> depths: array<f32>;
 // [P, 3] (0.0, 1.0)
-@group(0) @binding(9)
+@group(0) @binding(8)
 var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
 // [P, 2]
-@group(0) @binding(10)
+@group(0) @binding(9)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
 // [P]
-@group(0) @binding(11)
+@group(0) @binding(10)
 var<storage, read_write> radii: array<u32>;
 // [P]
-@group(0) @binding(12)
+@group(0) @binding(11)
 var<storage, read_write> tile_touched_counts: array<u32>;
 // [P, 4] (x max, x min, y max, y min)
-@group(0) @binding(13)
+@group(0) @binding(12)
 var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
@@ -129,8 +127,8 @@ fn main(
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
-    let view_rotation = view_transform.rotation;
-    let position_3d_in_view = view_rotation * position_3d + view_transform.translation;
+    let view_rotation = arguments.view_rotation;
+    let position_3d_in_view = view_rotation * position_3d + arguments.view_translation;
     let depth = position_3d_in_view.z;
 
     // Performing viewing-frustum culling
@@ -310,7 +308,7 @@ fn main(
     // Computing the view direction in world space
     // Dv[3] <- Ov[3] = Pw[3] - V[3]
 
-    let view_offset = position_3d - view_transform.position;
+    let view_offset = position_3d - arguments.view_position;
     let view_direction = normalize(view_offset);
     var vd_x = f32();
     var vd_y = f32();

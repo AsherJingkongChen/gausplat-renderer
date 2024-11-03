@@ -1,5 +1,5 @@
 // N
-@group(0) @binding(0) var<storage, read>
+@group(0) @binding(0) var<storage, read_write>
 count: u32;
 
 // (N' / G, 1, 1) <- N / (N / N' * G)

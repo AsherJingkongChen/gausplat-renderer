@@ -30,7 +30,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
     ) -> backward::RenderOutput<B>;
 }
 
-#[derive(Config, Debug, Record)]
+#[derive(Config, Debug, PartialEq, Record)]
 pub struct Gaussian3dRenderOptions {
     #[config(default = "SH_DEGREE_MAX")]
     /// It should be no more than [`SH_DEGREE_MAX`].

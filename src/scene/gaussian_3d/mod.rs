@@ -324,7 +324,8 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device).set_require_grad(true);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device)
+                .set_require_grad(true);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()

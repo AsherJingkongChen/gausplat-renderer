@@ -3,7 +3,7 @@ struct Arguments {
     radix_shift: u32,
 }
 
-@group(0) @binding(0) var<storage, read>
+@group(0) @binding(0) var<storage, read_write>
 arguments: Arguments;
 // N
 @group(0) @binding(1) var<storage, read_write>
