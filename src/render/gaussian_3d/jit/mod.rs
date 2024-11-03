@@ -120,7 +120,14 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     });
 
     #[cfg(debug_assertions)]
-    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
+    log::info!(
+        target: "gausplat::renderer::gaussian_3d::forward",
+        "scan > total ({})",
+        bytemuck::from_bytes::<u32>(
+            &outputs_scan.total.client
+                .read(outputs_scan.total.handle.to_owned().binding()),
+        )
+    );
 
     let outputs_rank = rank::main::<R, F, I>(
         rank::Arguments {
