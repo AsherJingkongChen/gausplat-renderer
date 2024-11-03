@@ -1,12 +1,10 @@
 pub use super::*;
 pub use bytemuck::{Pod, Zeroable};
 
-use burn::tensor::{
-    ops::{FloatTensorOps, IntTensorOps},
-};
+use burn::tensor::ops::{FloatTensorOps, IntTensorOps};
 use bytemuck::bytes_of;
 
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
     /// `(0 ~ 3)`
@@ -29,6 +27,14 @@ pub struct Arguments {
     pub view_bound_x: f32,
     /// `tan(Fov_y / 2) * (C_f + 1)`
     pub view_bound_y: f32,
+    /// Padding
+    pub _padding_1: [u32; 2],
+    /// `[3]`
+    pub view_position: [f32; 3],
+    /// Padding
+    pub _padding_2: [u32; 1],
+    /// `[3 (+ 1), 3 + 1]`
+    pub view_transform: [[f32; 4]; 4],
 }
 
 #[derive(Clone, Debug)]
@@ -41,8 +47,6 @@ pub struct Inputs<R: JitRuntime, F: FloatElement> {
     pub rotations: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,
-    /// `[3 (+ 1), 3 + 1 + 1]`
-    pub view_transform: JitTensor<R, F>,
 }
 
 #[derive(Clone, Debug)]
@@ -117,7 +121,6 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.positions_3d.handle.binding(),
             inputs.rotations.handle.binding(),
             inputs.scalings.handle.binding(),
-            inputs.view_transform.handle.binding(),
             colors_rgb_3d.handle.to_owned().binding(),
             conics.handle.to_owned().binding(),
             depths.handle.to_owned().binding(),

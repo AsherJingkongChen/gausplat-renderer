@@ -52,12 +52,14 @@ pub struct RenderInput<B: Backend> {
     pub tile_point_ranges: B::IntTensorPrimitive,
     /// `[I_y, I_x]`
     pub transmittances: B::FloatTensorPrimitive,
-    /// `[3 (+ 1), 3 + 1 + 1]`
-    pub view_transform: B::FloatTensorPrimitive,
     /// `tan(Fov_x / 2) * (C_f + 1)`
     pub view_bound_x: f32,
     /// `tan(Fov_y / 2) * (C_f + 1)`
     pub view_bound_y: f32,
+    /// `[3]`
+    pub view_position: [f32; 3],
+    /// `[3 (+ 1), 3 + 1]`
+    pub view_transform: [[f32; 4]; 4],
 }
 
 #[derive(Clone, Debug)]

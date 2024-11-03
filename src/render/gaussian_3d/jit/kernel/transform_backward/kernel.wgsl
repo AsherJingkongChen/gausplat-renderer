@@ -15,11 +15,12 @@ struct Arguments {
     view_bound_x: f32,
     // tan(Fov_y / 2) * (C_f + 1)
     view_bound_y: f32,
-}
-struct ViewTransform {
-    rotation: mat3x3<f32>,
-    translation: vec3<f32>,
-    position: vec3<f32>,
+    // V[3]
+    view_position: vec3<f32>,
+    // Rv[3, 3]
+    view_rotation: mat3x3<f32>,
+    // Tv[3, 1]
+    view_translation: vec3<f32>,
 }
 
 @group(0) @binding(0)
@@ -57,24 +58,21 @@ var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3]
 @group(0) @binding(11)
 var<storage, read_write> scalings: array<array<f32, 3>>;
-// [3 (+ 1), 3 + 1 + 1]
-@group(0) @binding(12)
-var<storage, read_write> view_transform: ViewTransform;
 
 // [P, 16, 3]
-@group(0) @binding(13)
+@group(0) @binding(12)
 var<storage, read_write> colors_sh_grad: array<array<array<f32, 3>, 16>>;
 // [P]
-@group(0) @binding(14)
+@group(0) @binding(13)
 var<storage, read_write> positions_2d_grad_norm: array<f32>;
 // [P, 3]
-@group(0) @binding(15)
+@group(0) @binding(14)
 var<storage, read_write> positions_3d_grad: array<array<f32, 3>>;
 // [P, 4]
-@group(0) @binding(16)
+@group(0) @binding(15)
 var<storage, read_write> rotations_grad: array<vec4<f32>>;
 // [P, 3]
-@group(0) @binding(17)
+@group(0) @binding(16)
 var<storage, read_write> scalings_grad: array<array<f32, 3>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
@@ -178,8 +176,8 @@ fn main(
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
-    let view_rotation = view_transform.rotation;
-    let position_3d_in_view = view_rotation * position_3d + view_transform.translation;
+    let view_rotation = arguments.view_rotation;
+    let position_3d_in_view = view_rotation * position_3d + arguments.view_translation;
     let depth = depths[index];
 
     // Projecting the 3D covariance matrix into 2D covariance matrix
@@ -395,7 +393,7 @@ fn main(
     // Computing the view direction in world space
     // Dv[3] <- Ov[3] = Pw[3] - V[3]
 
-    let view_offset = position_3d - view_transform.position;
+    let view_offset = position_3d - arguments.view_position;
     let view_direction = normalize(view_offset);
     var vd_x = f32();
     var vd_y = f32();

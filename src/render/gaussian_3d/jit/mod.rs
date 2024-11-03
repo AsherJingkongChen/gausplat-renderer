@@ -9,7 +9,6 @@ pub use rank::TILE_COUNT_MAX;
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 pub use transform::FILTER_LOW_PASS;
 
-use burn::tensor::{ops::FloatTensorOps, TensorData};
 use burn_jit::kernel::into_contiguous;
 use kernel::*;
 
@@ -61,6 +60,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     // tan(Fov_y / 2) * (C_f + 1)
     let view_bound_y =
         (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
+    let view_position = view.view_position.map(|c| c as f32);
+    let view_transform = view.view_transform.map(|c| c.map(|c| c as f32));
 
     // TODO: These should be errors, not panics.
     debug_assert!(
@@ -83,21 +84,6 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     input.rotations = into_contiguous(input.rotations);
     input.scalings = into_contiguous(input.scalings);
 
-    let view_position = view.view_position;
-    let view_transform = view
-        .view_transform
-        .iter()
-        .flatten()
-        .chain(&[view_position[0], view_position[1], view_position[2], 0.0])
-        .copied()
-        .collect::<Vec<f64>>();
-
-    // [3 (+ 1), 3 + 1 + 1]
-    let view_transform = JitBackend::<R, F, I>::float_from_data(
-        TensorData::new(view_transform, [3 + 1, 3 + 1 + 1]),
-        &input.device,
-    );
-
     // Launching the kernels
 
     let outputs_transform = transform::main::<R, F, I>(
@@ -112,13 +98,16 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             tile_count_y: tile_count_y as i32,
             view_bound_x,
             view_bound_y,
+            view_position,
+            view_transform,
+            _padding_1: Default::default(),
+            _padding_2: Default::default(),
         },
         transform::Inputs {
             colors_sh: input.colors_sh.to_owned(),
             positions_3d: input.positions.to_owned(),
             rotations: input.rotations.to_owned(),
             scalings: input.scalings.to_owned(),
-            view_transform: view_transform.to_owned(),
         },
     );
     #[cfg(debug_assertions)]
@@ -221,6 +210,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             transmittances: outputs_rasterize.transmittances,
             view_bound_x,
             view_bound_y,
+            view_position,
             view_transform,
         },
     }
@@ -275,6 +265,10 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             point_count: state.point_count,
             view_bound_x: state.view_bound_x,
             view_bound_y: state.view_bound_y,
+            view_position: state.view_position,
+            view_transform: state.view_transform,
+            _padding_1: Default::default(),
+            _padding_2: Default::default(),
         },
         transform_backward::Inputs {
             colors_rgb_3d_grad: outputs_rasterize_backward.colors_rgb_3d_grad,
@@ -288,7 +282,6 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             radii: state.radii,
             rotations: state.rotations,
             scalings: state.scalings,
-            view_transform: state.view_transform,
         },
     );
     #[cfg(debug_assertions)]
