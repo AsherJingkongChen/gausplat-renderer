@@ -9,7 +9,7 @@ pub use rank::TILE_COUNT_MAX;
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 pub use transform::FILTER_LOW_PASS;
 
-use burn::tensor::ops::FloatTensorOps;
+use burn::tensor::{ops::FloatTensorOps, TensorData};
 use burn_jit::kernel::into_contiguous;
 use kernel::*;
 
@@ -82,14 +82,19 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     input.positions = into_contiguous(input.positions);
     input.rotations = into_contiguous(input.rotations);
     input.scalings = into_contiguous(input.scalings);
-    // [3]
-    let view_position = JitBackend::<R, F, I>::float_from_data(
-        view.view_position.into(),
-        &input.device,
-    );
-    // [3 (+ 1), 3]
+
+    let view_position = view.view_position;
+    let view_transform = view
+        .view_transform
+        .iter()
+        .flatten()
+        .chain(&[view_position[0], view_position[1], view_position[2], 0.0])
+        .copied()
+        .collect::<Vec<f64>>();
+
+    // [3 (+ 1), 3 + 1 + 1]
     let view_transform = JitBackend::<R, F, I>::float_from_data(
-        view.view_transform.into(),
+        TensorData::new(view_transform, [3 + 1, 3 + 1 + 1]),
         &input.device,
     );
 
@@ -103,8 +108,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             image_size_half_x,
             image_size_half_y,
             point_count,
-            tile_count_x,
-            tile_count_y,
+            tile_count_x: tile_count_x as i32,
+            tile_count_y: tile_count_y as i32,
             view_bound_x,
             view_bound_y,
         },
@@ -113,7 +118,6 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             positions_3d: input.positions.to_owned(),
             rotations: input.rotations.to_owned(),
             scalings: input.scalings.to_owned(),
-            view_position,
             view_transform: view_transform.to_owned(),
         },
     );
@@ -127,7 +131,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     });
 
     #[cfg(debug_assertions)]
-    log::info!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
+    log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "scan");
 
     let outputs_rank = rank::main::<R, F, I>(
         rank::Arguments {
@@ -138,8 +142,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             depths: outputs_transform.depths.to_owned(),
             radii: outputs_transform.radii.to_owned(),
             tile_touched_offsets: outputs_scan.values,
-            tiles_touched_max: outputs_transform.tiles_touched_max,
-            tiles_touched_min: outputs_transform.tiles_touched_min,
+            tiles_touched_bound: outputs_transform.tiles_touched_bound,
         },
     );
     #[cfg(debug_assertions)]
@@ -194,7 +197,6 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             colors_sh: input.colors_sh,
             colors_sh_degree_max,
             conics: outputs_transform.conics,
-            covariances_3d: outputs_transform.covariances_3d,
             depths: outputs_transform.depths,
             focal_length_x,
             focal_length_y,
@@ -210,23 +212,16 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             point_rendered_counts: outputs_rasterize.point_rendered_counts,
             positions_2d: outputs_transform.positions_2d,
             positions_3d: input.positions,
-            positions_3d_in_normalized: outputs_transform
-                .positions_3d_in_normalized,
-            positions_3d_in_normalized_clamped: outputs_transform
-                .positions_3d_in_normalized_clamped,
             radii: outputs_transform.radii,
             rotations: input.rotations,
-            rotations_matrix: outputs_transform.rotations_matrix,
-            rotation_scalings: outputs_transform.rotation_scalings,
             scalings: input.scalings,
             tile_count_x,
             tile_count_y,
             tile_point_ranges: outputs_segment.tile_point_ranges,
-            transforms_2d: outputs_transform.transforms_2d,
             transmittances: outputs_rasterize.transmittances,
-            view_directions: outputs_transform.view_directions,
-            view_offsets: outputs_transform.view_offsets,
-            view_rotation: view_transform,
+            view_bound_x,
+            view_bound_y,
+            view_transform,
         },
     }
 }
@@ -278,28 +273,22 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             image_size_half_x: state.image_size_half_x,
             image_size_half_y: state.image_size_half_y,
             point_count: state.point_count,
+            view_bound_x: state.view_bound_x,
+            view_bound_y: state.view_bound_y,
         },
         transform_backward::Inputs {
             colors_rgb_3d_grad: outputs_rasterize_backward.colors_rgb_3d_grad,
             colors_sh: state.colors_sh,
             conics: state.conics,
             conics_grad: outputs_rasterize_backward.conics_grad,
-            covariances_3d: state.covariances_3d,
             depths: state.depths,
             is_colors_rgb_3d_not_clamped: state.is_colors_rgb_3d_not_clamped,
             positions_2d_grad: outputs_rasterize_backward.positions_2d_grad,
-            positions_3d_in_normalized: state.positions_3d_in_normalized,
-            positions_3d_in_normalized_clamped: state
-                .positions_3d_in_normalized_clamped,
+            positions_3d: state.positions_3d,
             radii: state.radii,
             rotations: state.rotations,
-            rotations_matrix: state.rotations_matrix,
-            rotation_scalings: state.rotation_scalings,
             scalings: state.scalings,
-            transforms_2d: state.transforms_2d,
-            view_directions: state.view_directions,
-            view_offsets: state.view_offsets,
-            view_rotation: state.view_rotation,
+            view_transform: state.view_transform,
         },
     );
     #[cfg(debug_assertions)]

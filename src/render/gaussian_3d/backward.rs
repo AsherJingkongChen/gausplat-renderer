@@ -2,7 +2,7 @@ pub use super::*;
 
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub colors_rgb_3d: B::FloatTensorPrimitive,
     /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
@@ -10,8 +10,6 @@ pub struct RenderInput<B: Backend> {
     pub colors_sh_degree_max: u32,
     /// `[P, 2, 2]`
     pub conics: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub covariances_3d: B::FloatTensorPrimitive,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive,
     /// `f_x <- I_x / tan(Fov_x / 2) / 2`
@@ -26,7 +24,7 @@ pub struct RenderInput<B: Backend> {
     pub image_size_x: u32,
     /// `I_y`
     pub image_size_y: u32,
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive,
     /// `[P]`
     pub opacities_3d: B::FloatTensorPrimitive,
@@ -40,18 +38,10 @@ pub struct RenderInput<B: Backend> {
     pub positions_2d: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub positions_3d: B::FloatTensorPrimitive,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized: B::FloatTensorPrimitive,
-    /// `[P, 2]`
-    pub positions_3d_in_normalized_clamped: B::FloatTensorPrimitive,
     /// `[P]`
     pub radii: B::IntTensorPrimitive,
     /// `[P, 4]`
     pub rotations: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotations_matrix: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
-    pub rotation_scalings: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,
     /// `I_x / T_x`
@@ -60,16 +50,14 @@ pub struct RenderInput<B: Backend> {
     pub tile_count_y: u32,
     /// `[I_y / T_y, I_x / T_x, 2]`
     pub tile_point_ranges: B::IntTensorPrimitive,
-    /// `[P, 2, 3]`
-    pub transforms_2d: B::FloatTensorPrimitive,
     /// `[I_y, I_x]`
     pub transmittances: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1)]`
-    pub view_directions: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1)]`
-    pub view_offsets: B::FloatTensorPrimitive,
-    /// `[3 (+ 1), 3]`
-    pub view_rotation: B::FloatTensorPrimitive,
+    /// `[3 (+ 1), 3 + 1 + 1]`
+    pub view_transform: B::FloatTensorPrimitive,
+    /// `tan(Fov_x / 2) * (C_f + 1)`
+    pub view_bound_x: f32,
+    /// `tan(Fov_y / 2) * (C_f + 1)`
+    pub view_bound_y: f32,
 }
 
 #[derive(Clone, Debug)]

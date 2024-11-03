@@ -20,7 +20,7 @@ pub struct Arguments {
 
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
-    /// `[P, 3 (+ 1)]`
+    /// `[P, 3]`
     pub colors_rgb_3d: JitTensor<R, F>,
     /// `[P, 2, 2]`
     pub conics: JitTensor<R, F>,

@@ -281,6 +281,12 @@ where
         view: &render::View,
         options: &Gaussian3dRenderOptions,
     ) -> Gaussian3dRenderOutput<B> {
+        #[cfg(debug_assertions)]
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "render > autodiff disabled",
+        );
+
         let input = render::forward::RenderInput {
             device: self.device(),
             point_count: self.point_count() as u64,
@@ -318,7 +324,7 @@ where
         let scalings = self.scalings().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device).set_require_grad(true);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -353,7 +359,10 @@ where
             {
                 OpsKind::Tracked(prep) => {
                     #[cfg(debug_assertions)]
-                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "track");
+                    log::debug!(
+                        target: "gausplat::renderer::gaussian_3d::scene",
+                        "render > autodiff tracked",
+                    );
 
                     prep.finish(
                         Gaussian3dRenderBackwardState {
@@ -365,7 +374,10 @@ where
                 },
                 OpsKind::UnTracked(prep) => {
                     #[cfg(debug_assertions)]
-                    log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "untrack");
+                    log::debug!(
+                        target: "gausplat::renderer::gaussian_3d::scene",
+                        "render > autodiff untracked",
+                    );
 
                     prep.finish(output.colors_rgb_2d)
                 },
@@ -392,7 +404,10 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
         _checkpointer: &mut Checkpointer,
     ) {
         #[cfg(debug_assertions)]
-        log::debug!(target: "gausplat::render::gaussian_3d::autodiff", "backward");
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "render > backward",
+        );
 
         let colors_rgb_2d_grad = grads.consume::<B>(&ops.node);
 
@@ -462,8 +477,8 @@ mod tests {
         view_id: 0,
         view_position: [1.86, 0.45, 2.92],
         view_transform: [
-            [-0.99, 0.08, -0.10, 0.00],
-            [0.06, 0.99, 0.05, 0.00],
+            [-0.99, 0.08, -0.10, 0.0],
+            [0.06, 0.99, 0.05, 0.000],
             [0.10, 0.05, -0.99, 0.00],
             [1.47, -0.69, 3.08, 1.00],
         ],

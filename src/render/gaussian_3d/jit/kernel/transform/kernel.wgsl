@@ -11,10 +11,10 @@ struct Arguments {
     image_size_half_y: f32,
     // P
     point_count: u32,
-    // I_x / T_x
-    tile_count_x: u32,
-    // I_y / T_y
-    tile_count_y: u32,
+    // I_x / T_x (0 ~ )
+    tile_count_x: i32,
+    // I_y / T_y (0 ~ )
+    tile_count_y: i32,
     // tan(Fov_x / 2) * (C_f + 1)
     view_bound_x: f32,
     // tan(Fov_y / 2) * (C_f + 1)
@@ -23,6 +23,7 @@ struct Arguments {
 struct ViewTransform {
     rotation: mat3x3<f32>,
     translation: vec3<f32>,
+    position: vec3<f32>,
 }
 
 @group(0) @binding(0)
@@ -39,64 +40,34 @@ var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3]
 @group(0) @binding(4)
 var<storage, read_write> scalings: array<array<f32, 3>>;
-// [3]
+// [3 (+ 1), 3 + 1 + 1]
 @group(0) @binding(5)
-var<storage, read_write> view_position: vec3<f32>;
-// [3 (+ 1), 4]
-@group(0) @binding(6)
 var<storage, read_write> view_transform: ViewTransform;
 
-// [P, 3 (+ 1)] (0.0, 1.0)
-@group(0) @binding(7)
-var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
+// [P, 3] (0.0, 1.0)
+@group(0) @binding(6)
+var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
-@group(0) @binding(8)
+@group(0) @binding(7)
 var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P, 3 (+ 1), 3] (Symmetric)
-@group(0) @binding(9)
-var<storage, read_write> covariances_3d: array<mat3x3<f32>>;
-// [P]
-@group(0) @binding(10)
+// [P] (0 ~ )
+@group(0) @binding(8)
 var<storage, read_write> depths: array<f32>;
-// [P, 3 (+ 1)] (0.0, 1.0)
-@group(0) @binding(11)
-var<storage, read_write> is_colors_rgb_3d_not_clamped: array<vec3<f32>>;
+// [P, 3] (0.0, 1.0)
+@group(0) @binding(9)
+var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
 // [P, 2]
-@group(0) @binding(12)
+@group(0) @binding(10)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
-// [P, 2]
-@group(0) @binding(13)
-var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
-// [P, 2]
-@group(0) @binding(14)
-var<storage, read_write> positions_3d_in_normalized_clamped: array<vec2<f32>>;
 // [P]
-@group(0) @binding(15)
+@group(0) @binding(11)
 var<storage, read_write> radii: array<u32>;
-// [P, 3 (+ 1), 3]
-@group(0) @binding(16)
-var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
-// [P, 3 (+ 1), 3]
-@group(0) @binding(17)
-var<storage, read_write> rotation_scalings: array<mat3x3<f32>>;
 // [P]
-@group(0) @binding(18)
+@group(0) @binding(12)
 var<storage, read_write> tile_touched_counts: array<u32>;
-// [P, 2]
-@group(0) @binding(19)
-var<storage, read_write> tiles_touched_max: array<vec2<u32>>;
-// [P, 2]
-@group(0) @binding(20)
-var<storage, read_write> tiles_touched_min: array<vec2<u32>>;
-// [P, 2, 3]
-@group(0) @binding(21)
-var<storage, read_write> transforms_2d: array<mat3x2<f32>>;
-// [P, 3 (+ 1)]
-@group(0) @binding(22)
-var<storage, read_write> view_directions: array<vec3<f32>>;
-// [P, 3 (+ 1)]
-@group(0) @binding(23)
-var<storage, read_write> view_offsets: array<vec3<f32>>;
+// [P, 4] (x max, x min, y max, y min)
+@group(0) @binding(13)
+var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -127,8 +98,8 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 // The depth range is restricted by 16-bit depth order for sorting
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
-// The `r` for `1 - Min opacity = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const FACTOR_RADIUS: f32 = 3.0961087;
+// The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
+const FACTOR_RADIUS: f32 = 2.5826694;
 // C_f
 const FILTER_LOW_PASS: f32 = 0.3;
 // T_x
@@ -159,8 +130,7 @@ fn main(
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
     let view_rotation = view_transform.rotation;
-    let view_translation = view_transform.translation;
-    let position_3d_in_view = view_rotation * position_3d + view_translation;
+    let position_3d_in_view = view_rotation * position_3d + view_transform.translation;
     let depth = position_3d_in_view.z;
 
     // Performing viewing-frustum culling
@@ -169,35 +139,22 @@ fn main(
         return;
     }
 
-    // Transforming the 3D position to 2D position (view => normalized => clip => screen)
-    // Pv'[2, 1] <- Pv[3, 1]
-    // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
-    //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
-
-    let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
-    let position_3d_in_normalized = position_3d_in_view.xy / depth;
-    let position_3d_in_clip = position_3d_in_normalized * focal_length;
-    let position_2d = position_3d_in_clip + vec2<f32>(
-        arguments.image_size_half_x,
-        arguments.image_size_half_y,
-    ) - 0.5;
-
     // Converting the quaternion to rotation matrix
     // R[3, 3] (Symmetric) = Q[4] (x, y, z, w)
     // R[3, 3] = [[-y * y - z * z + 0.5,  x * y - w * z,        x * z + w * y      ]
     //            [ x * y + w * z,       -x * x - z * z + 0.5,  y * z - w * x      ]
     //            [ x * z - w * y,        y * z + w * x,       -x * x - y * y + 0.5]] * 2
 
-    let quaternion = rotations[index];
-    let q_wx = quaternion.w * quaternion.x;
-    let q_wy = quaternion.w * quaternion.y;
-    let q_wz = quaternion.w * quaternion.z;
-    let q_xx = quaternion.x * quaternion.x;
-    let q_xy = quaternion.x * quaternion.y;
-    let q_xz = quaternion.x * quaternion.z;
-    let q_yy = quaternion.y * quaternion.y;
-    let q_yz = quaternion.y * quaternion.z;
-    let q_zz = quaternion.z * quaternion.z;
+    let rotation = rotations[index];
+    let q_wx = rotation.w * rotation.x;
+    let q_wy = rotation.w * rotation.y;
+    let q_wz = rotation.w * rotation.z;
+    let q_xx = rotation.x * rotation.x;
+    let q_xy = rotation.x * rotation.y;
+    let q_xz = rotation.x * rotation.z;
+    let q_yy = rotation.y * rotation.y;
+    let q_yz = rotation.y * rotation.z;
+    let q_zz = rotation.z * rotation.z;
 
     // Computing the 3D covariance matrix from rotation and scaling
     // RS[3, 3] = R[3, 3] * S[3, 3]
@@ -236,6 +193,19 @@ fn main(
     );
     let covariance_3d = rotation_scaling * transpose(rotation_scaling);
 
+    // Transforming the 3D position to 2D position (view => normalized => clip => screen)
+    // Pv'[2, 1] <- Pv[3, 1]
+    // Pv'[2, 1] = [f.x * Pv.x / Pv.z + (I.x * 0.5 - 0.5)
+    //              f.y * Pv.y / Pv.z + (I.y * 0.5 - 0.5)]
+
+    let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
+    let position_3d_in_normalized = position_3d_in_view.xy / depth;
+    let position_3d_in_clip = position_3d_in_normalized * focal_length;
+    let position_2d = position_3d_in_clip + vec2<f32>(
+        arguments.image_size_half_x,
+        arguments.image_size_half_y,
+    ) - 0.5;
+
     // Projecting the 3D covariance matrix into 2D covariance matrix
     // T[2, 3] = J[2, 3] * Rv[3, 3]
     // Σ'[2, 2] (Symmetric) = T[2, 3] * Σ[3, 3] * T^t[3, 2] + F[2, 2]
@@ -268,9 +238,11 @@ fn main(
     // Σ'^-1[2, 2] (Symmetric) <- Σ'[2, 2]
 
     let covariance_2d_det = determinant(covariance_2d);
-    let covariance_2d_det_inv = select(0.0, 1.0 / covariance_2d_det, covariance_2d_det != 0.0);
+    if covariance_2d_det == 0.0 {
+        return;
+    }
     let covariance_2d_01_n = -covariance_2d[0][1];
-    let conic = covariance_2d_det_inv * mat2x2<f32>(
+    let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
         covariance_2d[1][1], covariance_2d_01_n,
         covariance_2d_01_n, covariance_2d[0][0],
     );
@@ -298,10 +270,9 @@ fn main(
     // r = √λ_max
 
     let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
-    let eigenvalue_difference = max(
-        FILTER_LOW_PASS,
-        sqrt(covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det),
-    );
+    let eigenvalue_difference2 =
+        covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det;
+    let eigenvalue_difference = sqrt(max(eigenvalue_difference2, 0.0));
     let eigenvalue_max = max(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
@@ -309,26 +280,26 @@ fn main(
     let radius = ceil(sqrt(eigenvalue_max) * FACTOR_RADIUS);
 
     // Checking the tiles touched
+    // (x max, x min, y max, y min)
 
-    let tile_touched_max = clamp(
-        vec2<u32>(
-            u32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
-            u32((position_2d.y + radius + TILE_SIZE_Y - 1.0) / TILE_SIZE_Y),
-        ),
-        vec2<u32>(),
-        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
-    );
-    let tile_touched_min = clamp(
-        vec2<u32>(
-            u32((position_2d.x - radius) / TILE_SIZE_X),
-            u32((position_2d.y - radius) / TILE_SIZE_Y),
-        ),
-        vec2<u32>(),
-        vec2<u32>(arguments.tile_count_x, arguments.tile_count_y),
+    let tile_touched_bound = bitcast<vec4<u32>>(
+        clamp(
+            vec4<i32>(
+                i32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
+                i32((position_2d.x - radius) / TILE_SIZE_X),
+                i32((position_2d.y + radius + TILE_SIZE_Y - 1.0) / TILE_SIZE_Y),
+                i32((position_2d.y - radius) / TILE_SIZE_Y),
+            ),
+            vec4<i32>(),
+            vec4<i32>(
+                arguments.tile_count_x, arguments.tile_count_x,
+                arguments.tile_count_y, arguments.tile_count_y,
+            ),
+        )
     );
     let tile_point_count =
-        (tile_touched_max.x - tile_touched_min.x) *
-        (tile_touched_max.y - tile_touched_min.y);
+        (tile_touched_bound[0] - tile_touched_bound[1]) *
+        (tile_touched_bound[2] - tile_touched_bound[3]);
 
     // Leaving if no tile is touched
 
@@ -339,7 +310,7 @@ fn main(
     // Computing the view direction in world space
     // Dv[3] <- Ov[3] = Pw[3] - V[3]
 
-    let view_offset = position_3d - view_position;
+    let view_offset = position_3d - view_transform.position;
     let view_direction = normalize(view_offset);
     var vd_x = f32();
     var vd_y = f32();
@@ -419,40 +390,28 @@ fn main(
 
     // Specifying the results
 
-    // [P, 3 (+ 1)]
-    colors_rgb_3d[index] = color_rgb_3d;
+    // [P, 3]
+    colors_rgb_3d[index] = array_from_vec3_f32(color_rgb_3d);
     // [P, 2, 2]
     conics[index] = conic;
-    // [P, 3 (+ 1), 3]
-    covariances_3d[index] = covariance_3d;
     // [P]
     depths[index] = depth;
-    // [P, 3 (+ 1)]
-    is_colors_rgb_3d_not_clamped[index] = vec3<f32>(is_color_rgb_3d_not_clamped);
+    // [P, 3]
+    is_colors_rgb_3d_not_clamped[index] = array_from_vec3_f32(
+        vec3<f32>(is_color_rgb_3d_not_clamped)
+    );
     // [P, 2]
     positions_2d[index] = position_2d;
-    // [P, 2]
-    positions_3d_in_normalized[index] = position_3d_in_normalized;
-    // [P, 2]
-    positions_3d_in_normalized_clamped[index] = position_3d_in_normalized_clamped;
     // [P]
     radii[index] = u32(radius);
-    // [P, 3 (+ 1), 3]
-    rotations_matrix[index] = rotation_matrix;
-    // [P, 3 (+ 1), 3]
-    rotation_scalings[index] = rotation_scaling;
     // [P]
     tile_touched_counts[index] = tile_point_count;
-    // [P, 2]
-    tiles_touched_max[index] = tile_touched_max;
-    // [P, 2]
-    tiles_touched_min[index] = tile_touched_min;
-    // [P, 2, 3]
-    transforms_2d[index] = transform_2d;
-    // [P, 3 (+ 1)]
-    view_directions[index] = view_direction;
-    // [P, 3 (+ 1)]
-    view_offsets[index] = view_offset;
+    // [P, 4]
+    tiles_touched_bound[index] = tile_touched_bound;
+}
+
+fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
+    return array<f32, 3>(v[0], v[1], v[2]);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

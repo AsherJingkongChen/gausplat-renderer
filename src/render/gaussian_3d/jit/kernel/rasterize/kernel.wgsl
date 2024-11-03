@@ -7,9 +7,9 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [P, 3 (+ 1)] (0.0 ~ 1.0)
+// [P, 3] (0.0 ~ 1.0)
 @group(0) @binding(1)
-var<storage, read_write> colors_rgb_3d: array<vec3<f32>>;
+var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
 @group(0) @binding(2)
 var<storage, read_write> conics: array<mat2x2<f32>>;
@@ -47,9 +47,9 @@ var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_x * T_y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
-const OPACITY_2D_MAX: f32 = 1.0 - 5.0 * OPACITY_2D_MIN;
-const OPACITY_2D_MIN: f32 = 0.5 / 255.0;
-const TRANSMITTANCE_MIN: f32 = pow(5.0 * OPACITY_2D_MIN, 2.0);
+const OPACITY_2D_MAX: f32 = 1.0 - OPACITY_2D_MIN;
+const OPACITY_2D_MIN: f32 = 2.5 / 255.0;
+const TRANSMITTANCE_MIN: f32 = pow(OPACITY_2D_MIN, 2.0);
 // T_x * T_y
 const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
 // T_x
@@ -124,7 +124,7 @@ fn main(
         let index = point_range.x + batch_index * BATCH_SIZE + local_index;
         if index < point_range.y {
             let point_index = point_indices[index];
-            colors_rgb_3d_in_batch[local_index] = colors_rgb_3d[point_index];
+            colors_rgb_3d_in_batch[local_index] = vec_from_array_f32_3(colors_rgb_3d[point_index]);
             conics_in_batch[local_index] = conics[point_index];
             opacities_3d_in_batch[local_index] = opacities_3d[point_index];
             positions_2d_in_batch[local_index] = positions_2d[point_index];
@@ -217,4 +217,8 @@ fn main(
         // [I_y, I_x]
         transmittances[pixel_index] = transmittance_state;
     }
+}
+
+fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {
+    return vec3<f32>(a[0], a[1], a[2]);
 }
