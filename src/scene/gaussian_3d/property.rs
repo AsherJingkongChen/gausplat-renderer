@@ -223,22 +223,51 @@ impl<B: Backend> Gaussian3dScene<B> {
 
     #[inline]
     pub fn point_count(&self) -> usize {
-        debug_assert_eq!(
-            self.colors_sh.val().dims()[0],
-            self.opacities.val().dims()[0]
-        );
-        debug_assert_eq!(
-            self.colors_sh.val().dims()[0],
-            self.positions.val().dims()[0]
-        );
-        debug_assert_eq!(
-            self.colors_sh.val().dims()[0],
-            self.rotations.val().dims()[0]
-        );
-        debug_assert_eq!(
-            self.colors_sh.val().dims()[0],
-            self.scalings.val().dims()[0]
-        );
+        let point_count_target = self.colors_sh.dims()[0];
+        let point_count_other = self.opacities.dims()[0];
+        if point_count_other != point_count_target {
+            Err::<(), _>(
+                Error::MismatchedPointCount(
+                    point_count_target,
+                    format!("{point_count_other} (opacities)"),
+                )
+                .to_string(),
+            )
+            .expect("This is an internal error");
+        }
+        let point_count_other = self.positions.dims()[0];
+        if point_count_other != point_count_target {
+            Err::<(), _>(
+                Error::MismatchedPointCount(
+                    point_count_target,
+                    format!("{point_count_other} (positions)"),
+                )
+                .to_string(),
+            )
+            .expect("This is an internal error");
+        }
+        let point_count_other = self.rotations.dims()[0];
+        if point_count_other != point_count_target {
+            Err::<(), _>(
+                Error::MismatchedPointCount(
+                    point_count_target,
+                    format!("{point_count_other} (rotations)"),
+                )
+                .to_string(),
+            )
+            .expect("This is an internal error");
+        }
+        let point_count_other = self.scalings.dims()[0];
+        if point_count_other != point_count_target {
+            Err::<(), _>(
+                Error::MismatchedPointCount(
+                    point_count_target,
+                    format!("{point_count_other} (scalings)"),
+                )
+                .to_string(),
+            )
+            .expect("This is an internal error");
+        }
 
         self.positions.val().dims()[0]
     }

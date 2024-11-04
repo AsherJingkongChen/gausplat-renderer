@@ -8,6 +8,7 @@ pub use crate::{
 pub use rank::TILE_COUNT_MAX;
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 pub use transform::FILTER_LOW_PASS;
+pub use crate::error::Error;
 
 use burn_jit::kernel::into_contiguous;
 use kernel::*;
@@ -19,7 +20,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     mut input: forward::RenderInput<JitBackend<R, F, I>>,
     view: &View,
     options: &Gaussian3dRenderOptions,
-) -> forward::RenderOutput<JitBackend<R, F, I>> {
+) -> Result<forward::RenderOutput<JitBackend<R, F, I>>, Error> {
     #[cfg(debug_assertions)]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "start");
 
@@ -44,6 +45,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
     // I_y / 2
     let image_size_half_y = (image_size_y as f64 / 2.0) as f32;
+    // I_y * I_x
+    let pixel_count = image_size_x as usize * image_size_y as usize;
     // P
     let point_count = input.point_count as u32;
     // T_x
@@ -63,18 +66,15 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let view_position = view.view_position.map(|c| c as f32);
     let view_transform = view.view_transform.map(|c| c.map(|c| c as f32));
 
-    // TODO: These should be errors, not panics.
-    debug_assert!(
-        colors_sh_degree_max <= SH_DEGREE_MAX,
-        "colors_sh_degree_max should be no more than {SH_DEGREE_MAX}",
-    );
-    debug_assert!(
-        image_size_x * image_size_y <= PIXEL_COUNT_MAX,
-        "Pixel count should be no more than {PIXEL_COUNT_MAX}",
-    );
-    debug_assert_ne!(image_size_x, 0);
-    debug_assert_ne!(image_size_y, 0);
-    debug_assert_ne!(point_count, 0);
+    if colors_sh_degree_max > SH_DEGREE_MAX {
+        Err(Error::UnsupportedSphericalHarmonicsDegree(colors_sh_degree_max))?;
+    }
+    if pixel_count == 0 || pixel_count > PIXEL_COUNT_MAX as usize {
+        Err(Error::InvalidPixelCount(pixel_count))?;
+    }
+    if point_count == 0 {
+        Err(Error::MismatchedPointCount(0, "non-zero".into()))?;
+    }
 
     // Specifying the inputs
 
@@ -186,7 +186,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     #[cfg(debug_assertions)]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "rasterize");
 
-    forward::RenderOutput {
+    Ok(forward::RenderOutput {
         colors_rgb_2d: outputs_rasterize.colors_rgb_2d,
         state: backward::RenderInput {
             colors_rgb_3d: outputs_transform.colors_rgb_3d,
@@ -220,7 +220,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             view_position,
             view_transform,
         },
-    }
+    })
 }
 
 /// ## Arguments

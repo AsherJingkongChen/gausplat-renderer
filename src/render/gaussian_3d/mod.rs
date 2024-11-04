@@ -5,6 +5,7 @@ pub mod jit;
 pub use super::view::*;
 pub use crate::{
     backend::{autodiff, Autodiff, AutodiffBackend, Backend},
+    error::Error,
     spherical_harmonics::SH_DEGREE_MAX,
 };
 pub use burn::{
@@ -22,7 +23,7 @@ pub trait Gaussian3dRenderer<B: Backend>:
         input: forward::RenderInput<B>,
         view: &View,
         options: &Gaussian3dRenderOptions,
-    ) -> forward::RenderOutput<B>;
+    ) -> Result<forward::RenderOutput<B>, Error>;
 
     fn render_backward(
         state: backward::RenderInput<B>,

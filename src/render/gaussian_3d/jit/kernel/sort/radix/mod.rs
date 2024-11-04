@@ -48,6 +48,7 @@ pub const RADIX_COUNT_SHIFT: u32 = 8;
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     inputs: Inputs<R, I>
 ) -> Outputs<R, I> {
+    // NOTE: The key size is fixed.
     debug_assert_eq!(size_of::<I>(), KEY_BIT_COUNT >> 3);
 
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");

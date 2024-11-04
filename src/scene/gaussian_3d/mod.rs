@@ -4,6 +4,7 @@ pub use super::point::*;
 pub use crate::spherical_harmonics::SH_DEGREE_MAX;
 pub use crate::{
     backend::{self, *},
+    error::Error,
     render::gaussian_3d as render,
 };
 pub use burn::{
@@ -240,7 +241,7 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &render::View,
         options: &render::Gaussian3dRenderOptions,
-    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
+    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I>>, Error> {
         render::jit::forward(input, view, options)
     }
 
@@ -260,7 +261,7 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &render::View,
         options: &render::Gaussian3dRenderOptions,
-    ) -> render::forward::RenderOutput<JitBackend<R, F, I>> {
+    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I>>, Error> {
         render::jit::forward(input, view, options)
     }
 
@@ -280,7 +281,7 @@ where
         &self,
         view: &render::View,
         options: &Gaussian3dRenderOptions,
-    ) -> Gaussian3dRenderOutput<B> {
+    ) -> Result<Gaussian3dRenderOutput<B>, Error> {
         #[cfg(debug_assertions)]
         log::debug!(
             target: "gausplat::renderer::gaussian_3d::scene",
@@ -297,12 +298,12 @@ where
             scalings: self.scalings().into_primitive().tensor(),
         };
 
-        let output = Self::render_forward(input, view, options);
+        let output = Self::render_forward(input, view, options)?;
 
         let colors_rgb_2d =
             Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
 
-        Gaussian3dRenderOutput { colors_rgb_2d }
+        Ok(Gaussian3dRenderOutput { colors_rgb_2d })
     }
 }
 
@@ -315,7 +316,7 @@ where
         &self,
         view: &render::View,
         options: &Gaussian3dRenderOptions,
-    ) -> Gaussian3dRenderOutputAutodiff<Autodiff<B>> {
+    ) -> Result<Gaussian3dRenderOutputAutodiff<Autodiff<B>>, Error> {
         let device = self.device();
         let colors_sh = self.colors_sh().into_primitive().tensor();
         let opacities = self.opacities().into_primitive().tensor();
@@ -343,7 +344,7 @@ where
             scalings: scalings.primitive,
         };
 
-        let output = Self::render_forward(input, view, options);
+        let output = Self::render_forward(input, view, options)?;
 
         let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
@@ -385,11 +386,11 @@ where
             },
         ));
 
-        Gaussian3dRenderOutputAutodiff {
+        Ok(Gaussian3dRenderOutputAutodiff {
             colors_rgb_2d,
             positions_2d_grad_norm_ref,
             radii,
-        }
+        })
     }
 }
 
@@ -524,13 +525,14 @@ mod tests {
 
     #[test]
     fn default_render_wgpu() {
-        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default());
+        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default()).unwrap();
     }
 
     #[test]
     fn default_render_wgpu_autodiff() {
         Gaussian3dScene::<Autodiff<Wgpu>>::default()
             .render(&VIEW, &Default::default())
+            .unwrap()
             .colors_rgb_2d
             .backward();
     }
