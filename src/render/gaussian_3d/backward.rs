@@ -8,7 +8,7 @@ pub struct RenderInput<B: Backend> {
     pub colors_sh: B::FloatTensorPrimitive,
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics: B::FloatTensorPrimitive,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive,

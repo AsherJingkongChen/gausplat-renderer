@@ -22,7 +22,7 @@ pub struct Arguments {
 pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     /// `[P, 3]`
     pub colors_rgb_3d: JitTensor<R, F>,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics: JitTensor<R, F>,
     /// `[P]`
     pub opacities_3d: JitTensor<R, F>,

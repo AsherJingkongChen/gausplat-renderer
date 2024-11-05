@@ -13,10 +13,9 @@ var<storage, read_write> colors_rgb_2d_grad: array<array<f32, 3>>;
 // [P, 3] (0.0 ~ 1.0)
 @group(0) @binding(2)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
-// [P, 2, 2] (Symmetric)
-// TODO: Compact layout
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(3)
-var<storage, read_write> conics: array<mat2x2<f32>>;
+var<storage, read_write> conics: array<array<f32, 3>>;
 // [P, 1] (0.0 ~ 1.0)
 @group(0) @binding(4)
 var<storage, read_write> opacities_3d: array<f32>;
@@ -39,7 +38,7 @@ var<storage, read_write> transmittances: array<f32>;
 // [P, 3]
 @group(0) @binding(10)
 var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
-// [P, 2, 2] (Symmetric)
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(11)
 var<storage, read_write> conics_grad: array<atomic<f32>>;
 // [P, 1]
@@ -61,7 +60,7 @@ var<workgroup> point_indices_in_batch: array<u32, BATCH_SIZE>;
 var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 
 const OPACITY_2D_MAX: f32 = 1.0 - OPACITY_2D_MIN;
-const OPACITY_2D_MIN: f32 = 2.5 / 255.0;
+const OPACITY_2D_MIN: f32 = 0.7 / 255.0;
 // T_x * T_y
 const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
 // T_x
@@ -130,7 +129,7 @@ fn main(
         if index >= point_range.x {
             let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = vec_from_array_f32_3(colors_rgb_3d[point_index]);
-            conics_in_batch[local_index] = conics[point_index];
+            conics_in_batch[local_index] = mat_sym_from_array_f32_3(conics[point_index]);
             opacities_3d_in_batch[local_index] = opacities_3d[point_index];
             point_indices_in_batch[local_index] = point_index;
             positions_2d_in_batch[local_index] = positions_2d[point_index];
@@ -245,10 +244,8 @@ fn main(
             // Σ^-1 is symmetric
 
             let density_density_grad_n = -density * density_grad;
-            let conic_grad = 0.5 * density_density_grad_n * mat2x2<f32>(
-                position_offset * position_offset.x,
-                position_offset * position_offset.y,
-            );
+            let conic_grad = 0.5 * density_density_grad_n *
+                position_offset.xxy * position_offset.xyy;
             let position_2d_grad = density_density_grad_n * conic * position_offset;
 
             // Updating the gradients of the point
@@ -259,11 +256,10 @@ fn main(
             atomicAdd(&colors_rgb_3d_grad[3 * point_index + 0], color_rgb_3d_grad[0]);
             atomicAdd(&colors_rgb_3d_grad[3 * point_index + 1], color_rgb_3d_grad[1]);
             atomicAdd(&colors_rgb_3d_grad[3 * point_index + 2], color_rgb_3d_grad[2]);
-            // [P, 2, 2]
-            atomicAdd(&conics_grad[4 * point_index + 0], conic_grad[0][0]);
-            atomicAdd(&conics_grad[4 * point_index + 1], conic_grad[0][1]);
-            atomicAdd(&conics_grad[4 * point_index + 2], conic_grad[1][0]);
-            atomicAdd(&conics_grad[4 * point_index + 3], conic_grad[1][1]);
+            // [P, 3]
+            atomicAdd(&conics_grad[3 * point_index + 0], conic_grad[0]);
+            atomicAdd(&conics_grad[3 * point_index + 1], conic_grad[1]);
+            atomicAdd(&conics_grad[3 * point_index + 2], conic_grad[2]);
             // [P, 1]
             atomicAdd(&opacities_3d_grad[point_index], opacity_3d_grad);
             // [P, 2]
@@ -273,6 +269,15 @@ fn main(
 
         tile_point_count -= batch_point_count;
     }
+}
+
+// TODO: Apply the naming
+fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
+    return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {
+    return mat2x2<f32>(a[0], a[1], a[1], a[2]);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

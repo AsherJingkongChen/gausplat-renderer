@@ -31,14 +31,12 @@ var<storage, read_write> colors_rgb_3d_grad: array<array<f32, 3>>;
 // [P, 16, 3]
 @group(0) @binding(2)
 var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
-// [P, 2, 2] (Symmetric)
-// TODO: Compact layout
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(3)
-var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P, 2, 2] (Symmetric)
-// TODO: Compact layout
+var<storage, read_write> conics: array<array<f32, 3>>;
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(4)
-var<storage, read_write> conics_grad: array<mat2x2<f32>>;
+var<storage, read_write> conics_grad: array<array<f32, 3>>;
 // [P]
 @group(0) @binding(5)
 var<storage, read_write> depths: array<f32>;
@@ -140,8 +138,8 @@ fn main(
     //
     // Σ' and Σ'^-1 are symmetric
 
-    let conic = conics[index];
-    let conic_grad = conics_grad[index];
+    let conic = mat_sym_from_array_f32_3(conics[index]);
+    let conic_grad = mat_sym_from_array_f32_3(conics_grad[index]);
     // ∂L/∂Σ'[2, 2]
     let covariance_2d_grad = -1.0 * conic * conic_grad * conic;
 
@@ -581,6 +579,10 @@ fn main(
 
 fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {
+    return mat2x2<f32>(a[0], a[1], a[1], a[2]);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

@@ -37,9 +37,9 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub colors_rgb_3d_grad: JitTensor<R, F>,
     /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: JitTensor<R, F>,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics: JitTensor<R, F>,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics_grad: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,

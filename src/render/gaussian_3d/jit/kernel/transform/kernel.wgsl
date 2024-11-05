@@ -45,10 +45,9 @@ var<storage, read_write> scalings: array<array<f32, 3>>;
 // [P, 3] (0.0, 1.0)
 @group(0) @binding(5)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
-// [P, 2, 2] (Symmetric)
-// TODO: Compact layout
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(6)
-var<storage, read_write> conics: array<mat2x2<f32>>;
+var<storage, read_write> conics: array<array<f32, 3>>;
 // [P] (0 ~ )
 @group(0) @binding(7)
 var<storage, read_write> depths: array<f32>;
@@ -106,7 +105,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 const DEPTH_MAX: f32 = f32(1u << (17 - 4));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
 // The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const FACTOR_RADIUS: f32 = 2.5826694;
+const FACTOR_RADIUS: f32 = 2.9949278;
 // C_f
 const FILTER_LOW_PASS: f32 = 0.3;
 // T_x
@@ -249,10 +248,10 @@ fn main(
     if covariance_2d_det == 0.0 {
         return;
     }
-    let covariance_2d_01_n = -covariance_2d[0][1];
-    let conic = (1.0 / covariance_2d_det) * mat2x2<f32>(
-        covariance_2d[1][1], covariance_2d_01_n,
-        covariance_2d_01_n, covariance_2d[0][0],
+    let conic = array<f32, 3>(
+        covariance_2d[1][1] / covariance_2d_det,
+        -covariance_2d[0][1] / covariance_2d_det,
+        covariance_2d[0][0] / covariance_2d_det,
     );
 
     // Computing the max radius using the 2D covariance matrix
@@ -400,7 +399,7 @@ fn main(
 
     // [P, 3]
     colors_rgb_3d[index] = array_from_vec3_f32(color_rgb_3d);
-    // [P, 2, 2]
+    // [P, 3]
     conics[index] = conic;
     // [P]
     depths[index] = depth;
