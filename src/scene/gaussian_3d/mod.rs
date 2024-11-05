@@ -525,7 +525,9 @@ mod tests {
 
     #[test]
     fn default_render_wgpu() {
-        Gaussian3dScene::<Wgpu>::default().render(&VIEW, &Default::default()).unwrap();
+        Gaussian3dScene::<Wgpu>::default()
+            .render(&VIEW, &Default::default())
+            .unwrap();
     }
 
     #[test]

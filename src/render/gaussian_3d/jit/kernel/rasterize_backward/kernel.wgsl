@@ -14,6 +14,7 @@ var<storage, read_write> colors_rgb_2d_grad: array<array<f32, 3>>;
 @group(0) @binding(2)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
+// TODO: Compact layout
 @group(0) @binding(3)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P, 1] (0.0 ~ 1.0)

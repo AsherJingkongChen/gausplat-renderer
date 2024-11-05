@@ -258,6 +258,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             .expect("This is an internal error");
         }
         let point_count_other = self.scalings.dims()[0];
+        // TODO: Run clippy and fix this
         if point_count_other != point_count_target {
             Err::<(), _>(
                 Error::MismatchedPointCount(

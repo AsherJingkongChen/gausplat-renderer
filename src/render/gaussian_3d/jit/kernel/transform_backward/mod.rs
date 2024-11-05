@@ -49,10 +49,14 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub positions_2d_grad: JitTensor<R, F>,
     /// `[P, 3]`
     pub positions_3d: JitTensor<R, F>,
+    /// `[P, 2]`
+    pub positions_3d_in_normalized: JitTensor<R, F>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
     /// `[P, 4]`
     pub rotations: JitTensor<R, F>,
+    /// `[P, 3 (+ 1), 3]`
+    pub rotations_matrix: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,
 }
@@ -121,8 +125,10 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.is_colors_rgb_3d_not_clamped.handle.binding(),
             inputs.positions_2d_grad.handle.binding(),
             inputs.positions_3d.handle.binding(),
+            inputs.positions_3d_in_normalized.handle.binding(),
             inputs.radii.handle.binding(),
             inputs.rotations.handle.binding(),
+            inputs.rotations_matrix.handle.binding(),
             inputs.scalings.handle.binding(),
             colors_sh_grad.handle.to_owned().binding(),
             positions_2d_grad_norm.handle.to_owned().binding(),

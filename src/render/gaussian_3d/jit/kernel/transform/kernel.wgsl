@@ -46,6 +46,7 @@ var<storage, read_write> scalings: array<array<f32, 3>>;
 @group(0) @binding(5)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 2, 2] (Symmetric)
+// TODO: Compact layout
 @group(0) @binding(6)
 var<storage, read_write> conics: array<mat2x2<f32>>;
 // [P] (0 ~ )
@@ -57,14 +58,22 @@ var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
 // [P, 2]
 @group(0) @binding(9)
 var<storage, read_write> positions_2d: array<vec2<f32>>;
-// [P]
+// [P, 2]
 @group(0) @binding(10)
-var<storage, read_write> radii: array<u32>;
+var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
 // [P]
 @group(0) @binding(11)
+var<storage, read_write> radii: array<u32>;
+// [P, 3 (+ 1), 3]
+// TODO: Compact layout
+@group(0) @binding(12)
+var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
+// [P]
+@group(0) @binding(13)
 var<storage, read_write> tile_touched_counts: array<u32>;
 // [P, 4] (x max, x min, y max, y min)
-@group(0) @binding(12)
+// TODO: Rename point_bound
+@group(0) @binding(14)
 var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
@@ -226,6 +235,7 @@ fn main(
         vec2<f32>(0.0, focal_length_normalized.y),
         -focal_length_normalized * position_3d_in_normalized_clamped,
     );
+    // TODO: Rename to project_2d
     let transform_2d = projection_affine * view_rotation;
     let covariance_2d = transform_2d * covariance_3d * transpose(transform_2d) + mat2x2<f32>(
         FILTER_LOW_PASS, 0.0,
@@ -400,8 +410,12 @@ fn main(
     );
     // [P, 2]
     positions_2d[index] = position_2d;
+    // [P, 2]
+    positions_3d_in_normalized[index] = position_3d_in_normalized;
     // [P]
     radii[index] = u32(radius);
+    // [P, 3 (+ 1), 3]
+    rotations_matrix[index] = rotation_matrix;
     // [P]
     tile_touched_counts[index] = tile_point_count;
     // [P, 4]
