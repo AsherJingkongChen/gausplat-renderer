@@ -4,7 +4,7 @@ pub use bytemuck::{Pod, Zeroable};
 use burn::tensor::ops::FloatTensorOps;
 use bytemuck::bytes_of;
 
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
     /// `(0 ~ 3)`
@@ -23,12 +23,10 @@ pub struct Arguments {
     pub view_bound_x: f32,
     /// `tan(Fov_y / 2) * (C_f + 1)`
     pub view_bound_y: f32,
-    /// Padding
-    pub _padding_1: [u32; 2],
     /// `[3]`
     pub view_position: [f32; 3],
     /// Padding
-    pub _padding_2: [u32; 1],
+    pub _padding_1: [u32; 1],
     /// `[3 (+ 1), 3 + 1]`
     pub view_transform: [[f32; 4]; 4],
 }

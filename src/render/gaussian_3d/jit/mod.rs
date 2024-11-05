@@ -275,7 +275,6 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             view_position: state.view_position,
             view_transform: state.view_transform,
             _padding_1: Default::default(),
-            _padding_2: Default::default(),
         },
         transform_backward::Inputs {
             colors_rgb_3d_grad: outputs_rasterize_backward.colors_rgb_3d_grad,
