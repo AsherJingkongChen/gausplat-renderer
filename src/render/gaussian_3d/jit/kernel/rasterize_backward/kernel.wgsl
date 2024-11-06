@@ -16,7 +16,7 @@ var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
 // [P, 3] (Symmetric mat2x2)
 @group(0) @binding(3)
 var<storage, read_write> conics: array<array<f32, 3>>;
-// [P, 1] (0.0 ~ 1.0)
+// [P, 1] (Inner)
 @group(0) @binding(4)
 var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
@@ -41,7 +41,7 @@ var<storage, read_write> colors_rgb_3d_grad: array<atomic<f32>>;
 // [P, 3] (Symmetric mat2x2)
 @group(0) @binding(11)
 var<storage, read_write> conics_grad: array<atomic<f32>>;
-// [P, 1]
+// [P, 1] (Inner)
 @group(0) @binding(12)
 var<storage, read_write> opacities_3d_grad: array<atomic<f32>>;
 // [P, 2]
@@ -130,7 +130,8 @@ fn main(
             let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = vec_from_array_f32_3(colors_rgb_3d[point_index]);
             conics_in_batch[local_index] = mat_sym_from_array_f32_3(conics[point_index]);
-            opacities_3d_in_batch[local_index] = opacities_3d[point_index];
+            // (Outer)
+            opacities_3d_in_batch[local_index] = sigmoid_f32(opacities_3d[point_index]);
             point_indices_in_batch[local_index] = point_index;
             positions_2d_in_batch[local_index] = positions_2d[point_index];
         }
@@ -224,7 +225,8 @@ fn main(
             // ∂L/∂α[n] = ∂L/∂α'[n] * σ[n]
             // ∂L/∂σ[n] = ∂L/∂α'[n] * α[n]
 
-            let opacity_3d_grad = density * opacity_2d_grad;
+            // (Inner)
+            let opacity_3d_grad = sigmoid_grad_f32(opacity_3d) * density * opacity_2d_grad;
             let density_grad = opacity_3d * opacity_2d_grad;
 
             // Computing the gradients of the point
@@ -271,13 +273,25 @@ fn main(
     }
 }
 
-// TODO: Apply the naming
 fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
 }
 
 fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {
     return mat2x2<f32>(a[0], a[1], a[1], a[2]);
+}
+
+// y = e^x / (1 + e^x)
+fn sigmoid_f32(x: f32) -> f32 {
+    let x_exp = exp(x);
+    return x_exp / (1.0 + x_exp);
+}
+
+// dy/dx = dy/d(e^x) * de^x/dx
+//       = (1 + e^x)^-2 * e^x
+//       = y * (1 - y)
+fn sigmoid_grad_f32(y: f32) -> f32 {
+    return y * (1.0 - y);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

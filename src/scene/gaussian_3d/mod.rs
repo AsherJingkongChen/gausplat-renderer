@@ -291,11 +291,11 @@ where
         let input = render::forward::RenderInput {
             device: self.device(),
             point_count: self.point_count() as u64,
-            colors_sh: self.colors_sh().into_primitive().tensor(),
-            opacities: self.opacities().into_primitive().tensor(),
-            positions: self.positions().into_primitive().tensor(),
-            rotations: self.rotations().into_primitive().tensor(),
-            scalings: self.scalings().into_primitive().tensor(),
+            colors_sh: self.colors_sh.val().into_primitive().tensor(),
+            opacities: self.opacities.val().into_primitive().tensor(),
+            positions: self.positions.val().into_primitive().tensor(),
+            rotations: self.rotations.val().into_primitive().tensor(),
+            scalings: self.scalings.val().into_primitive().tensor(),
         };
 
         let output = Self::render_forward(input, view, options)?;
@@ -318,11 +318,11 @@ where
         options: &Gaussian3dRenderOptions,
     ) -> Result<Gaussian3dRenderOutputAutodiff<Autodiff<B>>, Error> {
         let device = self.device();
-        let colors_sh = self.colors_sh().into_primitive().tensor();
-        let opacities = self.opacities().into_primitive().tensor();
-        let positions = self.positions().into_primitive().tensor();
-        let rotations = self.rotations().into_primitive().tensor();
-        let scalings = self.scalings().into_primitive().tensor();
+        let colors_sh = self.colors_sh.val().into_primitive().tensor();
+        let opacities = self.opacities.val().into_primitive().tensor();
+        let positions = self.positions.val().into_primitive().tensor();
+        let rotations = self.rotations.val().into_primitive().tensor();
+        let scalings = self.scalings.val().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
             Tensor::<Autodiff<B>, 1>::empty([1], &device)
@@ -504,19 +504,19 @@ mod tests {
 
         let scene = Gaussian3dScene::<NdArray<f32>>::init(&device, priors);
 
-        let colors_sh = scene.colors_sh();
+        let colors_sh = scene.get_colors_sh();
         assert_eq!(colors_sh.dims(), [2, 48]);
 
-        let opacities = scene.opacities();
+        let opacities = scene.get_opacities();
         assert_eq!(opacities.dims(), [2, 1]);
 
-        let positions = scene.positions();
+        let positions = scene.get_positions();
         assert_eq!(positions.dims(), [2, 3]);
 
-        let rotations = scene.rotations();
+        let rotations = scene.get_rotations();
         assert_eq!(rotations.dims(), [2, 4]);
 
-        let scalings = scene.scalings();
+        let scalings = scene.get_scalings();
         assert_eq!(scalings.dims(), [2, 3]);
 
         assert_eq!(scene.point_count(), 2);

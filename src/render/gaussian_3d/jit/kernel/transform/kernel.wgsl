@@ -35,10 +35,10 @@ var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
 // [P, 3]
 @group(0) @binding(2)
 var<storage, read_write> positions_3d: array<array<f32, 3>>;
-// [P, 4] (x, y, z, w) (Normalized)
+// [P, 4] (x, y, z, w) (Inner)
 @group(0) @binding(3)
 var<storage, read_write> rotations: array<vec4<f32>>;
-// [P, 3]
+// [P, 3] (Inner)
 @group(0) @binding(4)
 var<storage, read_write> scalings: array<array<f32, 3>>;
 
@@ -151,16 +151,18 @@ fn main(
     //            [ x * y + w * z,       -x * x - z * z + 0.5,  y * z - w * x      ]
     //            [ x * z - w * y,        y * z + w * x,       -x * x - y * y + 0.5]] * 2
 
-    let rotation = rotations[index];
-    let q_wx = rotation.w * rotation.x;
-    let q_wy = rotation.w * rotation.y;
-    let q_wz = rotation.w * rotation.z;
-    let q_xx = rotation.x * rotation.x;
-    let q_xy = rotation.x * rotation.y;
-    let q_xz = rotation.x * rotation.z;
+    // (Outer)
+    let rotation = normalize(rotations[index]);
+    let q_c2_w = rotation.xyz * rotation.www;
+    let q_c2_x = rotation.xyz * rotation.xxx;
     let q_yy = rotation.y * rotation.y;
     let q_yz = rotation.y * rotation.z;
     let q_zz = rotation.z * rotation.z;
+    let rotation_matrix = 2.0 * mat3x3<f32>(
+        (- q_yy - q_zz) + 0.5, (q_c2_x.y + q_c2_w.z), (q_c2_x.z - q_c2_w.y),
+        (q_c2_x.y - q_c2_w.z), (- q_c2_x.x - q_zz) + 0.5, (q_yz + q_c2_w.x),
+        (q_c2_x.z + q_c2_w.y), (q_yz - q_c2_w.x), (- q_c2_x.x - q_yy) + 0.5,
+    );
 
     // Computing the 3D covariance matrix from rotation and scaling
     // RS[3, 3] = R[3, 3] * S[3, 3]
@@ -186,12 +188,8 @@ fn main(
     // 
     // S = √L
 
-    let rotation_matrix = 2.0 * mat3x3<f32>(
-        (- q_yy - q_zz) + 0.5, (q_xy + q_wz), (q_xz - q_wy),
-        (q_xy - q_wz), (- q_xx - q_zz) + 0.5, (q_yz + q_wx),
-        (q_xz + q_wy), (q_yz - q_wx), (- q_xx - q_yy) + 0.5,
-    );
-    let scaling = scalings[index];
+    // (Outer)
+    let scaling = exp(vec_from_array_f32_3(scalings[index]));
     let rotation_scaling = mat3x3<f32>(
         rotation_matrix[0] * scaling[0],
         rotation_matrix[1] * scaling[1],
@@ -224,22 +222,22 @@ fn main(
     // Pv.x and Pv.y are the clamped
 
     let focal_length_normalized = focal_length / depth;
+    let view_bound = vec2<f32>(arguments.view_bound_x, arguments.view_bound_y);
     let position_3d_in_normalized_clamped = clamp(
         position_3d_in_normalized,
-        vec2<f32>(-arguments.view_bound_x, -arguments.view_bound_y),
-        vec2<f32>(arguments.view_bound_x, arguments.view_bound_y),
+        -view_bound,
+        view_bound,
     );
-    let projection_affine = mat3x2<f32>(
+    let projection_2d = mat3x2<f32>(
         vec2<f32>(focal_length_normalized.x, 0.0),
         vec2<f32>(0.0, focal_length_normalized.y),
         -focal_length_normalized * position_3d_in_normalized_clamped,
-    );
-    // TODO: Rename to project_2d
-    let transform_2d = projection_affine * view_rotation;
-    let covariance_2d = transform_2d * covariance_3d * transpose(transform_2d) + mat2x2<f32>(
-        FILTER_LOW_PASS, 0.0,
-        0.0, FILTER_LOW_PASS,
-    );
+    ) * view_rotation;
+    let covariance_2d =
+        projection_2d * covariance_3d * transpose(projection_2d) + mat2x2<f32>(
+            FILTER_LOW_PASS, 0.0,
+            0.0, FILTER_LOW_PASS,
+        );
 
     // Computing the inverse of the 2D covariance matrix
     // Σ'^-1[2, 2] (Symmetric) <- Σ'[2, 2]
@@ -248,11 +246,9 @@ fn main(
     if covariance_2d_det == 0.0 {
         return;
     }
-    let conic = array<f32, 3>(
-        covariance_2d[1][1] / covariance_2d_det,
-        -covariance_2d[0][1] / covariance_2d_det,
-        covariance_2d[0][0] / covariance_2d_det,
-    );
+    let conic =
+        vec3<f32>(covariance_2d[1][1], -covariance_2d[0][1], covariance_2d[0][0]) /
+        covariance_2d_det;
 
     // Computing the max radius using the 2D covariance matrix
     // r <- Σ'[2, 2]
@@ -277,9 +273,9 @@ fn main(
     // r = √λ_max
 
     let covariance_2d_diag_mean = (covariance_2d[0][0] + covariance_2d[1][1]) / 2.0;
-    let eigenvalue_difference2 =
+    let eigenvalue_difference_p2 =
         covariance_2d_diag_mean * covariance_2d_diag_mean - covariance_2d_det;
-    let eigenvalue_difference = sqrt(max(eigenvalue_difference2, 0.0));
+    let eigenvalue_difference = sqrt(max(eigenvalue_difference_p2, 0.0));
     let eigenvalue_max = max(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
@@ -315,7 +311,8 @@ fn main(
     }
 
     // Computing the view direction in world space
-    // Dv[3] <- Ov[3] = Pw[3] - V[3]
+    // Ov[3] = Pw[3] - V[3]
+    // Dv[3] = Ov[3] / |Ov|
 
     let view_offset = position_3d - arguments.view_position;
     let view_direction = normalize(view_offset);
@@ -398,13 +395,13 @@ fn main(
     // Specifying the results
 
     // [P, 3]
-    colors_rgb_3d[index] = array_from_vec3_f32(color_rgb_3d);
+    colors_rgb_3d[index] = array_from_vec_f32_3(color_rgb_3d);
     // [P, 3]
-    conics[index] = conic;
+    conics[index] = array_from_vec_f32_3(conic);
     // [P]
     depths[index] = depth;
     // [P, 3]
-    is_colors_rgb_3d_not_clamped[index] = array_from_vec3_f32(
+    is_colors_rgb_3d_not_clamped[index] = array_from_vec_f32_3(
         vec3<f32>(is_color_rgb_3d_not_clamped)
     );
     // [P, 2]
@@ -421,7 +418,7 @@ fn main(
     tiles_touched_bound[index] = tile_touched_bound;
 }
 
-fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
+fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
 }
 

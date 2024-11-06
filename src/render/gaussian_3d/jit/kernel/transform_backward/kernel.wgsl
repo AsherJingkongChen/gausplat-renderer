@@ -55,14 +55,14 @@ var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
 // [P]
 @group(0) @binding(10)
 var<storage, read_write> radii: array<u32>;
-// [P, 4] (x, y, z, w) (Normalized)
+// [P, 4] (x, y, z, w) (Inner)
 @group(0) @binding(11)
 var<storage, read_write> rotations: array<vec4<f32>>;
 // [P, 3 (+ 1), 3]
 // TODO: Compact layout
 @group(0) @binding(12)
 var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
-// [P, 3]
+// [P, 3] (Inner)
 @group(0) @binding(13)
 var<storage, read_write> scalings: array<array<f32, 3>>;
 
@@ -75,10 +75,10 @@ var<storage, read_write> positions_2d_grad_norm: array<f32>;
 // [P, 3]
 @group(0) @binding(16)
 var<storage, read_write> positions_3d_grad: array<array<f32, 3>>;
-// [P, 4]
+// [P, 4] (x, y, z, w) (Inner)
 @group(0) @binding(17)
 var<storage, read_write> rotations_grad: array<vec4<f32>>;
-// [P, 3]
+// [P, 3] (Inner)
 @group(0) @binding(18)
 var<storage, read_write> scalings_grad: array<array<f32, 3>>;
 
@@ -151,7 +151,8 @@ fn main(
     // S is diagonal
 
     let rotation_matrix = rotations_matrix[index];
-    let scaling = scalings[index];
+    // (Outer)
+    let scaling = exp(vec_from_array_f32_3(scalings[index]));
     let rotation_scaling = mat3x3<f32>(
         rotation_matrix[0] * scaling[0],
         rotation_matrix[1] * scaling[1],
@@ -173,21 +174,20 @@ fn main(
     let depth = depths[index];
     let focal_length = vec2<f32>(arguments.focal_length_x, arguments.focal_length_y);
     let focal_length_normalized = focal_length / depth;
+    let view_bound = vec2<f32>(arguments.view_bound_x, arguments.view_bound_y);
     let position_3d_in_normalized = positions_3d_in_normalized[index];
     // [Pv.x / Pv.z, Pv.y / Pv.z]
     let position_3d_in_normalized_clamped = clamp(
         position_3d_in_normalized,
-        vec2<f32>(-arguments.view_bound_x, -arguments.view_bound_y),
-        vec2<f32>(arguments.view_bound_x, arguments.view_bound_y),
+        -view_bound,
+        view_bound,
     );
-    let projection_affine = mat3x2<f32>(
+    let view_rotation = arguments.view_rotation;
+    let projection_2d = mat3x2<f32>(
         vec2<f32>(focal_length_normalized.x, 0.0),
         vec2<f32>(0.0, focal_length_normalized.y),
         -focal_length_normalized * position_3d_in_normalized_clamped,
-    );
-    let view_rotation = arguments.view_rotation;
-    // TODO: Rename to project_2d
-    let transform_2d = projection_affine * view_rotation;
+    ) * view_rotation;
 
     // Computing the gradients
     //
@@ -209,44 +209,42 @@ fn main(
     // Σ and Σ' are symmetric
 
     // ∂L/∂Σ[3, 3]
-    let covariance_3d_grad = transpose(transform_2d) * covariance_2d_grad * transform_2d;
+    let covariance_3d_grad = transpose(projection_2d) * covariance_2d_grad * projection_2d;
     // ∂L/∂T[2, 3]
-    let transform_2d_grad = 2.0 * covariance_2d_grad * transform_2d * covariance_3d;
+    let projection_2d_grad = 2.0 * covariance_2d_grad * projection_2d * covariance_3d;
     // ∂L/∂J[2, 3]
-    let projection_affine_grad = transform_2d_grad * transpose(view_rotation);
+    let projection_2d_left_grad = projection_2d_grad * transpose(view_rotation);
 
     // Computing the gradients
     //
     // ∂L/∂Pv[3] = [∂L/∂Pv.x, ∂L/∂Pv.y, ∂L/∂Pv.z]
     //           = [〈∂L/∂J, ∂J/∂Pv.x〉,〈∂L/∂J, ∂J/∂Pv.y〉,〈∂L/∂J, ∂J/∂Pv.z〉]
     // ∂J/∂Pv.x[2, 3] = [[0, 0, -f.x / Pv.z^2]
-    //                   [0, 0, 0            ]]
-    // ∂J/∂Pv.x[2, 3] = [[0, 0, 0            ]
+    //                   [0, 0,  0           ]]
+    // ∂J/∂Pv.x[2, 3] = [[0, 0,  0           ]
     //                   [0, 0, -f.y / Pv.z^2]]
     // ∂J/∂Pv.z[2, 3] = [[-f.x / Pv.z^2,  0,            2 * f.x * Pv.x / Pv.z^3]
     //                   [ 0,            -f.y / Pv.z^2, 2 * f.y * Pv.y / Pv.z^3]]
 
-    // TODO: power of 2 -> p2
-    // TODO: Better naming
     let is_position_3d_in_normalized_not_clamped = vec2<f32>(
         position_3d_in_normalized == position_3d_in_normalized_clamped
     );
     // [f.x / Pv.z^2, f.y / Pv.z^2]
-    let focal_length_normalized2 = focal_length_normalized / depth;
+    let focal_length_normalized_p2 = focal_length_normalized / depth;
     // [f.x / Pv.z^2 * (∂L/∂J).2,0, f.y / Pv.z^2 * (∂L/∂J).2,1]
-    let focal_length_normalized2_projection_affine_grad_2 =
-        focal_length_normalized2 * projection_affine_grad[2];
+    let focal_length_normalized_p2_projection_2d_left_grad_2 =
+        focal_length_normalized_p2 * projection_2d_left_grad[2];
     // ∂L/∂Pv[3]
     let position_3d_in_view_grad = vec3<f32>(
         - is_position_3d_in_normalized_not_clamped.x *
-          focal_length_normalized2_projection_affine_grad_2.x,
+          focal_length_normalized_p2_projection_2d_left_grad_2.x,
         - is_position_3d_in_normalized_not_clamped.y *
-          focal_length_normalized2_projection_affine_grad_2.y,
-        - focal_length_normalized2.x * projection_affine_grad[0][0]
-        - focal_length_normalized2.y * projection_affine_grad[1][1]
+          focal_length_normalized_p2_projection_2d_left_grad_2.y,
+        - focal_length_normalized_p2.x * projection_2d_left_grad[0][0]
+        - focal_length_normalized_p2.y * projection_2d_left_grad[1][1]
         + 2 * dot(
             position_3d_in_normalized_clamped,
-            focal_length_normalized2_projection_affine_grad_2,
+            focal_length_normalized_p2_projection_2d_left_grad_2,
         ),
     );
 
@@ -257,8 +255,8 @@ fn main(
     //    =〈∂L/∂Pv, ∂Rv * Pw + Rv * ∂Pw〉
     //    =〈∂L/∂Pv * Pw^t, ∂Rv〉+〈Rv^t * ∂L/∂Pv, ∂Pw〉
     //
-    // (∂L/∂Pw)[3, 1]   = (Rv)^t[3, 3] * ∂L/∂Pv[3, 1]
-    // (∂L/∂Pw)^t[1, 3] = (∂L/∂Pv)^t[1, 3] * Rv[3, 3]
+    // ∂L/∂Pw[3, 1]   = Rv^t[3, 3] * ∂L/∂Pv[3, 1]
+    // ∂L/∂Pw^t[1, 3] = ∂L/∂Pv^t[1, 3] * Rv[3, 3]
 
     var position_3d_grad = position_3d_in_view_grad * view_rotation;
 
@@ -294,8 +292,8 @@ fn main(
         rotation_scaling_grad[1] * scaling[1],
         rotation_scaling_grad[2] * scaling[2],
     );
-    // ∂L/∂S[3, 3]
-    let scaling_grad = vec3<f32>(
+    // ∂L/∂S[3, 3] (Inner)
+    let scaling_grad = exp_grad_vec_f32_3(scaling) * vec3<f32>(
         dot(rotation_matrix[0], rotation_scaling_grad[0]),
         dot(rotation_matrix[1], rotation_scaling_grad[1]),
         dot(rotation_matrix[2], rotation_scaling_grad[2]),
@@ -306,8 +304,8 @@ fn main(
     // ∂L/∂Q[4] = [∂L/∂Q.x, ∂L/∂Q.y, ∂L/∂Q.z, ∂L/∂Q.w]
     //          = [∂L/∂R * ∂R/∂Q.x, ∂L/∂R * ∂R/∂Q.y, ∂L/∂R * ∂R/∂Q.z, ∂L/∂R * ∂R/∂Q.w]
     // ∂R/∂Q.x[3, 3] = [[0,    Q.y,      Q.z    ]
-    //            [Q.y, -2 * Q.x, -Q.w    ]
-    //            [Q.z,  Q.w,     -2 * Q.x]] * 2
+    //                  [Q.y, -2 * Q.x, -Q.w    ]
+    //                  [Q.z,  Q.w,     -2 * Q.x]] * 2
     // ∂R/∂Q.y[3, 3] = [[-2 * Q.y, Q.x,  Q.w    ]
     //                  [ Q.x,     0,    Q.z    ]
     //                  [-Q.w,     Q.z, -2 * Q.y]] * 2
@@ -318,34 +316,30 @@ fn main(
     //                  [ Q.z, 0,  -Q.x]
     //                  [-Q.y, Q.x, 0  ]] * 2
 
-    let quaternion = rotations[index];
-    let q_w = quaternion.w;
-    let q_x = quaternion.x;
-    let q_y = quaternion.y;
-    let q_z = quaternion.z;
-    let q_w_n = -q_w;
-    let q_x_2_n = -2.0 * q_x;
-    let q_y_2_n = -2.0 * q_y;
-    let q_z_2_n = -2.0 * q_z;
+    let rotation_inner = rotations[index];
+    // (Outer)
+    let q = normalize(rotation_inner);
+    let q_n_2 = -2.0 * q;
+    let q_n_w = q_n_2.w / 2.0;
 
-    // ∂L/∂Q[4]
-    let rotation_grad = 2.0 * vec4<f32>(
-        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q_y, q_z)) +
-        dot(rotation_matrix_grad[1], vec3<f32>(q_y, q_x_2_n, q_w)) +
-        dot(rotation_matrix_grad[2], vec3<f32>(q_z, q_w_n, q_x_2_n)),
+    // ∂L/∂Q[4] (Inner)
+    let rotation_grad = normalize_grad_vec_f32_4(rotation_inner) * vec4<f32>(
+        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q.y, q.z)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q.y, q_n_2.x, q.w)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q.z, q_n_w, q_n_2.x)),
 
-        dot(rotation_matrix_grad[0], vec3<f32>(q_y_2_n, q_x, q_w_n)) +
-        dot(rotation_matrix_grad[1], vec3<f32>(q_x, 0.0, q_z)) +
-        dot(rotation_matrix_grad[2], vec3<f32>(q_w, q_z, q_y_2_n)),
+        dot(rotation_matrix_grad[0], vec3<f32>(q_n_2.y, q.x, q_n_w)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q.x, 0.0, q.z)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q.w, q.z, q_n_2.y)),
 
-        dot(rotation_matrix_grad[0], vec3<f32>(q_z_2_n, q_w, q_x)) +
-        dot(rotation_matrix_grad[1], vec3<f32>(q_w_n, q_z_2_n, q_y)) +
-        dot(rotation_matrix_grad[2], vec3<f32>(q_x, q_y, 0.0)),
+        dot(rotation_matrix_grad[0], vec3<f32>(q_n_2.z, q.w, q.x)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(q_n_w, q_n_2.z, q.y)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q.x, q.y, 0.0)),
 
-        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q_z, -q_y)) +
-        dot(rotation_matrix_grad[1], vec3<f32>(-q_z, 0.0, q_x)) +
-        dot(rotation_matrix_grad[2], vec3<f32>(q_y, -q_x, 0.0)),
-    );
+        dot(rotation_matrix_grad[0], vec3<f32>(0.0, q.z, -q.y)) +
+        dot(rotation_matrix_grad[1], vec3<f32>(-q.z, 0.0, q.x)) +
+        dot(rotation_matrix_grad[2], vec3<f32>(q.y, -q.x, 0.0)),
+    ) * 2.0;
 
     // Computing the gradients
     //
@@ -357,18 +351,18 @@ fn main(
     // ∂L/∂Pv'[1, 2]
     let position_2d_grad = positions_2d_grad[index];
     // ∂Pv'/∂Pv[2, 3]
-    let position_2d_to_position_3d_in_view_grad = mat3x2<f32>(
+    let position_2d_to_3d_in_view_grad = mat3x2<f32>(
         vec2<f32>(focal_length_normalized.x, 0.0),
         vec2<f32>(0.0, focal_length_normalized.y),
         -focal_length_normalized * position_3d_in_normalized,
     );
     // ∂L/∂Pw[1, 3]
     position_3d_grad +=
-        position_2d_grad * position_2d_to_position_3d_in_view_grad *
+        position_2d_grad * position_2d_to_3d_in_view_grad *
         view_rotation;
 
     // Computing the norm of 2D positions gradient
-    // norm(∂L/∂Pv'[1, 2] * [I_x / 2, I_y / 2])
+    // |∂L/∂Pv'[1, 2] * [I_x / 2, I_y / 2]|
 
     let position_2d_grad_norm = length(
         position_2d_grad *
@@ -376,7 +370,8 @@ fn main(
     );
 
     // Computing the view direction in world space
-    // Dv[3] <- Ov[3] = Pw[3] - V[3]
+    // Ov[3] = Pw[3] - V[3]
+    // Dv[3] = Ov[3] / |Ov|
 
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
     let view_offset = position_3d - arguments.view_position;
@@ -525,64 +520,93 @@ fn main(
     // ∂L/∂Dv[1, 3] = ∂L/∂C_rgb[1, 3] * ∂C_rgb/∂Dv[3, 3]
     // ∂L/∂Pw[1, 3] = ∂L/∂Dv[1, 3] * ∂Dv/∂Ov[3, 3] * ∂Ov/∂Pw[3, 3]
     // ∂Ov/∂Pw[3, 3] = I
-    // ∂Dv/∂Ov[3, 3] = [[Dv.y^2 + Dv.z^2, -Dv.x * Dv.y,    -Dv.x * Dv.z]
-    //                  [-Dv.x * Dv.y,    Dv.x^2 + Dv.z^2, -Dv.y * Dv.z]
-    //                  [-Dv.x * Dv.z,    -Dv.y * Dv.z,    Dv.x^2 + Dv.y^2]] *
-    //                 (Dv.x^2 + Dv.y^2 + Dv.z^2)^-3/2
+    // ∂Dv/∂Ov[3, 3] = ∂(Ov / |Ov|)/∂Ov
 
     // ∂L/∂Dv[1, 3]
     let view_direction_grad = color_rgb_3d_grad * color_rgb_3d_to_view_direction_grad;
-    let vo_xx = view_offset.x * view_offset.x;
-    let vo_yy = view_offset.y * view_offset.y;
-    let vo_zz = view_offset.z * view_offset.z;
-    let vo_xy_n = -view_offset.x * view_offset.y;
-    let vo_xz_n = -view_offset.x * view_offset.z;
-    let vo_yz_n = -view_offset.y * view_offset.z;
-    let vo_l2_invsqrt3 = pow(inverseSqrt(vo_xx + vo_yy + vo_zz), 3.0);
     // ∂L/∂Pw[1, 3]
-    position_3d_grad += view_direction_grad * vo_l2_invsqrt3 * mat3x3<f32>(
-        vo_yy + vo_zz, vo_xy_n, vo_xz_n,
-        vo_xy_n, vo_xx + vo_zz, vo_yz_n,
-        vo_xz_n, vo_yz_n, vo_xx + vo_yy,
-    );
+    position_3d_grad += view_direction_grad * normalize_grad_vec_f32_3(view_offset);
 
     // Specifying the results
 
     // [P, 16, 3]
     colors_sh_grad[index] = array<array<f32, 3>, 16>(
-        array_from_vec3_f32(color_sh_grad[0u]),
-        array_from_vec3_f32(color_sh_grad[1u]),
-        array_from_vec3_f32(color_sh_grad[2u]),
-        array_from_vec3_f32(color_sh_grad[3u]),
-        array_from_vec3_f32(color_sh_grad[4u]),
-        array_from_vec3_f32(color_sh_grad[5u]),
-        array_from_vec3_f32(color_sh_grad[6u]),
-        array_from_vec3_f32(color_sh_grad[7u]),
-        array_from_vec3_f32(color_sh_grad[8u]),
-        array_from_vec3_f32(color_sh_grad[9u]),
-        array_from_vec3_f32(color_sh_grad[10]),
-        array_from_vec3_f32(color_sh_grad[11]),
-        array_from_vec3_f32(color_sh_grad[12]),
-        array_from_vec3_f32(color_sh_grad[13]),
-        array_from_vec3_f32(color_sh_grad[14]),
-        array_from_vec3_f32(color_sh_grad[15]),
+        array_from_vec_f32_3(color_sh_grad[0u]),
+        array_from_vec_f32_3(color_sh_grad[1u]),
+        array_from_vec_f32_3(color_sh_grad[2u]),
+        array_from_vec_f32_3(color_sh_grad[3u]),
+        array_from_vec_f32_3(color_sh_grad[4u]),
+        array_from_vec_f32_3(color_sh_grad[5u]),
+        array_from_vec_f32_3(color_sh_grad[6u]),
+        array_from_vec_f32_3(color_sh_grad[7u]),
+        array_from_vec_f32_3(color_sh_grad[8u]),
+        array_from_vec_f32_3(color_sh_grad[9u]),
+        array_from_vec_f32_3(color_sh_grad[10]),
+        array_from_vec_f32_3(color_sh_grad[11]),
+        array_from_vec_f32_3(color_sh_grad[12]),
+        array_from_vec_f32_3(color_sh_grad[13]),
+        array_from_vec_f32_3(color_sh_grad[14]),
+        array_from_vec_f32_3(color_sh_grad[15]),
     );
     // [P]
     positions_2d_grad_norm[index] = position_2d_grad_norm;
     // [P, 3]
-    positions_3d_grad[index] = array_from_vec3_f32(position_3d_grad);
+    positions_3d_grad[index] = array_from_vec_f32_3(position_3d_grad);
     // [P, 4]
     rotations_grad[index] = rotation_grad;
     // [P, 3]
-    scalings_grad[index] = array_from_vec3_f32(scaling_grad);
+    scalings_grad[index] = array_from_vec_f32_3(scaling_grad);
 }
 
-fn array_from_vec3_f32(v: vec3<f32>) -> array<f32, 3> {
+fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+// y = e^x
+// dy/dx = e^x = y
+fn exp_grad_vec_f32_3(y: vec3<f32>) -> vec3<f32> {
+    return y;
 }
 
 fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {
     return mat2x2<f32>(a[0], a[1], a[1], a[2]);
+}
+
+// Y[3] = X[3] / |X|
+// dot = X^t * X
+// ∂Y/∂X = [[-X.x^2 + dot, -X.y   * X.x, -X.z   * X.x]
+//          [-X.x   * X.y, -X.y^2 + dot, -X.z   * X.y]
+//          [-X.x   * X.z, -X.y   * X.z, -X.z^2 + dot]]
+//       * dot^(-3 / 2)
+fn normalize_grad_vec_f32_3(x: vec3<f32>) -> mat3x3<f32> {
+    let x_p2 = x * x;
+    let x_dot = x_p2.x + x_p2.y + x_p2.z;
+    let x_n_c2 = -x.xyz * x.yzx;
+    return mat3x3<f32>(
+        x_dot - x_p2.x, x_n_c2.x, x_n_c2.z,
+        x_n_c2.x, x_dot - x_p2.y, x_n_c2.y,
+        x_n_c2.z, x_n_c2.y, x_dot - x_p2.z,
+    ) * (inverseSqrt(x_dot) / x_dot);
+}
+
+// Y[4] = X[4] / |X|
+// dot = X^t * X
+// ∂Y/∂X = [[-X.x^2 + dot, -X.y   * X.x, -X.z   * X.x, -X.w   * X.x]
+//          [-X.x   * X.y, -X.y^2 + dot, -X.z   * X.y, -X.w   * X.y]
+//          [-X.x   * X.z, -X.y   * X.z, -X.z^2 + dot, -X.w   * X.z]
+//          [-X.x   * X.w, -X.y   * X.w, -X.z   * X.w, -X.w^2 + dot]]
+//       * d^(-3 / 2)
+fn normalize_grad_vec_f32_4(x: vec4<f32>) -> mat4x4<f32> {
+    let x_p2 = x * x;
+    let x_dot = x_p2.x + x_p2.y + x_p2.z + x_p2.w;
+    let x_n_c2 = -x.xyz * x.yzx;
+    let x_n_c2_w = -x.xyz * x.www;
+    return mat4x4<f32>(
+        x_dot - x_p2.x, x_n_c2.x, x_n_c2.z, x_n_c2_w.x,
+        x_n_c2.x, x_dot - x_p2.y, x_n_c2.y, x_n_c2_w.y,
+        x_n_c2.z, x_n_c2.y, x_dot - x_p2.z, x_n_c2_w.z,
+        x_n_c2_w.x, x_n_c2_w.y, x_n_c2_w.z, x_dot - x_p2.w,
+    ) * (inverseSqrt(x_dot) / x_dot);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {
