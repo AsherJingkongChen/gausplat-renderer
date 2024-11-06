@@ -17,12 +17,12 @@ pub struct Arguments {
 pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     /// `[P]`
     pub depths: JitTensor<R, F>,
+    /// `[P, 4]`
+    pub point_tile_bounds: JitTensor<R, I>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
     /// `[P]`
     pub tile_touched_offsets: JitTensor<R, I>,
-    /// `[P, 4]`
-    pub tiles_touched_bound: JitTensor<R, I>,
 }
 
 #[derive(Clone, Debug)]
@@ -81,9 +81,9 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         vec![
             client.create(bytes_of(&arguments)).binding(),
             inputs.depths.handle.binding(),
+            inputs.point_tile_bounds.handle.binding(),
             inputs.radii.handle.binding(),
             inputs.tile_touched_offsets.handle.binding(),
-            inputs.tiles_touched_bound.handle.binding(),
             point_indices.handle.to_owned().binding(),
             point_orders.handle.to_owned().binding(),
         ],

@@ -10,10 +10,10 @@ var<storage, read_write> arguments: Arguments;
 // [P, 3] (0.0 ~ 1.0)
 @group(0) @binding(1)
 var<storage, read_write> colors_rgb_3d: array<array<f32, 3>>;
-// [P, 2, 2] (Symmetric)
+// [P, 3] (Symmetric mat2x2)
 @group(0) @binding(2)
-var<storage, read_write> conics: array<mat2x2<f32>>;
-// [P, 1] (0.0 ~ 1.0)
+var<storage, read_write> conics: array<array<f32, 3>>;
+// [P, 1] (Inner)
 @group(0) @binding(3)
 var<storage, read_write> opacities_3d: array<f32>;
 // [T] (0 ~ P)
@@ -48,7 +48,7 @@ var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 var<workgroup> pixel_done_count: atomic<u32>;
 
 const OPACITY_2D_MAX: f32 = 1.0 - OPACITY_2D_MIN;
-const OPACITY_2D_MIN: f32 = 2.5 / 255.0;
+const OPACITY_2D_MIN: f32 = 0.7 / 255.0;
 const TRANSMITTANCE_MIN: f32 = pow(OPACITY_2D_MIN, 2.0);
 // T_x * T_y
 const BATCH_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
@@ -125,8 +125,9 @@ fn main(
         if index < point_range.y {
             let point_index = point_indices[index];
             colors_rgb_3d_in_batch[local_index] = vec_from_array_f32_3(colors_rgb_3d[point_index]);
-            conics_in_batch[local_index] = conics[point_index];
-            opacities_3d_in_batch[local_index] = opacities_3d[point_index];
+            conics_in_batch[local_index] = mat_sym_from_array_f32_3(conics[point_index]);
+            // (Outer)
+            opacities_3d_in_batch[local_index] = sigmoid_f32(opacities_3d[point_index]);
             positions_2d_in_batch[local_index] = positions_2d[point_index];
         }
         workgroupBarrier();
@@ -217,6 +218,20 @@ fn main(
         // [I_y, I_x]
         transmittances[pixel_index] = transmittance_state;
     }
+}
+
+fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
+    return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {
+    return mat2x2<f32>(a[0], a[1], a[1], a[2]);
+}
+
+// y = e^x / (1 + e^x)
+fn sigmoid_f32(x: f32) -> f32 {
+    let x_exp = exp(x);
+    return x_exp / (1.0 + x_exp);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

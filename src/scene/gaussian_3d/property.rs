@@ -8,7 +8,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 48] <- [P, 16, 3]`
     #[inline]
-    pub fn colors_sh(&self) -> Tensor<B, 2> {
+    pub fn get_colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())
     }
 
@@ -16,7 +16,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 1]`
     #[inline]
-    pub fn opacities(&self) -> Tensor<B, 2> {
+    pub fn get_opacities(&self) -> Tensor<B, 2> {
         Self::make_opacities(self.opacities.val())
     }
 
@@ -24,7 +24,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 3]`
     #[inline]
-    pub fn positions(&self) -> Tensor<B, 2> {
+    pub fn get_positions(&self) -> Tensor<B, 2> {
         Self::make_positions(self.positions.val())
     }
 
@@ -32,7 +32,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 4]`
     #[inline]
-    pub fn rotations(&self) -> Tensor<B, 2> {
+    pub fn get_rotations(&self) -> Tensor<B, 2> {
         Self::make_rotations(self.rotations.val())
     }
 
@@ -40,32 +40,32 @@ impl<B: Backend> Gaussian3dScene<B> {
     ///
     /// `[P, 3]`
     #[inline]
-    pub fn scalings(&self) -> Tensor<B, 2> {
+    pub fn get_scalings(&self) -> Tensor<B, 2> {
         Self::make_scalings(self.scalings.val())
     }
 }
 
 /// Outer value makers
 impl<B: Backend> Gaussian3dScene<B> {
-    /// Making values for [`Gaussian3dScene::colors_sh`]
+    /// Making values for [`Gaussian3dScene::get_colors_sh`]
     #[inline]
     pub fn make_colors_sh(colors_sh: Tensor<B, 2>) -> Tensor<B, 2> {
         colors_sh
     }
 
-    /// Making values for [`Gaussian3dScene::opacities`]
+    /// Making values for [`Gaussian3dScene::get_opacities`]
     #[inline]
     pub fn make_opacities(opacities: Tensor<B, 2>) -> Tensor<B, 2> {
         activation::sigmoid(opacities)
     }
 
-    /// Making values for [`Gaussian3dScene::positions`]
+    /// Making values for [`Gaussian3dScene::get_positions`]
     #[inline]
     pub fn make_positions(positions: Tensor<B, 2>) -> Tensor<B, 2> {
         positions
     }
 
-    /// Making values for [`Gaussian3dScene::rotations`]
+    /// Making values for [`Gaussian3dScene::get_rotations`]
     #[inline]
     pub fn make_rotations(rotations: Tensor<B, 2>) -> Tensor<B, 2> {
         rotations
@@ -73,7 +73,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             .div(rotations.powf_scalar(2.0).sum_dim(1).sqrt())
     }
 
-    /// Making values for [`Gaussian3dScene::scalings`]
+    /// Making values for [`Gaussian3dScene::get_scalings`]
     #[inline]
     pub fn make_scalings(scalings: Tensor<B, 2>) -> Tensor<B, 2> {
         scalings.exp()
@@ -82,7 +82,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
 /// Outer value setters
 impl<B: Backend> Gaussian3dScene<B> {
-    /// Setting values for [`Gaussian3dScene::colors_sh`]
+    /// Setting values for [`Gaussian3dScene::get_colors_sh`]
     pub fn set_colors_sh(
         &mut self,
         colors_sh: Tensor<B, 2>,
@@ -91,7 +91,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         self
     }
 
-    /// Setting values for [`Gaussian3dScene::opacities`]
+    /// Setting values for [`Gaussian3dScene::get_opacities`]
     pub fn set_opacities(
         &mut self,
         opacities: Tensor<B, 2>,
@@ -99,7 +99,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         self.set_inner_opacities(Self::make_inner_opacities(opacities))
     }
 
-    /// Setting values for [`Gaussian3dScene::positions`]
+    /// Setting values for [`Gaussian3dScene::get_positions`]
     pub fn set_positions(
         &mut self,
         positions: Tensor<B, 2>,
@@ -107,7 +107,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         self.set_inner_positions(Self::make_inner_positions(positions))
     }
 
-    /// Setting values for [`Gaussian3dScene::rotations`]
+    /// Setting values for [`Gaussian3dScene::get_rotations`]
     pub fn set_rotations(
         &mut self,
         rotations: Tensor<B, 2>,
@@ -115,7 +115,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         self.set_inner_rotations(Self::make_inner_rotations(rotations))
     }
 
-    /// Setting values for [`Gaussian3dScene::scalings`]
+    /// Setting values for [`Gaussian3dScene::get_scalings`]
     pub fn set_scalings(
         &mut self,
         scalings: Tensor<B, 2>,
@@ -225,49 +225,45 @@ impl<B: Backend> Gaussian3dScene<B> {
     pub fn point_count(&self) -> usize {
         let point_count_target = self.colors_sh.dims()[0];
         let point_count_other = self.opacities.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (opacities)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (opacities)"),
+            ),
+        );
         let point_count_other = self.positions.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (positions)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (positions)"),
+            ),
+        );
         let point_count_other = self.rotations.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (rotations)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (rotations)"),
+            ),
+        );
         let point_count_other = self.scalings.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (scalings)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (scalings)"),
+            ),
+        );
 
         self.positions.val().dims()[0]
     }
@@ -281,7 +277,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn set() {
+    fn set_outer_property() {
         use super::*;
         use burn::{backend::NdArray, tensor::Distribution};
 
@@ -307,7 +303,8 @@ mod tests {
             [10, 3],
             Distribution::Default,
             &device,
-        );
+        )
+        .add_scalar(1.0);
 
         let mut scene = Gaussian3dScene::<NdArray<f32>>::default();
 
@@ -322,19 +319,19 @@ mod tests {
 
         input_colors_sh
             .into_data()
-            .assert_approx_eq(&scene.colors_sh().into_data(), 6);
+            .assert_approx_eq(&scene.get_colors_sh().into_data(), 6);
         input_opacities
             .into_data()
-            .assert_approx_eq(&scene.opacities().into_data(), 6);
+            .assert_approx_eq(&scene.get_opacities().into_data(), 6);
         input_positions
             .into_data()
-            .assert_approx_eq(&scene.positions().into_data(), 6);
+            .assert_approx_eq(&scene.get_positions().into_data(), 6);
         assert!(input_rotations
-            .not_equal(scene.rotations())
+            .not_equal(scene.get_rotations())
             .all()
             .into_scalar());
         input_scalings
             .into_data()
-            .assert_approx_eq(&scene.scalings().into_data(), 6);
+            .assert_approx_eq(&scene.get_scalings().into_data(), 6);
     }
 }

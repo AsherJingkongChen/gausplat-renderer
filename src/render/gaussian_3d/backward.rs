@@ -8,7 +8,7 @@ pub struct RenderInput<B: Backend> {
     pub colors_sh: B::FloatTensorPrimitive,
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics: B::FloatTensorPrimitive,
     /// `[P]`
     pub depths: B::FloatTensorPrimitive,
@@ -38,10 +38,14 @@ pub struct RenderInput<B: Backend> {
     pub positions_2d: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub positions_3d: B::FloatTensorPrimitive,
+    /// `[P, 2]`
+    pub positions_3d_in_normalized: B::FloatTensorPrimitive,
     /// `[P]`
     pub radii: B::IntTensorPrimitive,
     /// `[P, 4]`
     pub rotations: B::FloatTensorPrimitive,
+    /// `[P, 3, 3]`
+    pub rotations_matrix: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,
     /// `I_x / T_x`

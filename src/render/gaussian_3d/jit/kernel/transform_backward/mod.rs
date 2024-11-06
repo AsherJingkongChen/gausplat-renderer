@@ -4,7 +4,7 @@ pub use bytemuck::{Pod, Zeroable};
 use burn::tensor::ops::FloatTensorOps;
 use bytemuck::bytes_of;
 
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
     /// `(0 ~ 3)`
@@ -23,12 +23,10 @@ pub struct Arguments {
     pub view_bound_x: f32,
     /// `tan(Fov_y / 2) * (C_f + 1)`
     pub view_bound_y: f32,
-    /// Padding
-    pub _padding_1: [u32; 2],
     /// `[3]`
     pub view_position: [f32; 3],
     /// Padding
-    pub _padding_2: [u32; 1],
+    pub _padding_1: [u32; 1],
     /// `[3 (+ 1), 3 + 1]`
     pub view_transform: [[f32; 4]; 4],
 }
@@ -39,9 +37,9 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub colors_rgb_3d_grad: JitTensor<R, F>,
     /// `[P, 48] <- [P, 16, 3]`
     pub colors_sh: JitTensor<R, F>,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics: JitTensor<R, F>,
-    /// `[P, 2, 2]`
+    /// `[P, 3]`
     pub conics_grad: JitTensor<R, F>,
     /// `[P]`
     pub depths: JitTensor<R, F>,
@@ -51,10 +49,14 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub positions_2d_grad: JitTensor<R, F>,
     /// `[P, 3]`
     pub positions_3d: JitTensor<R, F>,
+    /// `[P, 2]`
+    pub positions_3d_in_normalized: JitTensor<R, F>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
     /// `[P, 4]`
     pub rotations: JitTensor<R, F>,
+    /// `[P, 3, 3]`
+    pub rotations_matrix: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,
 }
@@ -123,8 +125,10 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             inputs.is_colors_rgb_3d_not_clamped.handle.binding(),
             inputs.positions_2d_grad.handle.binding(),
             inputs.positions_3d.handle.binding(),
+            inputs.positions_3d_in_normalized.handle.binding(),
             inputs.radii.handle.binding(),
             inputs.rotations.handle.binding(),
+            inputs.rotations_matrix.handle.binding(),
             inputs.scalings.handle.binding(),
             colors_sh_grad.handle.to_owned().binding(),
             positions_2d_grad_norm.handle.to_owned().binding(),

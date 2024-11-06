@@ -1,6 +1,7 @@
 pub mod kernel;
 
 pub use super::{backward, forward, Gaussian3dRenderOptions, View};
+pub use crate::error::Error;
 pub use crate::{
     backend::jit::{FloatElement, IntElement, JitBackend, JitRuntime},
     scene::gaussian_3d::SH_DEGREE_MAX,
@@ -8,7 +9,6 @@ pub use crate::{
 pub use rank::TILE_COUNT_MAX;
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 pub use transform::FILTER_LOW_PASS;
-pub use crate::error::Error;
 
 use burn_jit::kernel::into_contiguous;
 use kernel::*;
@@ -67,7 +67,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let view_transform = view.view_transform.map(|c| c.map(|c| c as f32));
 
     if colors_sh_degree_max > SH_DEGREE_MAX {
-        Err(Error::UnsupportedSphericalHarmonicsDegree(colors_sh_degree_max))?;
+        Err(Error::UnsupportedSphericalHarmonicsDegree(
+            colors_sh_degree_max,
+        ))?;
     }
     if pixel_count == 0 || pixel_count > PIXEL_COUNT_MAX as usize {
         Err(Error::InvalidPixelCount(pixel_count))?;
@@ -136,9 +138,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
         rank::Inputs {
             depths: outputs_transform.depths.to_owned(),
+            point_tile_bounds: outputs_transform.point_tile_bounds,
             radii: outputs_transform.radii.to_owned(),
             tile_touched_offsets: outputs_scan.values,
-            tiles_touched_bound: outputs_transform.tiles_touched_bound,
         },
     );
     #[cfg(debug_assertions)]
@@ -208,8 +210,11 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             point_rendered_counts: outputs_rasterize.point_rendered_counts,
             positions_2d: outputs_transform.positions_2d,
             positions_3d: input.positions,
+            positions_3d_in_normalized: outputs_transform
+                .positions_3d_in_normalized,
             radii: outputs_transform.radii,
             rotations: input.rotations,
+            rotations_matrix: outputs_transform.rotations_matrix,
             scalings: input.scalings,
             tile_count_x,
             tile_count_y,
@@ -275,7 +280,6 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             view_position: state.view_position,
             view_transform: state.view_transform,
             _padding_1: Default::default(),
-            _padding_2: Default::default(),
         },
         transform_backward::Inputs {
             colors_rgb_3d_grad: outputs_rasterize_backward.colors_rgb_3d_grad,
@@ -286,8 +290,10 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             is_colors_rgb_3d_not_clamped: state.is_colors_rgb_3d_not_clamped,
             positions_2d_grad: outputs_rasterize_backward.positions_2d_grad,
             positions_3d: state.positions_3d,
+            positions_3d_in_normalized: state.positions_3d_in_normalized,
             radii: state.radii,
             rotations: state.rotations,
+            rotations_matrix: state.rotations_matrix,
             scalings: state.scalings,
         },
     );
