@@ -44,7 +44,7 @@ pub struct RenderInput<B: Backend> {
     pub radii: B::IntTensorPrimitive,
     /// `[P, 4]`
     pub rotations: B::FloatTensorPrimitive,
-    /// `[P, 3 (+ 1), 3]`
+    /// `[P, 3, 3]`
     pub rotations_matrix: B::FloatTensorPrimitive,
     /// `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,

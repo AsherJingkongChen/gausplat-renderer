@@ -58,10 +58,9 @@ var<storage, read_write> radii: array<u32>;
 // [P, 4] (x, y, z, w) (Inner)
 @group(0) @binding(11)
 var<storage, read_write> rotations: array<vec4<f32>>;
-// [P, 3 (+ 1), 3]
-// TODO: Compact layout
+// [P, 3, 3]
 @group(0) @binding(12)
-var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
+var<storage, read_write> rotations_matrix: array<array<f32, 9>>;
 // [P, 3] (Inner)
 @group(0) @binding(13)
 var<storage, read_write> scalings: array<array<f32, 3>>;
@@ -150,7 +149,7 @@ fn main(
     // 
     // S is diagonal
 
-    let rotation_matrix = rotations_matrix[index];
+    let rotation_matrix = mat_from_array_f32_3x3(rotations_matrix[index]);
     // (Outer)
     let scaling = exp(vec_from_array_f32_3(scalings[index]));
     let rotation_scaling = mat3x3<f32>(
@@ -558,6 +557,14 @@ fn main(
     scalings_grad[index] = array_from_vec_f32_3(scaling_grad);
 }
 
+fn array_from_mat_f32_3x3(m: mat3x3<f32>) -> array<f32, 9> {
+    return array<f32, 9>(
+        m[0][0], m[0][1], m[0][2],
+        m[1][0], m[1][1], m[1][2],
+        m[2][0], m[2][1], m[2][2],
+    );
+}
+
 fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
 }
@@ -566,6 +573,14 @@ fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
 // dy/dx = e^x = y
 fn exp_grad_vec_f32_3(y: vec3<f32>) -> vec3<f32> {
     return y;
+}
+
+fn mat_from_array_f32_3x3(a: array<f32, 9>) -> mat3x3<f32> {
+    return mat3x3<f32>(
+        a[0], a[1], a[2],
+        a[3], a[4], a[5],
+        a[6], a[7], a[8],
+    );
 }
 
 fn mat_sym_from_array_f32_3(a: array<f32, 3>) -> mat2x2<f32> {

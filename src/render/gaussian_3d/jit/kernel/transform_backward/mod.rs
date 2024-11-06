@@ -55,7 +55,7 @@ pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub radii: JitTensor<R, I>,
     /// `[P, 4]`
     pub rotations: JitTensor<R, F>,
-    /// `[P, 3 (+ 1), 3]`
+    /// `[P, 3, 3]`
     pub rotations_matrix: JitTensor<R, F>,
     /// `[P, 3]`
     pub scalings: JitTensor<R, F>,

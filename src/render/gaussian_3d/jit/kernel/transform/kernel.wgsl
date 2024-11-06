@@ -66,10 +66,9 @@ var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
 // [P]
 @group(0) @binding(12)
 var<storage, read_write> radii: array<u32>;
-// [P, 3 (+ 1), 3]
-// TODO: Compact layout
+// [P, 3, 3]
 @group(0) @binding(13)
-var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
+var<storage, read_write> rotations_matrix: array<array<f32, 9>>;
 // [P]
 @group(0) @binding(14)
 var<storage, read_write> tile_touched_counts: array<u32>;
@@ -411,14 +410,30 @@ fn main(
     positions_3d_in_normalized[index] = position_3d_in_normalized;
     // [P]
     radii[index] = u32(radius);
-    // [P, 3 (+ 1), 3]
-    rotations_matrix[index] = rotation_matrix;
+    // [P, 3, 3]
+    rotations_matrix[index] = array_from_mat_f32_3x3(rotation_matrix);
     // [P]
     tile_touched_counts[index] = tile_point_count;
 }
 
+fn array_from_mat_f32_3x3(m: mat3x3<f32>) -> array<f32, 9> {
+    return array<f32, 9>(
+        m[0][0], m[0][1], m[0][2],
+        m[1][0], m[1][1], m[1][2],
+        m[2][0], m[2][1], m[2][2],
+    );
+}
+
 fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {
     return array<f32, 3>(v[0], v[1], v[2]);
+}
+
+fn mat_from_array_f32_3x3(a: array<f32, 9>) -> mat3x3<f32> {
+    return mat3x3<f32>(
+        a[0], a[1], a[2],
+        a[3], a[4], a[5],
+        a[6], a[7], a[8],
+    );
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {

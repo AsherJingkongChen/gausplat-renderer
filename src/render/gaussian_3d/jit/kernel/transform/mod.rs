@@ -67,7 +67,7 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub positions_3d_in_normalized: JitTensor<R, F>,
     /// `[P]`
     pub radii: JitTensor<R, I>,
-    /// `[P, 3 (+ 1), 3]`
+    /// `[P, 3, 3]`
     pub rotations_matrix: JitTensor<R, F>,
     /// `[P]`
     pub tile_touched_counts: JitTensor<R, I>,
@@ -106,10 +106,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let positions_3d_in_normalized =
         JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
     let radii = JitBackend::<R, F, I>::int_empty([point_count].into(), device);
-    let rotations_matrix = JitBackend::<R, F, I>::float_empty(
-        [point_count, 3 + 1, 3].into(),
-        device,
-    );
+    let rotations_matrix =
+        JitBackend::<R, F, I>::float_empty([point_count, 3, 3].into(), device);
     let tile_touched_counts =
         JitBackend::<R, F, I>::int_empty([point_count].into(), device);
 
