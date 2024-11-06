@@ -59,6 +59,8 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub depths: JitTensor<R, F>,
     /// `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
+    /// `[P, 4]`
+    pub point_tile_bounds: JitTensor<R, I>,
     /// `[P, 2]`
     pub positions_2d: JitTensor<R, F>,
     /// `[P, 2]`
@@ -69,8 +71,6 @@ pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
     pub rotations_matrix: JitTensor<R, F>,
     /// `[P]`
     pub tile_touched_counts: JitTensor<R, I>,
-    /// `[P, 4]`
-    pub tiles_touched_bound: JitTensor<R, I>,
 }
 
 /// `C_f`
@@ -99,6 +99,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         JitBackend::<R, F, I>::float_empty([point_count].into(), device);
     let is_colors_rgb_3d_not_clamped =
         JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
+    let point_tile_bounds =
+        JitBackend::<R, F, I>::int_empty([point_count, 4].into(), device);
     let positions_2d =
         JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
     let positions_3d_in_normalized =
@@ -110,8 +112,6 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     );
     let tile_touched_counts =
         JitBackend::<R, F, I>::int_empty([point_count].into(), device);
-    let tiles_touched_bound =
-        JitBackend::<R, F, I>::int_empty([point_count, 4].into(), device);
 
     // Launching the kernel
 
@@ -135,12 +135,12 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             conics.handle.to_owned().binding(),
             depths.handle.to_owned().binding(),
             is_colors_rgb_3d_not_clamped.handle.to_owned().binding(),
+            point_tile_bounds.handle.to_owned().binding(),
             positions_2d.handle.to_owned().binding(),
             positions_3d_in_normalized.handle.to_owned().binding(),
             radii.handle.to_owned().binding(),
             rotations_matrix.handle.to_owned().binding(),
             tile_touched_counts.handle.to_owned().binding(),
-            tiles_touched_bound.handle.to_owned().binding(),
         ],
     );
 
@@ -149,11 +149,11 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         conics,
         depths,
         is_colors_rgb_3d_not_clamped,
+        point_tile_bounds,
         positions_2d,
         positions_3d_in_normalized,
         radii,
         rotations_matrix,
         tile_touched_counts,
-        tiles_touched_bound,
     }
 }

@@ -54,26 +54,25 @@ var<storage, read_write> depths: array<f32>;
 // [P, 3] (0.0, 1.0)
 @group(0) @binding(8)
 var<storage, read_write> is_colors_rgb_3d_not_clamped: array<array<f32, 3>>;
-// [P, 2]
+// [P, 4] (x max, x min, y max, y min)
 @group(0) @binding(9)
-var<storage, read_write> positions_2d: array<vec2<f32>>;
+var<storage, read_write> point_tile_bounds: array<vec4<u32>>;
 // [P, 2]
 @group(0) @binding(10)
+var<storage, read_write> positions_2d: array<vec2<f32>>;
+// [P, 2]
+@group(0) @binding(11)
 var<storage, read_write> positions_3d_in_normalized: array<vec2<f32>>;
 // [P]
-@group(0) @binding(11)
+@group(0) @binding(12)
 var<storage, read_write> radii: array<u32>;
 // [P, 3 (+ 1), 3]
 // TODO: Compact layout
-@group(0) @binding(12)
+@group(0) @binding(13)
 var<storage, read_write> rotations_matrix: array<mat3x3<f32>>;
 // [P]
-@group(0) @binding(13)
-var<storage, read_write> tile_touched_counts: array<u32>;
-// [P, 4] (x max, x min, y max, y min)
-// TODO: Rename point_bound
 @group(0) @binding(14)
-var<storage, read_write> tiles_touched_bound: array<vec4<u32>>;
+var<storage, read_write> tile_touched_counts: array<u32>;
 
 // The real coefficients of orthonormalized spherical harmonics from degree 0 to 3
 const SH_C_0: array<f32, 1> = array<f32, 1>(
@@ -285,7 +284,7 @@ fn main(
     // Checking the tiles touched
     // (x max, x min, y max, y min)
 
-    let tile_touched_bound = bitcast<vec4<u32>>(
+    let point_tile_bound = bitcast<vec4<u32>>(
         clamp(
             vec4<i32>(
                 i32((position_2d.x + radius + TILE_SIZE_X - 1.0) / TILE_SIZE_X),
@@ -301,8 +300,8 @@ fn main(
         )
     );
     let tile_point_count =
-        (tile_touched_bound[0] - tile_touched_bound[1]) *
-        (tile_touched_bound[2] - tile_touched_bound[3]);
+        (point_tile_bound[0] - point_tile_bound[1]) *
+        (point_tile_bound[2] - point_tile_bound[3]);
 
     // Leaving if no tile is touched
 
@@ -404,6 +403,8 @@ fn main(
     is_colors_rgb_3d_not_clamped[index] = array_from_vec_f32_3(
         vec3<f32>(is_color_rgb_3d_not_clamped)
     );
+    // [P, 4]
+    point_tile_bounds[index] = point_tile_bound;
     // [P, 2]
     positions_2d[index] = position_2d;
     // [P, 2]
@@ -414,8 +415,6 @@ fn main(
     rotations_matrix[index] = rotation_matrix;
     // [P]
     tile_touched_counts[index] = tile_point_count;
-    // [P, 4]
-    tiles_touched_bound[index] = tile_touched_bound;
 }
 
 fn array_from_vec_f32_3(v: vec3<f32>) -> array<f32, 3> {

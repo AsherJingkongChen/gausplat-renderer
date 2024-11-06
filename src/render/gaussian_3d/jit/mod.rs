@@ -138,9 +138,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         },
         rank::Inputs {
             depths: outputs_transform.depths.to_owned(),
+            point_tile_bounds: outputs_transform.point_tile_bounds,
             radii: outputs_transform.radii.to_owned(),
             tile_touched_offsets: outputs_scan.values,
-            tiles_touched_bound: outputs_transform.tiles_touched_bound,
         },
     );
     #[cfg(debug_assertions)]
@@ -210,7 +210,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             point_rendered_counts: outputs_rasterize.point_rendered_counts,
             positions_2d: outputs_transform.positions_2d,
             positions_3d: input.positions,
-            positions_3d_in_normalized: outputs_transform.positions_3d_in_normalized,
+            positions_3d_in_normalized: outputs_transform
+                .positions_3d_in_normalized,
             radii: outputs_transform.radii,
             rotations: input.rotations,
             rotations_matrix: outputs_transform.rotations_matrix,
