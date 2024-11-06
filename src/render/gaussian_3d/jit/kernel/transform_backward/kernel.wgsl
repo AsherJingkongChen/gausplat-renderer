@@ -160,6 +160,7 @@ fn main(
     let covariance_3d = rotation_scaling * transpose(rotation_scaling);
 
     // Projecting the 3D covariance matrix into 2D covariance matrix
+    // 
     // T[2, 3] = J[2, 3] * Rv[3, 3]
     // Σ'[2, 2] (Symmetric) = T[2, 3] * Σ[3, 3] * T^t[3, 2] + F[2, 2]
     //
@@ -375,12 +376,8 @@ fn main(
     let position_3d = vec_from_array_f32_3(positions_3d[index]);
     let view_offset = position_3d - arguments.view_position;
     let view_direction = normalize(view_offset);
-    var vd_x = f32();
-    var vd_y = f32();
-    var vd_z = f32();
-    var vd_xx = f32();
-    var vd_xy = f32();
-    var vd_xz = f32();
+    var vd = vec3<f32>();
+    var vd_x = vec3<f32>();
     var vd_yy = f32();
     var vd_yz = f32();
     var vd_zz = f32();
@@ -435,13 +432,11 @@ fn main(
     color_sh_grad[0] = color_rgb_3d_grad * (SH_C_0[0]);
 
     if arguments.colors_sh_degree_max >= 1 {
-        vd_x = view_direction.x;
-        vd_y = view_direction.y;
-        vd_z = view_direction.z;
+        vd = view_direction;
 
-        color_sh_grad[1] = color_rgb_3d_grad * (SH_C_1[0] * (vd_y));
-        color_sh_grad[2] = color_rgb_3d_grad * (SH_C_1[1] * (vd_z));
-        color_sh_grad[3] = color_rgb_3d_grad * (SH_C_1[2] * (vd_x));
+        color_sh_grad[1] = color_rgb_3d_grad * (SH_C_1[0] * (vd.y));
+        color_sh_grad[2] = color_rgb_3d_grad * (SH_C_1[1] * (vd.z));
+        color_sh_grad[3] = color_rgb_3d_grad * (SH_C_1[2] * (vd.x));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
             color_sh[3] * (SH_C_1[2]),
@@ -451,65 +446,63 @@ fn main(
     }
 
     if arguments.colors_sh_degree_max >= 2 {
-        vd_xx = vd_x * vd_x;
-        vd_xy = vd_x * vd_y;
-        vd_xz = vd_x * vd_z;
-        vd_yy = vd_y * vd_y;
-        vd_yz = vd_y * vd_z;
-        vd_zz = vd_z * vd_z;
-        vd_xx_yy = vd_xx - vd_yy;
+        vd_x = vd * vd.x;
+        vd_yy = vd.y * vd.y;
+        vd_yz = vd.y * vd.z;
+        vd_zz = vd.z * vd.z;
+        vd_xx_yy = vd_x.x - vd_yy;
 
-        color_sh_grad[4] = color_rgb_3d_grad * (SH_C_2[0] * (vd_xy));
+        color_sh_grad[4] = color_rgb_3d_grad * (SH_C_2[0] * (vd_x.y));
         color_sh_grad[5] = color_rgb_3d_grad * (SH_C_2[1] * (vd_yz));
         color_sh_grad[6] = color_rgb_3d_grad * (SH_C_2[2] * (vd_zz * 3.0 - 1.0));
-        color_sh_grad[7] = color_rgb_3d_grad * (SH_C_2[3] * (vd_xz));
+        color_sh_grad[7] = color_rgb_3d_grad * (SH_C_2[3] * (vd_x.z));
         color_sh_grad[8] = color_rgb_3d_grad * (SH_C_2[4] * (vd_xx_yy));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
-            color_sh[4] * (SH_C_2[0] * (vd_y)) +
-            color_sh[7] * (SH_C_2[3] * (vd_z)) +
-            color_sh[8] * (SH_C_2[4] * (vd_x * 2.0)),
+            color_sh[4] * (SH_C_2[0] * (vd.y)) +
+            color_sh[7] * (SH_C_2[3] * (vd.z)) +
+            color_sh[8] * (SH_C_2[4] * (vd.x * 2.0)),
 
-            color_sh[4] * (SH_C_2[0] * (vd_x)) +
-            color_sh[5] * (SH_C_2[1] * (vd_z)) +
-            color_sh[8] * (SH_C_2[4] * (vd_y * -2.0)),
+            color_sh[4] * (SH_C_2[0] * (vd.x)) +
+            color_sh[5] * (SH_C_2[1] * (vd.z)) +
+            color_sh[8] * (SH_C_2[4] * (vd.y * -2.0)),
 
-            color_sh[5] * (SH_C_2[1] * (vd_y)) +
-            color_sh[6] * (SH_C_2[2] * (vd_z * 6.0)) +
-            color_sh[7] * (SH_C_2[3] * (vd_x)),
+            color_sh[5] * (SH_C_2[1] * (vd.y)) +
+            color_sh[6] * (SH_C_2[2] * (vd.z * 6.0)) +
+            color_sh[7] * (SH_C_2[3] * (vd.x)),
         );
     }
 
     if arguments.colors_sh_degree_max >= 3 {
         vd_xx_yy_3 = vd_xx_yy * 3.0;
-        vd_z_10 = vd_z * 10.0;
+        vd_z_10 = vd.z * 10.0;
         vd_zz_5_1 = vd_zz * 5.0 - 1.0;
 
-        color_sh_grad[9u] = color_rgb_3d_grad * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy)));
-        color_sh_grad[10] = color_rgb_3d_grad * (SH_C_3[1] * (vd_z * (vd_xy)));
-        color_sh_grad[11] = color_rgb_3d_grad * (SH_C_3[2] * (vd_y * (vd_zz_5_1)));
-        color_sh_grad[12] = color_rgb_3d_grad * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0)));
-        color_sh_grad[13] = color_rgb_3d_grad * (SH_C_3[4] * (vd_x * (vd_zz_5_1)));
-        color_sh_grad[14] = color_rgb_3d_grad * (SH_C_3[5] * (vd_z * (vd_xx_yy)));
-        color_sh_grad[15] = color_rgb_3d_grad * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+        color_sh_grad[9u] = color_rgb_3d_grad * (SH_C_3[0] * (vd.y * (vd_x.x * 3.0 - vd_yy)));
+        color_sh_grad[10] = color_rgb_3d_grad * (SH_C_3[1] * (vd.z * (vd_x.y)));
+        color_sh_grad[11] = color_rgb_3d_grad * (SH_C_3[2] * (vd.y * (vd_zz_5_1)));
+        color_sh_grad[12] = color_rgb_3d_grad * (SH_C_3[3] * (vd.z * (vd_zz_5_1 - 2.0)));
+        color_sh_grad[13] = color_rgb_3d_grad * (SH_C_3[4] * (vd.x * (vd_zz_5_1)));
+        color_sh_grad[14] = color_rgb_3d_grad * (SH_C_3[5] * (vd.z * (vd_xx_yy)));
+        color_sh_grad[15] = color_rgb_3d_grad * (SH_C_3[6] * (vd.x * (vd_x.x - vd_yy * 3.0)));
 
         color_rgb_3d_to_view_direction_grad += mat3x3<f32>(
-            color_sh[9u] * (SH_C_3[0] * (vd_xy * 6.0)) +
+            color_sh[9u] * (SH_C_3[0] * (vd_x.y * 6.0)) +
             color_sh[10] * (SH_C_3[1] * (vd_yz)) +
             color_sh[13] * (SH_C_3[4] * (vd_zz_5_1)) +
-            color_sh[14] * (SH_C_3[5] * (vd_xz * 2.0)) +
+            color_sh[14] * (SH_C_3[5] * (vd_x.z * 2.0)) +
             color_sh[15] * (SH_C_3[6] * (vd_xx_yy_3)),
 
             color_sh[9u] * (SH_C_3[0] * (vd_xx_yy_3)) +
-            color_sh[10] * (SH_C_3[1] * (vd_xz)) +
+            color_sh[10] * (SH_C_3[1] * (vd_x.z)) +
             color_sh[11] * (SH_C_3[2] * (vd_zz_5_1)) +
             color_sh[14] * (SH_C_3[5] * (vd_yz * -2.0)) +
-            color_sh[15] * (SH_C_3[6] * (vd_xy * -6.0)),
+            color_sh[15] * (SH_C_3[6] * (vd_x.y * -6.0)),
 
-            color_sh[10] * (SH_C_3[1] * (vd_xy)) +
-            color_sh[11] * (SH_C_3[2] * (vd_y * vd_z_10)) +
+            color_sh[10] * (SH_C_3[1] * (vd_x.y)) +
+            color_sh[11] * (SH_C_3[2] * (vd.y * vd_z_10)) +
             color_sh[12] * (SH_C_3[3] * (vd_zz_5_1 * 3.0)) +
-            color_sh[13] * (SH_C_3[4] * (vd_x * vd_z_10)) +
+            color_sh[13] * (SH_C_3[4] * (vd.x * vd_z_10)) +
             color_sh[14] * (SH_C_3[5] * (vd_xx_yy)),
         );
     }
@@ -615,7 +608,7 @@ fn normalize_grad_vec_f32_4(x: vec4<f32>) -> mat4x4<f32> {
     let x_p2 = x * x;
     let x_dot = x_p2.x + x_p2.y + x_p2.z + x_p2.w;
     let x_n_c2 = -x.xyz * x.yzx;
-    let x_n_c2_w = -x.xyz * x.www;
+    let x_n_c2_w = -x.xyz * x.w;
     return mat4x4<f32>(
         x_dot - x_p2.x, x_n_c2.x, x_n_c2.z, x_n_c2_w.x,
         x_n_c2.x, x_dot - x_p2.y, x_n_c2.y, x_n_c2_w.y,

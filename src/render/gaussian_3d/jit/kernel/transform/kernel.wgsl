@@ -151,8 +151,8 @@ fn main(
 
     // (Outer)
     let rotation = normalize(rotations[index]);
-    let q_c2_w = rotation.xyz * rotation.www;
-    let q_c2_x = rotation.xyz * rotation.xxx;
+    let q_c2_w = rotation.xyz * rotation.w;
+    let q_c2_x = rotation.xyz * rotation.x;
     let q_yy = rotation.y * rotation.y;
     let q_yz = rotation.y * rotation.z;
     let q_zz = rotation.z * rotation.z;
@@ -314,11 +314,8 @@ fn main(
 
     let view_offset = position_3d - arguments.view_position;
     let view_direction = normalize(view_offset);
-    var vd_x = f32();
-    var vd_y = f32();
-    var vd_z = f32();
-    var vd_xx = f32();
-    var vd_xy = f32();
+    var vd = vec3<f32>();
+    var vd_x = vec3<f32>();
     var vd_yy = f32();
     var vd_zz = f32();
     var vd_zz_5_1 = f32();
@@ -351,38 +348,35 @@ fn main(
     var color_rgb_3d = color_sh[0] * (SH_C_0[0]);
 
     if arguments.colors_sh_degree_max >= 1 {
-        vd_x = view_direction.x;
-        vd_y = view_direction.y;
-        vd_z = view_direction.z;
+        vd = view_direction;
 
-        color_rgb_3d += color_sh[1] * (SH_C_1[0] * (vd_y));
-        color_rgb_3d += color_sh[2] * (SH_C_1[1] * (vd_z));
-        color_rgb_3d += color_sh[3] * (SH_C_1[2] * (vd_x));
+        color_rgb_3d += color_sh[1] * (SH_C_1[0] * (vd.y));
+        color_rgb_3d += color_sh[2] * (SH_C_1[1] * (vd.z));
+        color_rgb_3d += color_sh[3] * (SH_C_1[2] * (vd.x));
     }
 
     if arguments.colors_sh_degree_max >= 2 {
-        vd_xx = vd_x * vd_x;
-        vd_xy = vd_x * vd_y;
-        vd_yy = vd_y * vd_y;
-        vd_zz = vd_z * vd_z;
+        vd_x = vd * vd.x;
+        vd_yy = vd.y * vd.y;
+        vd_zz = vd.z * vd.z;
 
-        color_rgb_3d += color_sh[4] * (SH_C_2[0] * (vd_xy));
-        color_rgb_3d += color_sh[5] * (SH_C_2[1] * (vd_y * vd_z));
+        color_rgb_3d += color_sh[4] * (SH_C_2[0] * (vd_x.y));
+        color_rgb_3d += color_sh[5] * (SH_C_2[1] * (vd.y * vd.z));
         color_rgb_3d += color_sh[6] * (SH_C_2[2] * (vd_zz * 3.0 - 1.0));
-        color_rgb_3d += color_sh[7] * (SH_C_2[3] * (vd_x * vd_z));
-        color_rgb_3d += color_sh[8] * (SH_C_2[4] * (vd_xx - vd_yy));
+        color_rgb_3d += color_sh[7] * (SH_C_2[3] * (vd_x.z));
+        color_rgb_3d += color_sh[8] * (SH_C_2[4] * (vd_x.x - vd_yy));
     }
 
     if arguments.colors_sh_degree_max >= 3 {
         vd_zz_5_1 = vd_zz * 5.0 - 1.0;
 
-        color_rgb_3d += color_sh[9u] * (SH_C_3[0] * (vd_y * (vd_xx * 3.0 - vd_yy)));
-        color_rgb_3d += color_sh[10] * (SH_C_3[1] * (vd_z * (vd_xy)));
-        color_rgb_3d += color_sh[11] * (SH_C_3[2] * (vd_y * (vd_zz_5_1)));
-        color_rgb_3d += color_sh[12] * (SH_C_3[3] * (vd_z * (vd_zz_5_1 - 2.0)));
-        color_rgb_3d += color_sh[13] * (SH_C_3[4] * (vd_x * (vd_zz_5_1)));
-        color_rgb_3d += color_sh[14] * (SH_C_3[5] * (vd_z * (vd_xx - vd_yy)));
-        color_rgb_3d += color_sh[15] * (SH_C_3[6] * (vd_x * (vd_xx - vd_yy * 3.0)));
+        color_rgb_3d += color_sh[9u] * (SH_C_3[0] * (vd.y * (vd_x.x * 3.0 - vd_yy)));
+        color_rgb_3d += color_sh[10] * (SH_C_3[1] * (vd.z * (vd_x.y)));
+        color_rgb_3d += color_sh[11] * (SH_C_3[2] * (vd.y * (vd_zz_5_1)));
+        color_rgb_3d += color_sh[12] * (SH_C_3[3] * (vd.z * (vd_zz_5_1 - 2.0)));
+        color_rgb_3d += color_sh[13] * (SH_C_3[4] * (vd.x * (vd_zz_5_1)));
+        color_rgb_3d += color_sh[14] * (SH_C_3[5] * (vd.z * (vd_x.x - vd_yy)));
+        color_rgb_3d += color_sh[15] * (SH_C_3[6] * (vd.x * (vd_x.x - vd_yy * 3.0)));
     }
 
     color_rgb_3d += 0.5;
