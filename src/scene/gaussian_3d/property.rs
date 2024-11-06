@@ -225,50 +225,45 @@ impl<B: Backend> Gaussian3dScene<B> {
     pub fn point_count(&self) -> usize {
         let point_count_target = self.colors_sh.dims()[0];
         let point_count_other = self.opacities.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (opacities)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (opacities)"),
+            ),
+        );
         let point_count_other = self.positions.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (positions)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (positions)"),
+            ),
+        );
         let point_count_other = self.rotations.dims()[0];
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (rotations)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (rotations)"),
+            ),
+        );
         let point_count_other = self.scalings.dims()[0];
-        // TODO: Run clippy and fix this
-        if point_count_other != point_count_target {
-            Err::<(), _>(
-                Error::MismatchedPointCount(
-                    point_count_target,
-                    format!("{point_count_other} (scalings)"),
-                )
-                .to_string(),
-            )
-            .expect("This is an internal error");
-        }
+        assert_eq!(
+            point_count_other,
+            point_count_target,
+            "{}",
+            Error::MismatchedPointCount(
+                point_count_target,
+                format!("{point_count_other} (scalings)"),
+            ),
+        );
 
         self.positions.val().dims()[0]
     }
