@@ -64,26 +64,27 @@ impl View {
 
     /// ## Arguments
     ///
-    /// * `quaternion_normalized` - A normalized quaternion `(x, y, z, w)`.
+    /// * `quaternion_normalized` - A normalized Hamiltonian quaternion
+    /// **(in scalar-first order, i.e., `[w, x, y, z]`)**.
     ///
     /// ## Returns
     ///
     /// A 3D rotation matrix **(in column-major order)**.
     pub fn rotation(quaternion_normalized: &[f64; 4]) -> [[f64; 3]; 3] {
-        let [x, y, z, w] = quaternion_normalized;
-        let y_y = y * y * 2.0;
-        let z_z = z * z * 2.0;
-        let w_w = w * w * 2.0;
+        let [w, x, y, z] = quaternion_normalized;
+        let w_x = w * x * 2.0;
+        let w_y = w * y * 2.0;
+        let w_z = w * z * 2.0;
+        let x_x = x * x * 2.0;
         let x_y = x * y * 2.0;
         let x_z = x * z * 2.0;
-        let x_w = x * w * 2.0;
+        let y_y = y * y * 2.0;
         let y_z = y * z * 2.0;
-        let y_w = y * w * 2.0;
-        let z_w = z * w * 2.0;
+        let z_z = z * z * 2.0;
         [
-            [1.0 - z_z - w_w, y_z + x_w, y_w - x_z],
-            [y_z - x_w, 1.0 - y_y - w_w, z_w + x_y],
-            [y_w + x_z, z_w - x_y, 1.0 - y_y - z_z],
+            [1.0 - y_y - z_z, x_y + w_z, x_z - w_y],
+            [x_y - w_z, 1.0 - x_x - z_z, y_z + w_x],
+            [x_z + w_y, y_z - w_x, 1.0 - x_x - y_y],
         ]
     }
 
@@ -106,7 +107,7 @@ impl View {
     /// Tr_v = [R_v   | T_v]
     ///        [0 0 0 | 1  ]
     /// ```
-    pub fn transform_to_view(
+    pub fn transform(
         rotation_to_view: &[[f64; 3]; 3],
         translation_to_view: &[f64; 3],
     ) -> [[f64; 4]; 4] {
@@ -124,7 +125,7 @@ impl View {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn view_position() {
+    fn position() {
         use super::*;
 
         let quaternion_normalized = [
@@ -147,7 +148,41 @@ mod tests {
     }
 
     #[test]
-    fn view_transform() {
+    fn rotation() {
+        use super::*;
+
+        let quaternion_normalized = [
+            0.9898446088507,
+            0.0712377208478,
+            -0.122993928961,
+            -0.002308873358,
+        ];
+
+        let rotation = View::rotation(&quaternion_normalized);
+        assert_eq!(
+            rotation,
+            [
+                [
+                    0.9697343250851065000,
+                    -0.022094466046466348,
+                    0.2431607972553234400,
+                ],
+                [
+                    -0.012952762662725100,
+                    0.9898397124644553000,
+                    0.1415965026675595000,
+                ],
+                [
+                    -0.243818712758323920,
+                    -0.140460593044464320,
+                    0.9595953611342949000,
+                ]
+            ]
+        );
+    }
+
+    #[test]
+    fn transform() {
         use super::*;
 
         let quaternion_normalized = [
@@ -158,7 +193,7 @@ mod tests {
         ];
         let translation_to_view = [0.129242027423, 0.0, -0.3424233862];
 
-        let view_transform = View::transform_to_view(
+        let view_transform = View::transform(
             &View::rotation(&quaternion_normalized),
             &translation_to_view,
         );
