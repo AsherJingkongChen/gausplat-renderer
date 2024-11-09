@@ -28,7 +28,7 @@ var<storage, read_write> point_indices: array<u32>;
 var<storage, read_write> point_orders: array<u32>;
 
 // The difference in bits between depth to depth order (before shifting).
-const FACTOR_DEPTH_ORDER: u32 = (4u << 23) + 0xC0000000;
+const FACTOR_DEPTH_ORDER: u32 = (4u << 23) + 0xc0000000;
 const GROUP_SIZE: u32 = 256;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)

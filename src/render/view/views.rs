@@ -1,3 +1,3 @@
 pub use super::View;
 
-pub type Views = std::collections::HashMap<u32, View>;
+pub type Views = gausplat_loader::collection::IndexMap<u32, View>;

@@ -326,10 +326,13 @@ mod tests {
         input_positions
             .into_data()
             .assert_approx_eq(&scene.get_positions().into_data(), 6);
-        assert!(input_rotations
-            .not_equal(scene.get_rotations())
-            .all()
-            .into_scalar());
+        assert!(
+            input_rotations
+                .not_equal(scene.get_rotations())
+                .all()
+                .into_scalar(),
+            "Rotations should be not equal to unnormalized ones"
+        );
         input_scalings
             .into_data()
             .assert_approx_eq(&scene.get_scalings().into_data(), 6);

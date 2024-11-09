@@ -65,7 +65,7 @@ impl View {
     /// ## Arguments
     ///
     /// * `quaternion_normalized` - A normalized Hamiltonian quaternion
-    /// **(in scalar-first order, i.e., `[w, x, y, z]`)**.
+    ///   **(in scalar-first order, i.e., `[w, x, y, z]`)**.
     ///
     /// ## Returns
     ///
