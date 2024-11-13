@@ -1,11 +1,3 @@
-//! ## Usage
-//!
-//! To run the benchmarks, execute the following command in the console:
-//!
-//! ```sh
-//! cargo bench jit-kernel
-//! ```
-
 use divan::Bencher;
 use gausplat_renderer::{
     backend::{Backend, Wgpu, WgpuRuntime},
@@ -53,7 +45,7 @@ mod gpu {
         bencher
             .with_inputs(data::random_tensor_u32_tensor_u32())
             .bench_local_refs(|(k, v)| {
-                main::<WgpuRuntime, f32, i32>(Inputs {
+                let output = main::<WgpuRuntime, f32, i32>(Inputs {
                     count: Tensor::<Wgpu, 1, Int>::from_data(
                         [k.shape().num_elements()],
                         &k.device(),
@@ -63,6 +55,7 @@ mod gpu {
                     values: v.to_owned().into_primitive(),
                 });
                 Wgpu::sync(&Default::default());
+                output
             });
     }
 
@@ -73,10 +66,11 @@ mod gpu {
         bencher
             .with_inputs(data::random_tensor_u32())
             .bench_local_refs(|v| {
-                main::<WgpuRuntime, f32, i32>(Inputs {
+                let output = main::<WgpuRuntime, f32, i32>(Inputs {
                     values: v.to_owned().into_primitive(),
                 });
                 Wgpu::sync(&Default::default());
+                output
             });
     }
 }

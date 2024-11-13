@@ -113,7 +113,7 @@ fn main(
         }
         workgroupBarrier();
 
-        // Leaving if all the pixels in the tile finished rendering
+        // Leaving if all pixels in the tile finished rendering
 
         if pixel_done_count == BATCH_SIZE {
             break;

@@ -16,7 +16,7 @@ pub use render::{
     Gaussian3dRenderOutputAutodiff, Gaussian3dRenderer,
 };
 
-use crate::spherical_harmonics::{SH_C, SH_COUNT_MAX};
+use crate::spherical_harmonics::{SH_COEF, SH_COUNT_MAX};
 use autodiff::{
     checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
     grads::Gradients,
@@ -93,7 +93,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
                 colors_sh = colors_sh.slice_assign(
                     [0..point_count, 0..3],
-                    (colors_rgb - 0.5) / SH_C.0[0],
+                    (colors_rgb - 0.5) / SH_COEF.0[0],
                 );
 
                 colors_sh = Self::make_inner_colors_sh(colors_sh)
