@@ -82,14 +82,15 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
             )),
             CubeCount::Static(count_next, 1, 1),
             vec![
-                values.handle.to_owned().binding(),
                 values_next.handle.binding(),
+                values.handle.to_owned().binding(),
             ],
         );
 
         total
     } else {
         // Returning the next values if there is only one group
+        assert_eq!(count_next, 1);
         values_next
     };
 

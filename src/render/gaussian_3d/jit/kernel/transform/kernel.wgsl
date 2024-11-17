@@ -278,7 +278,7 @@ fn main(
         covariance_2d_diag_mean + eigenvalue_difference,
         covariance_2d_diag_mean - eigenvalue_difference,
     );
-    let radius = ceil(sqrt(eigenvalue_max) * FACTOR_RADIUS);
+    let radius = ceil(sqrt(max(eigenvalue_max, 0.0)) * FACTOR_RADIUS);
 
     // Checking the tiles touched
     // (x max, x min, y max, y min)

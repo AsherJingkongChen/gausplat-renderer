@@ -1,10 +1,10 @@
-// [N]
-@group(0) @binding(0) var<storage, read_write>
-values: array<u32>;
-
 // [N']
-@group(0) @binding(1) var<storage, read_write>
+@group(0) @binding(0) var<storage, read_write>
 values_next: array<u32>;
+
+// [N]
+@group(0) @binding(1) var<storage, read_write>
+values: array<u32>;
 
 // N / N'
 const GROUP_SIZE: u32 = 256;
