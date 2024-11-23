@@ -118,14 +118,11 @@ mod tests {
         let values_target = vec![0, 0, 3, 3, 5, 9, 10, 13, 15];
         let total_target = 24;
 
-        let values =
-            B::int_from_data(TensorData::new(values_source, [count]), device);
+        let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
-        let total_output = *from_bytes::<u32>(
-            &total.client.read(total.handle.to_owned().binding()),
-        );
-        let values_output =
-            total.client.read(values.handle.to_owned().binding());
+        let total_output =
+            *from_bytes::<u32>(&total.client.read(total.handle.to_owned().binding()));
+        let values_output = total.client.read(values.handle.to_owned().binding());
         let values_output = cast_slice::<u8, u32>(&values_output);
 
         assert_eq!(total_output, total_target);
@@ -166,17 +163,13 @@ mod tests {
                 Some(output)
             })
             .collect::<Vec<_>>();
-        let total_target =
-            values_target.last().unwrap() + values_source.last().unwrap();
+        let total_target = values_target.last().unwrap() + values_source.last().unwrap();
 
-        let values =
-            B::int_from_data(TensorData::new(values_source, [count]), device);
+        let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
-        let total_output = *from_bytes::<u32>(
-            &total.client.read(total.handle.to_owned().binding()),
-        );
-        let values_output =
-            total.client.read(values.handle.to_owned().binding());
+        let total_output =
+            *from_bytes::<u32>(&total.client.read(total.handle.to_owned().binding()));
+        let values_output = total.client.read(values.handle.to_owned().binding());
         let values_output = cast_slice::<u8, u32>(&values_output);
 
         assert_eq!(total_output, total_target);

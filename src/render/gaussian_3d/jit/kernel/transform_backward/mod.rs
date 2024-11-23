@@ -1,8 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::FloatTensorOps;
-use bytemuck::bytes_of;
+use bytemuck::{bytes_of, Pod, Zeroable};
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]

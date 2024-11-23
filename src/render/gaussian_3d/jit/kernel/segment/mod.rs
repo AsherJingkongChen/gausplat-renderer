@@ -1,7 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::IntTensorOps;
+use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]

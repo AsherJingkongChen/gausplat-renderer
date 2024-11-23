@@ -1,5 +1,6 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
+
+use bytemuck::{Pod, Zeroable};
 pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 
 use burn::tensor::ops::FloatTensorOps;
@@ -71,8 +72,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     let colors_rgb_3d_grad =
         JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
-    let conics_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
+    let conics_grad = JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
     let opacities_3d_grad =
         JitBackend::<R, F, I>::float_zeros([point_count, 1].into(), device);
     let positions_2d_grad =

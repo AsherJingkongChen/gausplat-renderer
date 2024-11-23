@@ -21,7 +21,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     view: &View,
     options: &Gaussian3dRenderOptions,
 ) -> Result<forward::RenderOutput<JitBackend<R, F, I>>, Error> {
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "start");
 
     // Specifying the arguments
@@ -36,11 +36,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     // I_y
     let image_size_y = view.image_height;
     // F_x <- I_x / tan(Fov_x / 2) / 2
-    let focal_length_x =
-        (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
+    let focal_length_x = (image_size_x as f64 / field_of_view_x_half_tan / 2.0) as f32;
     // F_y <- I_y / tan(Fov_y / 2) / 2
-    let focal_length_y =
-        (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
+    let focal_length_y = (image_size_y as f64 / field_of_view_y_half_tan / 2.0) as f32;
     // I_x / 2
     let image_size_half_x = (image_size_x as f64 / 2.0) as f32;
     // I_y / 2
@@ -58,11 +56,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     // I_y / T_y
     let tile_count_y = image_size_y.div_ceil(tile_size_y);
     // tan(Fov_x / 2) * (C_f + 1)
-    let view_bound_x =
-        (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
+    let view_bound_x = (field_of_view_x_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     // tan(Fov_y / 2) * (C_f + 1)
-    let view_bound_y =
-        (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
+    let view_bound_y = (field_of_view_y_half_tan * (FILTER_LOW_PASS + 1.0)) as f32;
     let view_position = view.view_position.map(|c| c as f32);
     let view_transform = view.view_transform.map(|c| c.map(|c| c as f32));
 
@@ -112,7 +108,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             scalings: input.scalings.to_owned(),
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "transform");
 
     // Scanning the counts of the touched tiles into offsets
@@ -121,7 +117,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         values: outputs_transform.tile_touched_counts,
     });
 
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::info!(
         target: "gausplat::renderer::gaussian_3d::forward",
         "scan > total ({})",
@@ -143,7 +139,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             tile_touched_offsets: outputs_scan.values,
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "rank");
 
     // Sorting the points by its tile index and depth
@@ -153,7 +149,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         keys: outputs_rank.point_orders,
         values: outputs_rank.point_indices,
     });
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "sort");
 
     let outputs_segment = segment::main::<R, F, I>(
@@ -166,7 +162,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             tile_point_count: outputs_scan.total,
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "segment");
 
     let outputs_rasterize = rasterize::main::<R, F, I>(
@@ -185,7 +181,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             tile_point_ranges: outputs_segment.tile_point_ranges.to_owned(),
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "rasterize");
 
     Ok(forward::RenderOutput {
@@ -202,16 +198,14 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
             image_size_half_y,
             image_size_x,
             image_size_y,
-            is_colors_rgb_3d_not_clamped: outputs_transform
-                .is_colors_rgb_3d_not_clamped,
+            is_colors_rgb_3d_not_clamped: outputs_transform.is_colors_rgb_3d_not_clamped,
             opacities_3d: input.opacities,
             point_count,
             point_indices: outputs_sort.values,
             point_rendered_counts: outputs_rasterize.point_rendered_counts,
             positions_2d: outputs_transform.positions_2d,
             positions_3d: input.positions,
-            positions_3d_in_normalized: outputs_transform
-                .positions_3d_in_normalized,
+            positions_3d_in_normalized: outputs_transform.positions_3d_in_normalized,
             radii: outputs_transform.radii,
             rotations: input.rotations,
             rotations_matrix: outputs_transform.rotations_matrix,
@@ -235,7 +229,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     state: backward::RenderInput<JitBackend<R, F, I>>,
     mut colors_rgb_2d_grad: JitTensor<R, F>,
 ) -> backward::RenderOutput<JitBackend<R, F, I>> {
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "start");
 
     // Specifying the inputs
@@ -264,7 +258,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             transmittances: state.transmittances,
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "rasterize_backward");
 
     let outputs_transform_backward = transform_backward::main(
@@ -297,14 +291,13 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
             scalings: state.scalings,
         },
     );
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "transform_backward");
 
     backward::RenderOutput {
         colors_sh_grad: outputs_transform_backward.colors_sh_grad,
         opacities_grad: outputs_rasterize_backward.opacities_3d_grad,
-        positions_2d_grad_norm: outputs_transform_backward
-            .positions_2d_grad_norm,
+        positions_2d_grad_norm: outputs_transform_backward.positions_2d_grad_norm,
         positions_grad: outputs_transform_backward.positions_3d_grad,
         rotations_grad: outputs_transform_backward.rotations_grad,
         scalings_grad: outputs_transform_backward.scalings_grad,

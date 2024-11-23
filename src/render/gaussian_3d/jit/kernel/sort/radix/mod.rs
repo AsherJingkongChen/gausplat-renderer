@@ -1,8 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::IntTensorOps;
-use bytemuck::bytes_of;
+use bytemuck::{bytes_of, Pod, Zeroable};
 use std::mem::swap;
 
 #[repr(C)]
@@ -69,11 +68,9 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     // (N' / G, 1, 1)
     let group_count = JitBackend::<R, F, I>::int_empty([3].into(), device);
     // [N]
-    let mut keys_output =
-        JitBackend::<R, F, I>::int_empty([count].into(), device);
+    let mut keys_output = JitBackend::<R, F, I>::int_empty([count].into(), device);
     // [N]
-    let mut values_output =
-        JitBackend::<R, F, I>::int_empty([count].into(), device);
+    let mut values_output = JitBackend::<R, F, I>::int_empty([count].into(), device);
     // [2 * N' / G, R]
     let counts_radix_group = JitBackend::<R, F, I>::int_empty(
         [GROUP_COUNT_MAX as usize, RADIX_COUNT].into(),
@@ -93,9 +90,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Launching the kernel 2 and 3 iteratively
 
-    for radix_shift in
-        (0..KEY_BIT_COUNT as u32).step_by(RADIX_COUNT_SHIFT as usize)
-    {
+    for radix_shift in (0..KEY_BIT_COUNT as u32).step_by(RADIX_COUNT_SHIFT as usize) {
         // Specifying the parameters for the pass
 
         arguments.radix_shift = radix_shift;
@@ -176,25 +171,22 @@ mod tests {
         let count = 14;
 
         let keys_source = vec![
-            0x221a707e, 0x404673dd, 0x08f23dac, 0x79dc4824, 0x60986a48,
-            0x6f358f8e, 0x61f1a696, 0x2255a70e, 0x3009911f, 0x3628f9f4,
-            0x3c95798b, 0x561b9e2e, 0x41c02344, 0x168ff8d5,
+            0x221a707e, 0x404673dd, 0x08f23dac, 0x79dc4824, 0x60986a48, 0x6f358f8e,
+            0x61f1a696, 0x2255a70e, 0x3009911f, 0x3628f9f4, 0x3c95798b, 0x561b9e2e,
+            0x41c02344, 0x168ff8d5,
         ];
-        let values_source =
-            (0..count as u32 * 10).step_by(10).collect::<Vec<_>>();
+        let values_source = (0..count as u32 * 10).step_by(10).collect::<Vec<_>>();
 
         let keys_target = vec![
-            0x08f23dac, 0x168ff8d5, 0x221a707e, 0x2255a70e, 0x3009911f,
-            0x3628f9f4, 0x3c95798b, 0x404673dd, 0x41c02344, 0x561b9e2e,
-            0x60986a48, 0x61f1a696, 0x6f358f8e, 0x79dc4824,
+            0x08f23dac, 0x168ff8d5, 0x221a707e, 0x2255a70e, 0x3009911f, 0x3628f9f4,
+            0x3c95798b, 0x404673dd, 0x41c02344, 0x561b9e2e, 0x60986a48, 0x61f1a696,
+            0x6f358f8e, 0x79dc4824,
         ];
         let values_target =
             vec![20, 130, 0, 70, 80, 90, 100, 10, 120, 110, 40, 60, 50, 30];
 
-        let keys =
-            B::int_from_data(TensorData::new(keys_source, [count]), device);
-        let values =
-            B::int_from_data(TensorData::new(values_source, [count]), device);
+        let keys = B::int_from_data(TensorData::new(keys_source, [count]), device);
+        let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let count = B::int_from_data([count].into(), device);
         let Outputs { keys, values } = main::<R, F, I>(Inputs {
             count,
@@ -203,8 +195,7 @@ mod tests {
         });
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output =
-            &values.client.read(values.handle.to_owned().binding());
+        let values_output = &values.client.read(values.handle.to_owned().binding());
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(
@@ -264,10 +255,8 @@ mod tests {
             items_source.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
         };
 
-        let keys =
-            B::int_from_data(TensorData::new(keys_source, [count]), device);
-        let values =
-            B::int_from_data(TensorData::new(values_source, [count]), device);
+        let keys = B::int_from_data(TensorData::new(keys_source, [count]), device);
+        let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let count = B::int_from_data([count].into(), device);
         let Outputs { keys, values } = main::<R, F, I>(Inputs {
             count,
@@ -276,8 +265,7 @@ mod tests {
         });
         let keys_output = &keys.client.read(keys.handle.to_owned().binding());
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output =
-            &values.client.read(values.handle.to_owned().binding());
+        let values_output = &values.client.read(values.handle.to_owned().binding());
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(

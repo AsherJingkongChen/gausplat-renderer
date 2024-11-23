@@ -165,8 +165,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         &mut self,
         colors_sh: Tensor<B, 2>,
     ) -> &mut Self {
-        self.colors_sh =
-            Param::initialized(self.colors_sh.id.to_owned(), colors_sh);
+        self.colors_sh = Param::initialized(self.colors_sh.id.to_owned(), colors_sh);
         self
     }
 
@@ -176,8 +175,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         &mut self,
         opacities: Tensor<B, 2>,
     ) -> &mut Self {
-        self.opacities =
-            Param::initialized(self.opacities.id.to_owned(), opacities);
+        self.opacities = Param::initialized(self.opacities.id.to_owned(), opacities);
         self
     }
 
@@ -187,8 +185,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         &mut self,
         positions: Tensor<B, 2>,
     ) -> &mut Self {
-        self.positions =
-            Param::initialized(self.positions.id.to_owned(), positions);
+        self.positions = Param::initialized(self.positions.id.to_owned(), positions);
         self
     }
 
@@ -198,8 +195,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         &mut self,
         rotations: Tensor<B, 2>,
     ) -> &mut Self {
-        self.rotations =
-            Param::initialized(self.rotations.id.to_owned(), rotations);
+        self.rotations = Param::initialized(self.rotations.id.to_owned(), rotations);
         self
     }
 
@@ -209,8 +205,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         &mut self,
         scalings: Tensor<B, 2>,
     ) -> &mut Self {
-        self.scalings =
-            Param::initialized(self.scalings.id.to_owned(), scalings);
+        self.scalings = Param::initialized(self.scalings.id.to_owned(), scalings);
         self
     }
 }
@@ -283,28 +278,16 @@ mod tests {
 
         let device = Default::default();
 
-        let input_colors_sh = Tensor::<NdArray<f32>, 2>::random(
-            [10, 48],
-            Distribution::Default,
-            &device,
-        );
+        let input_colors_sh =
+            Tensor::<NdArray<f32>, 2>::random([10, 48], Distribution::Default, &device);
         let input_rotations = Tensor::<NdArray<f32>, 2>::ones([10, 4], &device);
-        let input_opacities = Tensor::<NdArray<f32>, 2>::random(
-            [10, 1],
-            Distribution::Default,
-            &device,
-        );
-        let input_positions = Tensor::<NdArray<f32>, 2>::random(
-            [10, 3],
-            Distribution::Default,
-            &device,
-        );
-        let input_scalings = Tensor::<NdArray<f32>, 2>::random(
-            [10, 3],
-            Distribution::Default,
-            &device,
-        )
-        .add_scalar(1.0);
+        let input_opacities =
+            Tensor::<NdArray<f32>, 2>::random([10, 1], Distribution::Default, &device);
+        let input_positions =
+            Tensor::<NdArray<f32>, 2>::random([10, 3], Distribution::Default, &device);
+        let input_scalings =
+            Tensor::<NdArray<f32>, 2>::random([10, 3], Distribution::Default, &device)
+                .add_scalar(1.0);
 
         let mut scene = Gaussian3dScene::<NdArray<f32>>::default();
 

@@ -1,8 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::{FloatTensorOps, IntTensorOps};
-use bytemuck::bytes_of;
+use bytemuck::{bytes_of, Pod, Zeroable};
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -93,10 +92,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     let colors_rgb_3d =
         JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
-    let conics =
-        JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
-    let depths =
-        JitBackend::<R, F, I>::float_empty([point_count].into(), device);
+    let conics = JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
+    let depths = JitBackend::<R, F, I>::float_empty([point_count].into(), device);
     let is_colors_rgb_3d_not_clamped =
         JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
     let point_tile_bounds =

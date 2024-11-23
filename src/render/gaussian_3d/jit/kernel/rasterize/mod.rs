@@ -1,8 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::{FloatTensorOps, IntTensorOps};
-use bytemuck::bytes_of;
+use bytemuck::{bytes_of, Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -71,15 +70,11 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         device,
     );
     // [I_x, I_y]
-    let point_rendered_counts = JitBackend::<R, F, I>::int_empty(
-        [image_size_y, image_size_x].into(),
-        device,
-    );
+    let point_rendered_counts =
+        JitBackend::<R, F, I>::int_empty([image_size_y, image_size_x].into(), device);
     // [I_x, I_y]
-    let transmittances = JitBackend::<R, F, I>::float_empty(
-        [image_size_y, image_size_x].into(),
-        device,
-    );
+    let transmittances =
+        JitBackend::<R, F, I>::float_empty([image_size_y, image_size_x].into(), device);
 
     // Launching the kernel
 

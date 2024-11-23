@@ -1,8 +1,7 @@
 pub use super::*;
-pub use bytemuck::{Pod, Zeroable};
 
 use burn::tensor::ops::IntTensorOps;
-use bytemuck::bytes_of;
+use bytemuck::{bytes_of, Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -56,15 +55,11 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         (arguments.point_count * FACTOR_TILE_POINT_COUNT) as usize;
 
     // [T]
-    let point_indices = JitBackend::<R, F, I>::int_empty(
-        [tile_point_count_estimated].into(),
-        device,
-    );
+    let point_indices =
+        JitBackend::<R, F, I>::int_empty([tile_point_count_estimated].into(), device);
     // [T]
-    let point_orders = JitBackend::<R, F, I>::int_empty(
-        [tile_point_count_estimated].into(),
-        device,
-    );
+    let point_orders =
+        JitBackend::<R, F, I>::int_empty([tile_point_count_estimated].into(), device);
 
     // Launching the kernel
 

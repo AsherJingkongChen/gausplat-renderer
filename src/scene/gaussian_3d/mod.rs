@@ -12,8 +12,8 @@ pub use burn::{
     tensor::{Tensor, TensorData},
 };
 pub use render::{
-    Gaussian3dRenderOptions, Gaussian3dRenderOutput,
-    Gaussian3dRenderOutputAutodiff, Gaussian3dRenderer,
+    Gaussian3dRenderOptions, Gaussian3dRenderOutput, Gaussian3dRenderOutputAutodiff,
+    Gaussian3dRenderer,
 };
 
 use crate::spherical_harmonics::{SH_COEF, SH_COUNT_MAX};
@@ -82,10 +82,8 @@ impl<B: Backend> Gaussian3dScene<B> {
         let colors_sh = Param::uninitialized(
             Default::default(),
             move |device, is_require_grad| {
-                let mut colors_sh = Tensor::zeros(
-                    [point_count, COLORS_SH_FEATURE_COUNT],
-                    device,
-                );
+                let mut colors_sh =
+                    Tensor::zeros([point_count, COLORS_SH_FEATURE_COUNT], device);
                 let colors_rgb = Tensor::from_data(
                     TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,
@@ -99,7 +97,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 colors_sh = Self::make_inner_colors_sh(colors_sh)
                     .set_require_grad(is_require_grad);
 
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
                     "init > colors_sh",
@@ -122,7 +120,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 ))
                 .set_require_grad(is_require_grad);
 
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
                     "init > opacities",
@@ -144,7 +142,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 ))
                 .set_require_grad(is_require_grad);
 
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
                     "init > positions",
@@ -169,7 +167,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 ))
                 .set_require_grad(is_require_grad);
 
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
                     "init > rotations",
@@ -200,18 +198,15 @@ impl<B: Backend> Gaussian3dScene<B> {
                     .collect();
 
                 let scalings = Self::make_inner_scalings(
-                    Tensor::from_data(
-                        TensorData::new(samples, [point_count, 1]),
-                        device,
-                    )
-                    .div_scalar(sample_max)
-                    .sqrt()
-                    .clamp_min(f32::EPSILON)
-                    .repeat_dim(1, 3),
+                    Tensor::from_data(TensorData::new(samples, [point_count, 1]), device)
+                        .div_scalar(sample_max)
+                        .sqrt()
+                        .clamp_min(f32::EPSILON)
+                        .repeat_dim(1, 3),
                 )
                 .set_require_grad(is_require_grad);
 
-                #[cfg(debug_assertions)]
+                #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
                     "init > scalings",
@@ -234,8 +229,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 }
 
 impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
-    Gaussian3dRenderer<JitBackend<R, F, I>>
-    for Gaussian3dScene<JitBackend<R, F, I>>
+    Gaussian3dRenderer<JitBackend<R, F, I>> for Gaussian3dScene<JitBackend<R, F, I>>
 {
     fn render_forward(
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
@@ -282,7 +276,7 @@ where
         view: &render::View,
         options: &Gaussian3dRenderOptions,
     ) -> Result<Gaussian3dRenderOutput<B>, Error> {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(test)))]
         log::debug!(
             target: "gausplat::renderer::gaussian_3d::scene",
             "render > autodiff disabled",
@@ -300,8 +294,7 @@ where
 
         let output = Self::render_forward(input, view, options)?;
 
-        let colors_rgb_2d =
-            Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
+        let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(output.colors_rgb_2d));
 
         Ok(Gaussian3dRenderOutput { colors_rgb_2d })
     }
@@ -325,8 +318,7 @@ where
         let scalings = self.scalings.val().into_primitive().tensor();
 
         let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device)
-                .set_require_grad(true);
+            Tensor::<Autodiff<B>, 1>::empty([1], &device).set_require_grad(true);
         let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
             .to_owned()
             .into_primitive()
@@ -360,7 +352,7 @@ where
                 .stateful()
             {
                 OpsKind::Tracked(prep) => {
-                    #[cfg(debug_assertions)]
+                    #[cfg(all(debug_assertions, not(test)))]
                     log::debug!(
                         target: "gausplat::renderer::gaussian_3d::scene",
                         "render > autodiff tracked",
@@ -375,7 +367,7 @@ where
                     )
                 },
                 OpsKind::UnTracked(prep) => {
-                    #[cfg(debug_assertions)]
+                    #[cfg(all(debug_assertions, not(test)))]
                     log::debug!(
                         target: "gausplat::renderer::gaussian_3d::scene",
                         "render > autodiff untracked",
@@ -405,7 +397,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
         grads: &mut Gradients,
         _checkpointer: &mut Checkpointer,
     ) {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(test)))]
         log::debug!(
             target: "gausplat::renderer::gaussian_3d::scene",
             "render > backward",

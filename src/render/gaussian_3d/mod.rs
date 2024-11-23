@@ -16,9 +16,7 @@ pub use burn::{
 
 use std::fmt;
 
-pub trait Gaussian3dRenderer<B: Backend>:
-    'static + Send + Sized + fmt::Debug
-{
+pub trait Gaussian3dRenderer<B: Backend>: 'static + Send + Sized + fmt::Debug {
     fn render_forward(
         input: forward::RenderInput<B>,
         view: &View,
