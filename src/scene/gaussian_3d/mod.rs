@@ -186,8 +186,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 let mut sample_max = f32::EPSILON;
                 let samples = StdRng::seed_from_u64(SEED_INIT)
                     .sample_iter(
-                        rand_distr::LogNormal::new(0.0, std::f32::consts::E)
-                            .expect("Unreachable"),
+                        rand_distr::LogNormal::new(0.0, std::f32::consts::E).unwrap(),
                     )
                     .take(point_count)
                     .map(|mut sample| {

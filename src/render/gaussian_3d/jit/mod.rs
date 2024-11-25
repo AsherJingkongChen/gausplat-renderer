@@ -63,15 +63,15 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     let view_transform = view.view_transform.map(|c| c.map(|c| c as f32));
 
     if colors_sh_degree_max > SH_DEGREE_MAX {
-        Err(Error::UnsupportedSphericalHarmonicsDegree(
+        return Err(Error::UnsupportedSphericalHarmonicsDegree(
             colors_sh_degree_max,
-        ))?;
+        ));
     }
     if pixel_count == 0 || pixel_count > PIXEL_COUNT_MAX as usize {
-        Err(Error::InvalidPixelCount(pixel_count))?;
+        return Err(Error::InvalidPixelCount(pixel_count));
     }
     if point_count == 0 {
-        Err(Error::MismatchedPointCount(0, "non-zero".into()))?;
+        return Err(Error::MismatchedPointCount(0, "non-zero".into()));
     }
 
     // Specifying the inputs
