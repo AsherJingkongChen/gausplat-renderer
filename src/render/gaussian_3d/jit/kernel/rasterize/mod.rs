@@ -18,29 +18,29 @@ pub struct Arguments {
 }
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
-    pub colors_rgb_3d: JitTensor<R, F>,
+    pub colors_rgb_3d: JitTensor<R>,
     /// `[P, 3]`
-    pub conics: JitTensor<R, F>,
+    pub conics: JitTensor<R>,
     /// `[P]`
-    pub opacities_3d: JitTensor<R, F>,
+    pub opacities_3d: JitTensor<R>,
     /// `[T]`
-    pub point_indices: JitTensor<R, I>,
+    pub point_indices: JitTensor<R>,
     /// `[P, 2]`
-    pub positions_2d: JitTensor<R, F>,
+    pub positions_2d: JitTensor<R>,
     /// `[I_y / T_y, I_x / T_x, 2]`
-    pub tile_point_ranges: JitTensor<R, I>,
+    pub tile_point_ranges: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, F: FloatElement, I: IntElement> {
+pub struct Outputs<R: JitRuntime> {
     /// `[I_y, I_x, 3]`
-    pub colors_rgb_2d: JitTensor<R, F>,
+    pub colors_rgb_2d: JitTensor<R>,
     /// `[I_y, I_x]`
-    pub point_rendered_counts: JitTensor<R, I>,
+    pub point_rendered_counts: JitTensor<R>,
     /// `[I_y, I_x]`
-    pub transmittances: JitTensor<R, F>,
+    pub transmittances: JitTensor<R>,
 }
 
 /// `T_x`
@@ -51,8 +51,8 @@ pub const TILE_SIZE_Y: u32 = 16;
 /// Rasterizing the point to the image.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     arguments: Arguments,
-    inputs: Inputs<R, F, I>,
-) -> Outputs<R, F, I> {
+    inputs: Inputs<R>,
+) -> Outputs<R> {
     impl_kernel_source!(Kernel, "kernel.wgsl");
 
     // Specifying the parameters

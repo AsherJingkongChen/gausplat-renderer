@@ -31,47 +31,47 @@ pub struct Arguments {
 }
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
-    pub colors_rgb_3d_grad: JitTensor<R, F>,
+    pub colors_rgb_3d_grad: JitTensor<R>,
     /// `[P, 48] <- [P, 16, 3]`
-    pub colors_sh: JitTensor<R, F>,
+    pub colors_sh: JitTensor<R>,
     /// `[P, 3]`
-    pub conics: JitTensor<R, F>,
+    pub conics: JitTensor<R>,
     /// `[P, 3]`
-    pub conics_grad: JitTensor<R, F>,
+    pub conics_grad: JitTensor<R>,
     /// `[P]`
-    pub depths: JitTensor<R, F>,
+    pub depths: JitTensor<R>,
     /// `[P, 3]`
-    pub is_colors_rgb_3d_not_clamped: JitTensor<R, F>,
+    pub is_colors_rgb_3d_not_clamped: JitTensor<R>,
     /// `[P, 2]`
-    pub positions_2d_grad: JitTensor<R, F>,
+    pub positions_2d_grad: JitTensor<R>,
     /// `[P, 3]`
-    pub positions_3d: JitTensor<R, F>,
+    pub positions_3d: JitTensor<R>,
     /// `[P, 2]`
-    pub positions_3d_in_normalized: JitTensor<R, F>,
+    pub positions_3d_in_normalized: JitTensor<R>,
     /// `[P]`
-    pub radii: JitTensor<R, I>,
+    pub radii: JitTensor<R>,
     /// `[P, 4]`
-    pub rotations: JitTensor<R, F>,
+    pub rotations: JitTensor<R>,
     /// `[P, 3, 3]`
-    pub rotations_matrix: JitTensor<R, F>,
+    pub rotations_matrix: JitTensor<R>,
     /// `[P, 3]`
-    pub scalings: JitTensor<R, F>,
+    pub scalings: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, F: FloatElement> {
+pub struct Outputs<R: JitRuntime> {
     /// `[P, 48] <- [P, 16, 3]`
-    pub colors_sh_grad: JitTensor<R, F>,
+    pub colors_sh_grad: JitTensor<R>,
     /// `[P]`
-    pub positions_2d_grad_norm: JitTensor<R, F>,
+    pub positions_2d_grad_norm: JitTensor<R>,
     /// `[P, 3]`
-    pub positions_3d_grad: JitTensor<R, F>,
+    pub positions_3d_grad: JitTensor<R>,
     /// `[P, 4]`
-    pub rotations_grad: JitTensor<R, F>,
+    pub rotations_grad: JitTensor<R>,
     /// `[P, 3]`
-    pub scalings_grad: JitTensor<R, F>,
+    pub scalings_grad: JitTensor<R>,
 }
 
 /// `C_f`
@@ -81,8 +81,8 @@ pub const GROUP_SIZE: u32 = 256;
 /// Transforming the points.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     arguments: Arguments,
-    inputs: Inputs<R, F, I>,
-) -> Outputs<R, F> {
+    inputs: Inputs<R>,
+) -> Outputs<R> {
     impl_kernel_source!(Kernel, "kernel.wgsl");
 
     // Specifying the parameters

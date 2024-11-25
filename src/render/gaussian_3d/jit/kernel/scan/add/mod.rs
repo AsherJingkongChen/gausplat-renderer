@@ -3,17 +3,17 @@ pub use super::*;
 use burn::tensor::ops::IntTensorOps;
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// The values to scan.
-    pub values: JitTensor<R, I>,
+    pub values: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, I: IntElement> {
+pub struct Outputs<R: JitRuntime> {
     /// The exclusively scanned values.
-    pub values: JitTensor<R, I>,
+    pub values: JitTensor<R>,
     /// The total of scanned values.
-    pub total: JitTensor<R, I>,
+    pub total: JitTensor<R>,
 }
 
 /// `N / N'`
@@ -21,8 +21,8 @@ pub const GROUP_SIZE: u32 = 256;
 
 /// Scanning the values exclusively.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
-    inputs: Inputs<R, I>
-) -> Outputs<R, I> {
+    inputs: Inputs<R>
+) -> Outputs<R> {
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");
     impl_kernel_source!(Kernel2, "kernel.2.wgsl");
 
@@ -121,9 +121,9 @@ mod tests {
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
         let total_output =
-            *from_bytes::<u32>(&total.client.read(total.handle.to_owned().binding()));
-        let values_output = total.client.read(values.handle.to_owned().binding());
-        let values_output = cast_slice::<u8, u32>(&values_output);
+            *from_bytes::<u32>(&total.client.read(vec![total.handle.to_owned().binding()])[0]);
+        let values_output = total.client.read(vec![values.handle.to_owned().binding()]);
+        let values_output = cast_slice::<u8, u32>(&values_output[0]);
 
         assert_eq!(total_output, total_target);
         values_output
@@ -168,9 +168,9 @@ mod tests {
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
         let total_output =
-            *from_bytes::<u32>(&total.client.read(total.handle.to_owned().binding()));
-        let values_output = total.client.read(values.handle.to_owned().binding());
-        let values_output = cast_slice::<u8, u32>(&values_output);
+            *from_bytes::<u32>(&total.client.read(vec![total.handle.to_owned().binding()])[0]);
+        let values_output = total.client.read(vec![values.handle.to_owned().binding()]);
+        let values_output = cast_slice::<u8, u32>(&values_output[0]);
 
         assert_eq!(total_output, total_target);
         values_output

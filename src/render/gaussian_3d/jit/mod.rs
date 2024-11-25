@@ -117,13 +117,14 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         values: outputs_transform.tile_touched_counts,
     });
 
+    // FIXME
     #[cfg(all(debug_assertions, not(test)))]
     log::info!(
         target: "gausplat::renderer::gaussian_3d::forward",
         "scan > total ({})",
         bytemuck::from_bytes::<u32>(
             &outputs_scan.total.client
-                .read(outputs_scan.total.handle.to_owned().binding()),
+                .read(vec![outputs_scan.total.handle.to_owned().binding()])[0],
         )
     );
 
@@ -227,7 +228,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 /// * `colors_rgb_2d_grad` - `[I_y, I_x, 3]`
 pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     state: backward::RenderInput<JitBackend<R, F, I>>,
-    mut colors_rgb_2d_grad: JitTensor<R, F>,
+    mut colors_rgb_2d_grad: JitTensor<R>,
 ) -> backward::RenderOutput<JitBackend<R, F, I>> {
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "start");
@@ -238,7 +239,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Launching the kernels
 
-    let outputs_rasterize_backward = rasterize_backward::main(
+    let outputs_rasterize_backward = rasterize_backward::main::<R, F, I>(
         rasterize_backward::Arguments {
             image_size_x: state.image_size_x,
             image_size_y: state.image_size_y,
@@ -261,7 +262,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "rasterize_backward");
 
-    let outputs_transform_backward = transform_backward::main(
+    let outputs_transform_backward = transform_backward::main::<R, F, I>(
         transform_backward::Arguments {
             colors_sh_degree_max: state.colors_sh_degree_max,
             focal_length_x: state.focal_length_x,

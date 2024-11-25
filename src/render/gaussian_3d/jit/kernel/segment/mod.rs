@@ -13,17 +13,17 @@ pub struct Arguments {
 }
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// `[T]`
-    pub point_orders: JitTensor<R, I>,
+    pub point_orders: JitTensor<R>,
     /// `T`
-    pub tile_point_count: JitTensor<R, I>,
+    pub tile_point_count: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, I: IntElement> {
+pub struct Outputs<R: JitRuntime> {
     /// `[I_y / T_y, I_x / T_x, 2]`
-    pub tile_point_ranges: JitTensor<R, I>,
+    pub tile_point_ranges: JitTensor<R>,
 }
 
 /// `G`
@@ -34,8 +34,8 @@ pub const GROUP_SIZE2: u32 = GROUP_SIZE * GROUP_SIZE;
 /// Segmenting the points into tiles.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     arguments: Arguments,
-    inputs: Inputs<R, I>,
-) -> Outputs<R, I> {
+    inputs: Inputs<R>,
+) -> Outputs<R> {
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");
     impl_kernel_source!(Kernel2, "kernel.2.wgsl");
 

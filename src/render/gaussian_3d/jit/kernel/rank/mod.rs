@@ -13,23 +13,23 @@ pub struct Arguments {
 }
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, F: FloatElement, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// `[P]`
-    pub depths: JitTensor<R, F>,
+    pub depths: JitTensor<R>,
     /// `[P, 4]`
-    pub point_tile_bounds: JitTensor<R, I>,
+    pub point_tile_bounds: JitTensor<R>,
     /// `[P]`
-    pub radii: JitTensor<R, I>,
+    pub radii: JitTensor<R>,
     /// `[P]`
-    pub tile_touched_offsets: JitTensor<R, I>,
+    pub tile_touched_offsets: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, I: IntElement> {
+pub struct Outputs<R: JitRuntime> {
     /// `[T]`
-    pub point_indices: JitTensor<R, I>,
+    pub point_indices: JitTensor<R>,
     /// `[T]`
-    pub point_orders: JitTensor<R, I>,
+    pub point_orders: JitTensor<R>,
 }
 
 pub const GROUP_SIZE: u32 = 256;
@@ -41,8 +41,8 @@ pub const FACTOR_TILE_POINT_COUNT: u32 = 15;
 /// Ranking the points.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     arguments: Arguments,
-    inputs: Inputs<R, F, I>,
-) -> Outputs<R, I> {
+    inputs: Inputs<R>,
+) -> Outputs<R> {
     impl_kernel_source!(Kernel, "kernel.wgsl");
 
     // Specifying the parameters

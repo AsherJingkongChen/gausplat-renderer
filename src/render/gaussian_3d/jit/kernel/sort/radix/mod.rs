@@ -12,21 +12,21 @@ pub struct Arguments {
 }
 
 #[derive(Clone, Debug)]
-pub struct Inputs<R: JitRuntime, I: IntElement> {
+pub struct Inputs<R: JitRuntime> {
     /// The count of items to sort.
-    pub count: JitTensor<R, I>,
+    pub count: JitTensor<R>,
     /// The keys of items to sort.
-    pub keys: JitTensor<R, I>,
+    pub keys: JitTensor<R>,
     /// The values of items to sort.
-    pub values: JitTensor<R, I>,
+    pub values: JitTensor<R>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Outputs<R: JitRuntime, I: IntElement> {
+pub struct Outputs<R: JitRuntime> {
     /// The keys of sorted items.
-    pub keys: JitTensor<R, I>,
+    pub keys: JitTensor<R>,
     /// The values of sorted items.
-    pub values: JitTensor<R, I>,
+    pub values: JitTensor<R>,
 }
 
 /// `log2(N')`
@@ -45,8 +45,8 @@ pub const RADIX_COUNT_SHIFT: u32 = 8;
 
 /// Sort the keys and values.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
-    inputs: Inputs<R, I>
-) -> Outputs<R, I> {
+    inputs: Inputs<R>
+) -> Outputs<R> {
     // NOTE: The key size is fixed.
     debug_assert_eq!(size_of::<I>(), KEY_BIT_COUNT >> 3);
 
@@ -193,9 +193,9 @@ mod tests {
             keys,
             values,
         });
-        let keys_output = &keys.client.read(keys.handle.to_owned().binding());
+        let keys_output = &keys.client.read(vec![keys.handle.to_owned().binding()])[0];
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output = &values.client.read(values.handle.to_owned().binding());
+        let values_output = &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(
@@ -263,9 +263,9 @@ mod tests {
             keys,
             values,
         });
-        let keys_output = &keys.client.read(keys.handle.to_owned().binding());
+        let keys_output = &keys.client.read(vec![keys.handle.to_owned().binding()])[0];
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output = &values.client.read(values.handle.to_owned().binding());
+        let values_output = &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(
