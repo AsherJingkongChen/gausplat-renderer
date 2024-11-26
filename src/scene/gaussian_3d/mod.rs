@@ -66,6 +66,7 @@ struct Gaussian3dRenderBackwardState<B: Backend> {
 
 pub const SEED_INIT: u64 = 0x3D65;
 
+/// Scene initializers
 impl<B: Backend> Gaussian3dScene<B> {
     pub fn init_from_points(
         points: Points,
@@ -73,19 +74,19 @@ impl<B: Backend> Gaussian3dScene<B> {
     ) -> Self {
         // P
         let point_count = points.len();
-        let points = (points.to_owned(), points);
-        // [P, 3]
-        let colors_rgb = points
-            .0
-            .into_iter()
-            .flat_map(|point| point.color_rgb)
-            .collect::<Vec<_>>();
-        // [P, 3]
-        let positions = points
-            .1
-            .into_iter()
-            .flat_map(|point| point.position)
-            .collect::<Vec<_>>();
+
+        // ([P, 3], [P, 3])
+        let (colors_rgb, positions) = points.iter().fold(
+            (
+                Vec::<f32>::with_capacity(point_count * 3),
+                Vec::<f64>::with_capacity(point_count * 3),
+            ),
+            |(mut colors_rgb, mut positions), point| {
+                colors_rgb.extend(point.color_rgb);
+                positions.extend(point.position);
+                (colors_rgb, positions)
+            },
+        );
 
         // [P, 48] <- [P, 16, 3]
         let colors_sh = Param::uninitialized(
@@ -251,95 +252,60 @@ impl<B: Backend> Gaussian3dScene<B> {
         // NOTE: The header is validated previously.
         let point_count = object.elem("vertex").unwrap().meta.count;
 
+        let mut take_tensor = |names: &[String], device: &B::Device| {
+            let dtype = DType::F32;
+            let channel_count = names.len();
+            let bytes = names.iter().fold(
+                Vec::<u8>::with_capacity(channel_count * point_count * dtype.size()),
+                |mut bytes, name| {
+                    let data = object.elem_prop_mut("vertex", name).unwrap().data;
+                    bytes.extend(take(data));
+                    bytes
+                },
+            );
+            let data = TensorData {
+                bytes,
+                shape: [channel_count, point_count].into(),
+                dtype,
+            };
+            Tensor::<B, 2>::from_data(data, device)
+                .swap_dims(0, 1)
+                .set_require_grad(true)
+        };
+
         // [P, 48] <- [P, 1, 3] + [P, 3, 15]
-        let colors_sh = Tensor::<B, 2>::from_data(
-            TensorData {
-                bytes: (0..SH_COUNT_MAX * 3)
-                    .flat_map(|i| {
-                        let name = if i < 3 {
-                            format!("f_dc_{i}")
-                        } else {
-                            let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
-                            format!("f_rest_{i}")
-                        };
-                        take(object.elem_prop_mut("vertex", &name).unwrap().data)
-                    })
-                    .collect::<Vec<_>>(),
-                shape: [COLORS_SH_FEATURE_COUNT, point_count].into(),
-                dtype: DType::F32,
-            },
+        let colors_sh = take_tensor(
+            &(0..COLORS_SH_FEATURE_COUNT)
+                .map(|i| {
+                    if i < 3 {
+                        format!("f_dc_{i}")
+                    } else {
+                        let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
+                        format!("f_rest_{i}")
+                    }
+                    .into()
+                })
+                .collect::<Vec<_>>(),
             device,
-        )
-        .swap_dims(0, 1)
-        .set_require_grad(true);
+        );
 
         // [P, 1]
-        let opacities = Tensor::<B, 2>::from_data(
-            TensorData {
-                bytes: take(object.elem_prop_mut("vertex", "opacity").unwrap().data),
-                shape: [1, point_count].into(),
-                dtype: DType::F32,
-            },
-            device,
-        )
-        .swap_dims(0, 1)
-        .set_require_grad(true);
+        let opacities = take_tensor(&["opacity"].map(Into::into), device);
 
         // [P, 3]
-        let positions = Tensor::<B, 2>::from_data(
-            TensorData {
-                bytes: [
-                    take(object.elem_prop_mut("vertex", "x").unwrap().data),
-                    take(object.elem_prop_mut("vertex", "y").unwrap().data),
-                    take(object.elem_prop_mut("vertex", "z").unwrap().data),
-                ]
-                .concat(),
-                shape: [3, point_count].into(),
-                dtype: DType::F32,
-            },
-            device,
-        )
-        .swap_dims(0, 1)
-        .set_require_grad(true);
+        let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
 
         // [P, 4] (x, y, z, w) <- (w, x, y, z)
-        let rotations = Tensor::<B, 2>::from_data(
-            TensorData {
-                bytes: [
-                    take(object.elem_prop_mut("vertex", "rot_1").unwrap().data),
-                    take(object.elem_prop_mut("vertex", "rot_2").unwrap().data),
-                    take(object.elem_prop_mut("vertex", "rot_3").unwrap().data),
-                    take(object.elem_prop_mut("vertex", "rot_0").unwrap().data),
-                ]
-                .concat(),
-                shape: [4, point_count].into(),
-                dtype: DType::F32,
-            },
-            device,
-        )
-        .swap_dims(0, 1)
-        .set_require_grad(true);
+        let rotations =
+            take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}").into()), device);
 
         // [P, 3]
-        let scalings = Tensor::<B, 2>::from_data(
-            TensorData {
-                bytes: (0..3)
-                    .flat_map(|i| {
-                        take(
-                            object
-                                .elem_prop_mut("vertex", &format!("scale_{i}"))
-                                .unwrap()
-                                .data,
-                        )
-                    })
-                    .collect(),
-                shape: [3, point_count].into(),
-                dtype: DType::F32,
-            },
+        let scalings = take_tensor(
+            &(0..3)
+                .map(|i| format!("scale_{i}").into())
+                .collect::<Vec<_>>(),
             device,
-        )
-        .swap_dims(0, 1)
-        .set_require_grad(true);
+        );
 
         let mut scene = Self::default();
         scene
@@ -356,6 +322,69 @@ impl<B: Backend> Gaussian3dScene<B> {
         );
 
         Ok(scene)
+    }
+}
+
+/// Scene exporters
+impl<B: Backend> Gaussian3dScene<B> {
+    // TODO: It needs a point cloud viewer to validate the function.
+    pub fn to_points(&self) -> Points {
+        let point_count = self.point_count();
+
+        // NOTE: The data type is converted.
+        let colors_rgb = self
+            .get_colors_sh()
+            .slice([0..point_count, 0..3])
+            .mul_scalar(SH_COEF.0[0])
+            .add_scalar(0.5)
+            .into_data()
+            .convert::<f32>()
+            .into_vec()
+            .unwrap();
+
+        // NOTE: The data type is converted.
+        let positions = self
+            .get_positions()
+            .into_data()
+            .convert::<f64>()
+            .into_vec()
+            .unwrap();
+
+        colors_rgb
+            .chunks_exact(3)
+            .zip(positions.chunks_exact(3))
+            .map(|(color_rgb, position)| Point {
+                // NOTE: The slice size is guaranteed to fit.
+                color_rgb: color_rgb.try_into().unwrap(),
+                position: position.try_into().unwrap(),
+            })
+            .collect()
+    }
+
+    pub fn to_polygon_3dgs(&self) -> polygon::Object {
+        // let point_count = self.point_count();
+
+        // TODO: Use tensor operation to combine the tensor before loading to the host.
+        // NOTE: The data type is converted.
+        // let [colors_sh, opacities, positions, rotations, scalings] = [
+        //     self.get_colors_sh(),
+        //     self.get_opacities(),
+        //     self.get_positions(),
+        //     self.get_rotations(),
+        //     self.get_scalings(),
+        // ]
+        // .map(|tensor| tensor.into_data().bytes);
+
+        // // NOTE: The header is determined.
+        // let mut object = polygon::Object {
+        //     header: POLYGON_HEADER_3DGS.to_owned(),
+        //     ..Default::default()
+        // };
+        // object.elem_mut("vertex").unwrap().meta.count = point_count;
+
+        // *object.elem_prop_mut("vertex", "opacity").unwrap().data = opacities;
+
+        todo!()
     }
 }
 
@@ -591,7 +620,7 @@ impl<B: Backend> Default for Gaussian3dScene<B> {
 }
 
 /// A polygon file header for 3D Gaussian splats.
-/// 
+///
 /// <details>
 /// <summary>
 ///     <strong>Click to expand</strong>
