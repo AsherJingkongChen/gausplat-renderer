@@ -195,7 +195,8 @@ mod tests {
         });
         let keys_output = &keys.client.read(vec![keys.handle.to_owned().binding()])[0];
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output = &values.client.read(vec![values.handle.to_owned().binding()])[0];
+        let values_output =
+            &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(
@@ -265,7 +266,8 @@ mod tests {
         });
         let keys_output = &keys.client.read(vec![keys.handle.to_owned().binding()])[0];
         let keys_output = cast_slice::<u8, u32>(keys_output);
-        let values_output = &values.client.read(vec![values.handle.to_owned().binding()])[0];
+        let values_output =
+            &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
         keys_output.iter().enumerate().try_fold(

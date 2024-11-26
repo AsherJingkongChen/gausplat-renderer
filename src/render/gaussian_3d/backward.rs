@@ -4,7 +4,7 @@ pub use super::*;
 pub struct RenderInput<B: Backend> {
     /// `[P, 3]`
     pub colors_rgb_3d: B::FloatTensorPrimitive,
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
@@ -68,7 +68,7 @@ pub struct RenderInput<B: Backend> {
 
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh_grad: B::FloatTensorPrimitive,
     /// `[P]`
     pub opacities_grad: B::FloatTensorPrimitive,

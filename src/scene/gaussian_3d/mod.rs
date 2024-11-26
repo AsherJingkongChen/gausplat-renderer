@@ -11,6 +11,7 @@ pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{Tensor, TensorData},
 };
+pub use gausplat_loader::source::polygon;
 pub use render::{
     Gaussian3dRenderOptions, Gaussian3dRenderOutput, Gaussian3dRenderOutputAutodiff,
     Gaussian3dRenderer,
@@ -23,22 +24,30 @@ use autodiff::{
     ops::{Backward, Ops, OpsKind},
     NodeID,
 };
-use burn::tensor::TensorPrimitive;
+use burn::tensor::{DType, TensorPrimitive};
+use gausplat_loader::function::{Decoder, DecoderWith};
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{fmt, marker, mem::size_of};
+use std::{
+    fmt,
+    io::{BufReader, Read},
+    marker,
+    mem::take,
+    sync::LazyLock,
+};
 
+/// [`SH_COUNT_MAX * 3`](SH_COUNT_MAX)
 pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT_MAX * 3;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh: Param<Tensor<B, 2>>,
     /// `[P, 1]`
     pub opacities: Param<Tensor<B, 2>>,
     /// `[P, 3]`
     pub positions: Param<Tensor<B, 2>>,
-    /// `[P, 4]`
+    /// `[P, 4]`. **(in scalar-last order, i.e., `[x, y, z, w]`)**
     pub rotations: Param<Tensor<B, 2>>,
     /// `[P, 3]`
     pub scalings: Param<Tensor<B, 2>>,
@@ -58,21 +67,21 @@ struct Gaussian3dRenderBackwardState<B: Backend> {
 pub const SEED_INIT: u64 = 0x3D65;
 
 impl<B: Backend> Gaussian3dScene<B> {
-    pub fn init(
+    pub fn init_from_points(
+        points: Points,
         device: &B::Device,
-        priors: Points,
     ) -> Self {
         // P
-        let point_count = priors.len();
-        let priors = (priors.to_owned(), priors);
+        let point_count = points.len();
+        let points = (points.to_owned(), points);
         // [P, 3]
-        let colors_rgb = priors
+        let colors_rgb = points
             .0
             .into_iter()
             .flat_map(|point| point.color_rgb)
             .collect::<Vec<_>>();
         // [P, 3]
-        let positions = priors
+        let positions = points
             .1
             .into_iter()
             .flat_map(|point| point.position)
@@ -100,7 +109,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
-                    "init > colors_sh",
+                    "init_from_points > colors_sh",
                 );
 
                 colors_sh
@@ -123,7 +132,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
-                    "init > opacities",
+                    "init_from_points > opacities",
                 );
 
                 opacities
@@ -145,7 +154,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
-                    "init > positions",
+                    "init_from_points > positions",
                 );
 
                 positions
@@ -170,7 +179,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
-                    "init > rotations",
+                    "init_from_points > rotations",
                 );
 
                 rotations
@@ -208,7 +217,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                 #[cfg(all(debug_assertions, not(test)))]
                 log::debug!(
                     target: "gausplat::renderer::gaussian_3d::scene",
-                    "init > scalings",
+                    "init_from_points > scalings",
                 );
 
                 scalings
@@ -224,6 +233,129 @@ impl<B: Backend> Gaussian3dScene<B> {
             rotations,
             scalings,
         }
+    }
+
+    pub fn init_from_polygon_3dgs(
+        reader: &mut impl Read,
+        device: &B::Device,
+    ) -> Result<Self, Error> {
+        let reader = &mut BufReader::new(reader);
+
+        let header = polygon::Header::decode(reader)?;
+        if !header.is_same_order(&POLYGON_HEADER_3DGS) {
+            return Err(Error::MismatchedPolygonHeader3DGS(header.into()));
+        }
+        let payload = polygon::Payload::decode_with(reader, &header)?;
+        let mut object = polygon::Object { header, payload };
+
+        // NOTE: The header is validated previously.
+        let point_count = object.elem("vertex").unwrap().meta.count;
+
+        // [P, 48] <- [P, 1, 3] + [P, 3, 15]
+        let colors_sh = Tensor::<B, 2>::from_data(
+            TensorData {
+                bytes: (0..SH_COUNT_MAX * 3)
+                    .flat_map(|i| {
+                        let name = if i < 3 {
+                            format!("f_dc_{i}")
+                        } else {
+                            let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
+                            format!("f_rest_{i}")
+                        };
+                        take(object.elem_prop_mut("vertex", &name).unwrap().data)
+                    })
+                    .collect::<Vec<_>>(),
+                shape: [COLORS_SH_FEATURE_COUNT, point_count].into(),
+                dtype: DType::F32,
+            },
+            device,
+        )
+        .swap_dims(0, 1)
+        .set_require_grad(true);
+
+        // [P, 1]
+        let opacities = Tensor::<B, 2>::from_data(
+            TensorData {
+                bytes: take(object.elem_prop_mut("vertex", "opacity").unwrap().data),
+                shape: [1, point_count].into(),
+                dtype: DType::F32,
+            },
+            device,
+        )
+        .swap_dims(0, 1)
+        .set_require_grad(true);
+
+        // [P, 3]
+        let positions = Tensor::<B, 2>::from_data(
+            TensorData {
+                bytes: [
+                    take(object.elem_prop_mut("vertex", "x").unwrap().data),
+                    take(object.elem_prop_mut("vertex", "y").unwrap().data),
+                    take(object.elem_prop_mut("vertex", "z").unwrap().data),
+                ]
+                .concat(),
+                shape: [3, point_count].into(),
+                dtype: DType::F32,
+            },
+            device,
+        )
+        .swap_dims(0, 1)
+        .set_require_grad(true);
+
+        // [P, 4] (x, y, z, w) <- (w, x, y, z)
+        let rotations = Tensor::<B, 2>::from_data(
+            TensorData {
+                bytes: [
+                    take(object.elem_prop_mut("vertex", "rot_1").unwrap().data),
+                    take(object.elem_prop_mut("vertex", "rot_2").unwrap().data),
+                    take(object.elem_prop_mut("vertex", "rot_3").unwrap().data),
+                    take(object.elem_prop_mut("vertex", "rot_0").unwrap().data),
+                ]
+                .concat(),
+                shape: [4, point_count].into(),
+                dtype: DType::F32,
+            },
+            device,
+        )
+        .swap_dims(0, 1)
+        .set_require_grad(true);
+
+        // [P, 3]
+        let scalings = Tensor::<B, 2>::from_data(
+            TensorData {
+                bytes: (0..3)
+                    .flat_map(|i| {
+                        take(
+                            object
+                                .elem_prop_mut("vertex", &format!("scale_{i}"))
+                                .unwrap()
+                                .data,
+                        )
+                    })
+                    .collect(),
+                shape: [3, point_count].into(),
+                dtype: DType::F32,
+            },
+            device,
+        )
+        .swap_dims(0, 1)
+        .set_require_grad(true);
+
+        let mut scene = Self::default();
+        scene
+            .set_inner_colors_sh(colors_sh)
+            .set_inner_opacities(opacities)
+            .set_inner_positions(positions)
+            .set_inner_rotations(rotations)
+            .set_inner_scalings(scalings);
+
+        #[cfg(all(debug_assertions, not(test)))]
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "init_from_polygon_3dgs",
+        );
+
+        Ok(scene)
     }
 }
 
@@ -454,9 +586,25 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
 impl<B: Backend> Default for Gaussian3dScene<B> {
     #[inline]
     fn default() -> Self {
-        Self::init(&Default::default(), vec![Default::default(); 16])
+        Self::init_from_points(vec![Default::default(); 16], &Default::default())
     }
 }
+
+/// A polygon file header for 3D Gaussian splats.
+/// 
+/// <details>
+/// <summary>
+///     <strong>Click to expand</strong>
+/// </summary>
+/// <pre class=language-plaintext>
+#[doc = include_str!("header.3dgs.ply")]
+/// </pre>
+/// </details>
+pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
+    include_str!("header.3dgs.ply")
+        .parse::<polygon::Header>()
+        .unwrap()
+});
 
 #[cfg(test)]
 mod tests {
@@ -478,11 +626,11 @@ mod tests {
     };
 
     #[test]
-    fn init() {
+    fn init_from_points() {
         use burn::backend::NdArray;
 
         let device = Default::default();
-        let priors = vec![
+        let points = vec![
             Point {
                 color_rgb: [1.0, 0.5, 0.0],
                 position: [0.0, -0.5, 0.2],
@@ -493,7 +641,7 @@ mod tests {
             },
         ];
 
-        let scene = Gaussian3dScene::<NdArray<f32>>::init(&device, priors);
+        let scene = Gaussian3dScene::<NdArray<f32>>::init_from_points(points, &device);
 
         let colors_sh = scene.get_colors_sh();
         assert_eq!(colors_sh.dims(), [2, 48]);

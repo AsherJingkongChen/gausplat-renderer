@@ -34,7 +34,7 @@ pub struct Arguments {
 pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
     pub colors_rgb_3d_grad: JitTensor<R>,
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh: JitTensor<R>,
     /// `[P, 3]`
     pub conics: JitTensor<R>,
@@ -62,7 +62,7 @@ pub struct Inputs<R: JitRuntime> {
 
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh_grad: JitTensor<R>,
     /// `[P]`
     pub positions_2d_grad_norm: JitTensor<R>,

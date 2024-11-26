@@ -5,7 +5,7 @@ pub struct RenderInput<B: Backend> {
     pub device: B::Device,
     /// `P`
     pub point_count: u64,
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
     /// `[P]`
     pub opacities: B::FloatTensorPrimitive,

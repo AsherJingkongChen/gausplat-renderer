@@ -18,7 +18,7 @@ pub struct View {
     ///
     /// ## Details
     ///
-    /// ```ignore
+    /// ```plaintext
     /// Tr_v = [R_v   | T_v]
     ///        [0 0 0 | 1  ]
     /// ```
@@ -40,11 +40,11 @@ impl View {
     ///
     /// ## Details
     ///
-    /// ```ignore
-    /// // P_w is the view position in world space.
-    /// // P_v is the view position in view space, which is the origin.
-    /// // R_v is the rotation matrix mapping from world space to view space.
-    /// // T_v is the translation vector mapping from world space to view space.
+    /// ```plaintext
+    /// * P_w is the view position in world space.
+    /// * P_v is the view position in view space, which is the origin.
+    /// * R_v is the rotation matrix mapping from world space to view space.
+    /// * T_v is the translation vector mapping from world space to view space.
     ///
     /// P_v = 0 = R_v * P_w + T_v
     /// P_w = -R_v^t * T_v
@@ -103,7 +103,7 @@ impl View {
     ///
     /// ## Details
     ///
-    /// ```ignore
+    /// ```plaintext
     /// Tr_v = [R_v   | T_v]
     ///        [0 0 0 | 1  ]
     /// ```

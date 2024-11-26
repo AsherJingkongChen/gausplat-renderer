@@ -120,8 +120,9 @@ mod tests {
 
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
-        let total_output =
-            *from_bytes::<u32>(&total.client.read(vec![total.handle.to_owned().binding()])[0]);
+        let total_output = *from_bytes::<u32>(
+            &total.client.read(vec![total.handle.to_owned().binding()])[0],
+        );
         let values_output = total.client.read(vec![values.handle.to_owned().binding()]);
         let values_output = cast_slice::<u8, u32>(&values_output[0]);
 
@@ -167,8 +168,9 @@ mod tests {
 
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let Outputs { total, values } = main::<R, F, I>(Inputs { values });
-        let total_output =
-            *from_bytes::<u32>(&total.client.read(vec![total.handle.to_owned().binding()])[0]);
+        let total_output = *from_bytes::<u32>(
+            &total.client.read(vec![total.handle.to_owned().binding()])[0],
+        );
         let values_output = total.client.read(vec![values.handle.to_owned().binding()]);
         let values_output = cast_slice::<u8, u32>(&values_output[0]);
 

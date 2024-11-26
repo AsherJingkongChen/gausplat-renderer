@@ -6,7 +6,7 @@ use burn::tensor::activation;
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
     ///
-    /// `[P, 48] <- [P, 16, 3]`
+    /// `[P, 48]` <- `[P, 16, 3]`
     #[inline]
     pub fn get_colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())

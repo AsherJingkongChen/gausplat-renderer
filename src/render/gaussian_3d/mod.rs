@@ -51,7 +51,7 @@ pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
     ///
     /// ## Usage
     ///
-    /// ```ignore
+    /// ```plaintext
     /// use burn::backend::autodiff::grads::Gradients;
     ///
     /// let mut grads: Gradients = todo!();
