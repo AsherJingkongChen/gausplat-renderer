@@ -201,7 +201,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             move |device, is_require_grad| {
                 let rotations = Self::make_inner_rotations(Tensor::from_data(
                     TensorData::new(
-                        [0.0, 0.0, 0.0, 1.0].repeat(point_count),
+                        [0.0, 0.0, 0.0, 1.0_f32].repeat(point_count),
                         [point_count, 4],
                     ),
                     device,
@@ -310,6 +310,108 @@ mod tests {
 
         let target = source;
         let output = scene.to_points();
+        assert_eq!(output, target);
+    }
+
+    #[test]
+    fn decode_and_encode_polygon_3dgs() {
+        use super::super::*;
+        use burn::backend::NdArray;
+        use std::io::Cursor;
+
+        type B = NdArray<f32>;
+
+        let device = Default::default();
+        let source =
+            include_bytes!("../../../examples/data/3dgs-ply/sixstars.3dgs.ply").to_vec();
+        let mut reader = Cursor::new(source.to_owned());
+
+        let scene =
+            Gaussian3dScene::<B>::decode_polygon_3dgs(&mut reader, &device).unwrap();
+
+        let target = 18;
+        let output = scene.point_count();
+        assert_eq!(output, target);
+
+        let target = Tensor::<B, 2>::from_data(
+            [
+                [
+                    1.75, 0.00, 0.00, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                ],
+                [
+                    0.00, 1.75, 0.00, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,
+                ],
+                [
+                    0.00, 0.00, 1.75, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+                ],
+                [
+                    1.75, 0.00, 0.00, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                ],
+                [
+                    0.00, 1.75, 0.00, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                ],
+                [
+                    0.00, 0.00, 1.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                ],
+            ],
+            &device,
+        )
+        .repeat_dim(0, 3);
+        let output = scene.colors_sh.val().slice([0..18, 0..(1 + 3) * 3]);
+        output.into_data().assert_eq(&target.into_data(), true);
+
+        let target = Tensor::<B, 2>::from_data([[-1.0_f32]; 18], &device);
+        let output = scene.opacities.val();
+        output.into_data().assert_eq(&target.into_data(), true);
+
+        let target = Tensor::<B, 2>::from_data(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+                [-1.0, 0.0, 0.0],
+                [0.0, -1.0, 0.0],
+                [0.0, 0.0, -1.0],
+            ],
+            &device,
+        )
+        .repeat_dim(0, 3);
+        let output = scene.positions.val();
+        output.into_data().assert_eq(&target.into_data(), true);
+
+        let target = Tensor::<B, 2>::from_data([[0.0, 0.0, 0.0, 1.0]; 18], &device);
+        let output = scene.rotations.val();
+        output.into_data().assert_eq(&target.into_data(), true);
+
+        let target = Tensor::<B, 2>::from_data(
+            [
+                [-0.75, -2.5, -2.5],
+                [-2.5, -0.75, -2.5],
+                [-2.5, -2.5, -0.75],
+                [-0.75, -2.5, -2.5],
+                [-2.5, -0.75, -2.5],
+                [-2.5, -2.5, -0.75],
+                [-2.0, -1.0, -2.00],
+                [-2.0, -2.0, -1.00],
+                [-1.0, -2.0, -2.00],
+                [-2.0, -1.0, -2.00],
+                [-2.0, -2.0, -1.00],
+                [-1.0, -2.0, -2.00],
+                [-2.0, -2.0, -1.00],
+                [-1.0, -2.0, -2.00],
+                [-2.0, -1.0, -2.00],
+                [-2.0, -2.0, -1.00],
+                [-1.0, -2.0, -2.00],
+                [-2.0, -1.0, -2.00],
+            ],
+            &device,
+        );
+        let output = scene.scalings.val();
+        output.into_data().assert_eq(&target.into_data(), true);
+
+        let target = source;
+        let mut output = vec![];
+        scene.encode_polygon_3dgs(&mut output).unwrap();
         assert_eq!(output, target);
     }
 }
