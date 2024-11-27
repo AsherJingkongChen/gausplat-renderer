@@ -1,11 +1,11 @@
 pub use super::*;
 
+use gausplat_loader::function::{Decoder, DecoderWith};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
     io::{BufReader, Read},
     mem::take,
 };
-use gausplat_loader::function::{Decoder, DecoderWith};
 
 /// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
@@ -270,25 +270,25 @@ impl<B: Backend> Gaussian3dScene<B> {
 
 #[cfg(test)]
 mod tests {
-
     #[test]
     fn from_and_to_points() {
         use super::super::*;
         use burn::backend::NdArray;
 
         let device = Default::default();
-        let points = vec![
+        let source = vec![
             Point {
                 color_rgb: [1.0, 0.5, 0.0],
-                position: [0.0, -0.5, 0.2],
+                position: [0.0, -0.5, 0.25],
             },
             Point {
-                color_rgb: [0.5, 1.0, 0.2],
-                position: [1.0, 0.0, -0.3],
+                color_rgb: [0.5, 1.0, 0.25],
+                position: [1.0, 0.0, -0.25],
             },
         ];
 
-        let scene = Gaussian3dScene::<NdArray<f32>>::from_points(points, &device);
+        let scene =
+            Gaussian3dScene::<NdArray<f32>>::from_points(source.to_owned(), &device);
 
         let colors_sh = scene.get_colors_sh();
         assert_eq!(colors_sh.dims(), [2, 48]);
@@ -307,5 +307,9 @@ mod tests {
 
         assert_eq!(scene.point_count(), 2);
         assert_eq!(scene.size(), (2 * 48 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
+
+        let target = source;
+        let output = scene.to_points();
+        assert_eq!(output, target);
     }
 }
