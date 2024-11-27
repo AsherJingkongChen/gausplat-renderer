@@ -1,7 +1,7 @@
 pub mod property;
 
 pub use super::point::*;
-pub use crate::spherical_harmonics::SH_DEGREE_MAX;
+pub use crate::spherical_harmonics::{SH_COUNT_MAX, SH_DEGREE_MAX};
 pub use crate::{
     backend::{self, *},
     error::Error,
@@ -17,7 +17,7 @@ pub use render::{
     Gaussian3dRenderer,
 };
 
-use crate::spherical_harmonics::{SH_COEF, SH_COUNT_MAX};
+use crate::spherical_harmonics::SH_COEF;
 use autodiff::{
     checkpoint::{base::Checkpointer, strategy::NoCheckpointing},
     grads::Gradients,
@@ -25,19 +25,19 @@ use autodiff::{
     NodeID,
 };
 use burn::tensor::{DType, TensorPrimitive};
-use gausplat_loader::function::{Decoder, DecoderWith};
+use gausplat_loader::function::{Decoder, DecoderWith, Encoder};
 use humansize::{format_size, BINARY};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
     fmt,
-    io::{BufReader, Read},
+    io::{BufReader, BufWriter, Read, Write},
     marker,
     mem::take,
     sync::LazyLock,
 };
 
 /// [`SH_COUNT_MAX * 3`](SH_COUNT_MAX)
-pub const COLORS_SH_FEATURE_COUNT: usize = SH_COUNT_MAX * 3;
+pub const COLORS_SH_COUNT_MAX: usize = SH_COUNT_MAX * 3;
 
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
@@ -66,8 +66,96 @@ struct Gaussian3dRenderBackwardState<B: Backend> {
 
 pub const SEED_INIT: u64 = 0x3D65;
 
-/// Scene initializers
+/// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
+    pub fn decode_polygon_3dgs(
+        reader: &mut impl Read,
+        device: &B::Device,
+    ) -> Result<Self, Error> {
+        let reader = &mut BufReader::new(reader);
+
+        let header = polygon::Header::decode(reader)?;
+        if !header.is_same_order(&POLYGON_HEADER_3DGS) {
+            return Err(Error::MismatchedPolygonHeader3DGS(header.into()));
+        }
+        let payload = polygon::Payload::decode_with(reader, &header)?;
+        let mut object = polygon::Object { header, payload };
+
+        // NOTE: The header is validated previously.
+        let point_count = object.elem("vertex").unwrap().meta.count;
+
+        let mut take_tensor = |names: &[String], device: &B::Device| {
+            let dtype = DType::F32;
+            let channel_count = names.len();
+            let bytes = names.iter().fold(
+                Vec::<u8>::with_capacity(channel_count * point_count * dtype.size()),
+                |mut bytes, name| {
+                    let data = object.elem_prop_mut("vertex", name).unwrap().data;
+                    bytes.extend(take(data));
+                    bytes
+                },
+            );
+            let data = TensorData {
+                bytes,
+                shape: [channel_count, point_count].into(),
+                dtype,
+            };
+            Tensor::<B, 2>::from_data(data, device)
+                .swap_dims(0, 1)
+                .set_require_grad(true)
+        };
+
+        // [P, 48] <- [P, 1, 3] + [P, 3, 15]
+        let colors_sh = take_tensor(
+            &(0..COLORS_SH_COUNT_MAX)
+                .map(|i| {
+                    if i < 3 {
+                        format!("f_dc_{i}")
+                    } else {
+                        let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
+                        format!("f_rest_{i}")
+                    }
+                    .into()
+                })
+                .collect::<Vec<_>>(),
+            device,
+        );
+
+        // [P, 1]
+        let opacities = take_tensor(&["opacity"].map(Into::into), device);
+
+        // [P, 3]
+        let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
+
+        // [P, 4] (x, y, z, w) <- (w, x, y, z)
+        let rotations =
+            take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}").into()), device);
+
+        // [P, 3]
+        let scalings = take_tensor(
+            &(0..3)
+                .map(|i| format!("scale_{i}").into())
+                .collect::<Vec<_>>(),
+            device,
+        );
+
+        let mut scene = Self::default();
+        scene
+            .set_inner_colors_sh(colors_sh)
+            .set_inner_opacities(opacities)
+            .set_inner_positions(positions)
+            .set_inner_rotations(rotations)
+            .set_inner_scalings(scalings);
+
+        #[cfg(all(debug_assertions, not(test)))]
+        log::debug!(
+            target: "gausplat::renderer::gaussian_3d::scene",
+            "decode_polygon_3dgs",
+        );
+
+        Ok(scene)
+    }
+
     pub fn init_from_points(
         points: Points,
         device: &B::Device,
@@ -93,7 +181,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             Default::default(),
             move |device, is_require_grad| {
                 let mut colors_sh =
-                    Tensor::zeros([point_count, COLORS_SH_FEATURE_COUNT], device);
+                    Tensor::zeros([point_count, COLORS_SH_COUNT_MAX], device);
                 let colors_rgb = Tensor::from_data(
                     TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,
@@ -235,98 +323,73 @@ impl<B: Backend> Gaussian3dScene<B> {
             scalings,
         }
     }
-
-    pub fn init_from_polygon_3dgs(
-        reader: &mut impl Read,
-        device: &B::Device,
-    ) -> Result<Self, Error> {
-        let reader = &mut BufReader::new(reader);
-
-        let header = polygon::Header::decode(reader)?;
-        if !header.is_same_order(&POLYGON_HEADER_3DGS) {
-            return Err(Error::MismatchedPolygonHeader3DGS(header.into()));
-        }
-        let payload = polygon::Payload::decode_with(reader, &header)?;
-        let mut object = polygon::Object { header, payload };
-
-        // NOTE: The header is validated previously.
-        let point_count = object.elem("vertex").unwrap().meta.count;
-
-        let mut take_tensor = |names: &[String], device: &B::Device| {
-            let dtype = DType::F32;
-            let channel_count = names.len();
-            let bytes = names.iter().fold(
-                Vec::<u8>::with_capacity(channel_count * point_count * dtype.size()),
-                |mut bytes, name| {
-                    let data = object.elem_prop_mut("vertex", name).unwrap().data;
-                    bytes.extend(take(data));
-                    bytes
-                },
-            );
-            let data = TensorData {
-                bytes,
-                shape: [channel_count, point_count].into(),
-                dtype,
-            };
-            Tensor::<B, 2>::from_data(data, device)
-                .swap_dims(0, 1)
-                .set_require_grad(true)
-        };
-
-        // [P, 48] <- [P, 1, 3] + [P, 3, 15]
-        let colors_sh = take_tensor(
-            &(0..COLORS_SH_FEATURE_COUNT)
-                .map(|i| {
-                    if i < 3 {
-                        format!("f_dc_{i}")
-                    } else {
-                        let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
-                        format!("f_rest_{i}")
-                    }
-                    .into()
-                })
-                .collect::<Vec<_>>(),
-            device,
-        );
-
-        // [P, 1]
-        let opacities = take_tensor(&["opacity"].map(Into::into), device);
-
-        // [P, 3]
-        let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
-
-        // [P, 4] (x, y, z, w) <- (w, x, y, z)
-        let rotations =
-            take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}").into()), device);
-
-        // [P, 3]
-        let scalings = take_tensor(
-            &(0..3)
-                .map(|i| format!("scale_{i}").into())
-                .collect::<Vec<_>>(),
-            device,
-        );
-
-        let mut scene = Self::default();
-        scene
-            .set_inner_colors_sh(colors_sh)
-            .set_inner_opacities(opacities)
-            .set_inner_positions(positions)
-            .set_inner_rotations(rotations)
-            .set_inner_scalings(scalings);
-
-        #[cfg(all(debug_assertions, not(test)))]
-        log::debug!(
-            target: "gausplat::renderer::gaussian_3d::scene",
-            "init_from_polygon_3dgs",
-        );
-
-        Ok(scene)
-    }
 }
 
 /// Scene exporters
 impl<B: Backend> Gaussian3dScene<B> {
+    pub fn encode_polygon_3dgs(
+        &self,
+        writer: &mut impl Write,
+    ) -> Result<(), Error> {
+        let writer = &mut BufWriter::new(writer);
+
+        let point_count = self.point_count();
+
+        // [P, 1, 3] + [P, 3, 15] <- [P, 48]
+        let colors_sh_dc = self.colors_sh.val().slice([0..point_count, 0..3]);
+        let colors_sh_rest = self
+            .colors_sh
+            .val()
+            .slice([0..point_count, 3..COLORS_SH_COUNT_MAX])
+            .reshape([point_count, SH_COUNT_MAX - 1, 3])
+            .swap_dims(1, 2)
+            .flatten(1, 2);
+
+        // [P, 1]
+        let opacities = self.opacities.val();
+
+        // [P, 3]
+        let positions = self.positions.val();
+
+        // [P, 4] (w, x, y, z) <- (x, y, z, w)
+        let rotations_scalar = self.rotations.val().slice([0..point_count, 3..4]);
+        let rotations_vector = self.rotations.val().slice([0..point_count, 0..3]);
+
+        // [P, 3]
+        let scalings = self.scalings.val();
+
+        // [P, 3] (Unused)
+        let normals = Tensor::<B, 2>::zeros([point_count, 3], &self.device());
+
+        // [P, 62] <- [P, 3 + 3 + 3 + 45 + 1 + 3 + 1 + 3]
+        let data = Tensor::cat(
+            [
+                positions,
+                normals,
+                colors_sh_dc,
+                colors_sh_rest,
+                opacities,
+                scalings,
+                rotations_scalar,
+                rotations_vector,
+            ]
+            .into(),
+            1,
+        )
+        .into_data()
+        .bytes;
+
+        let mut header = POLYGON_HEADER_3DGS.to_owned();
+        // NOTE: The data format is set to binary native-endian.
+        header.format = polygon::Format::binary_native_endian();
+        header.get_mut("vertex").unwrap().count = point_count;
+        header.encode(writer)?;
+
+        writer.write_all(&data)?;
+
+        Ok(())
+    }
+
     // TODO: It needs a point cloud viewer to validate the function.
     pub fn to_points(&self) -> Points {
         let point_count = self.point_count();
@@ -360,34 +423,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             })
             .collect()
     }
-
-    pub fn to_polygon_3dgs(&self) -> polygon::Object {
-        // let point_count = self.point_count();
-
-        // TODO: Use tensor operation to combine the tensor before loading to the host.
-        // NOTE: The data type is converted.
-        // let [colors_sh, opacities, positions, rotations, scalings] = [
-        //     self.get_colors_sh(),
-        //     self.get_opacities(),
-        //     self.get_positions(),
-        //     self.get_rotations(),
-        //     self.get_scalings(),
-        // ]
-        // .map(|tensor| tensor.into_data().bytes);
-
-        // // NOTE: The header is determined.
-        // let mut object = polygon::Object {
-        //     header: POLYGON_HEADER_3DGS.to_owned(),
-        //     ..Default::default()
-        // };
-        // object.elem_mut("vertex").unwrap().meta.count = point_count;
-
-        // *object.elem_prop_mut("vertex", "opacity").unwrap().data = opacities;
-
-        todo!()
-    }
 }
-
 impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
     Gaussian3dRenderer<JitBackend<R, F, I>> for Gaussian3dScene<JitBackend<R, F, I>>
 {

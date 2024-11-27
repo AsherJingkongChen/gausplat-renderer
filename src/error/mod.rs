@@ -7,6 +7,9 @@ pub enum Error {
     #[error("Invalid pixel count: {0}. It should not be zero or excessively large.")]
     InvalidPixelCount(usize),
 
+    #[error("Io error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("Gausplat loader error: {0}")]
     Loader(#[from] gausplat_loader::error::Error),
 
