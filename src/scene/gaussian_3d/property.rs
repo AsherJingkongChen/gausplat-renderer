@@ -2,11 +2,12 @@ pub use super::*;
 
 use burn::tensor::activation;
 
-/// Outer value getters
+/// Outer property value getters
 impl<B: Backend> Gaussian3dScene<B> {
     /// The colors represented as orthonormalized spherical harmonics
     ///
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)
+    /// <- [`[P, SH_COUNT_MAX, 3]`](SH_COUNT_MAX)
     #[inline]
     pub fn get_colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())
@@ -45,7 +46,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-/// Outer value makers
+/// Outer property value makers
 impl<B: Backend> Gaussian3dScene<B> {
     /// Making values for [`Gaussian3dScene::get_colors_sh`]
     #[inline]
@@ -80,7 +81,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-/// Outer value setters
+/// Outer property value setters
 impl<B: Backend> Gaussian3dScene<B> {
     /// Setting values for [`Gaussian3dScene::get_colors_sh`]
     pub fn set_colors_sh(
@@ -124,7 +125,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-/// Inner value makers
+/// Inner property value makers
 impl<B: Backend> Gaussian3dScene<B> {
     /// Making inner values for [`Gaussian3dScene::colors_sh`]
     #[inline]
@@ -157,7 +158,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
-/// Inner value setters
+/// Inner property value setters
 impl<B: Backend> Gaussian3dScene<B> {
     /// Setting inner values for [`Gaussian3dScene::colors_sh`]
     #[inline]
@@ -210,10 +211,11 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 }
 
+/// Attribute getters
 impl<B: Backend> Gaussian3dScene<B> {
     #[inline]
     pub fn device(&self) -> B::Device {
-        self.positions.val().device()
+        self.devices().first().expect("A device").to_owned()
     }
 
     #[inline]

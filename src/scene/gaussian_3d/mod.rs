@@ -1,3 +1,5 @@
+pub mod export;
+pub mod import;
 pub mod property;
 
 pub use super::point::*;
@@ -11,7 +13,6 @@ pub use burn::{
     module::{AutodiffModule, Module, Param},
     tensor::{Tensor, TensorData},
 };
-pub use gausplat_loader::source::polygon;
 pub use render::{
     Gaussian3dRenderOptions, Gaussian3dRenderOutput, Gaussian3dRenderOutputAutodiff,
     Gaussian3dRenderer,
@@ -25,23 +26,33 @@ use autodiff::{
     NodeID,
 };
 use burn::tensor::{DType, TensorPrimitive};
-use gausplat_loader::function::{Decoder, DecoderWith, Encoder};
+use gausplat_loader::source::polygon;
 use humansize::{format_size, BINARY};
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{
-    fmt,
-    io::{BufReader, BufWriter, Read, Write},
-    marker,
-    mem::take,
-    sync::LazyLock,
-};
+use std::{fmt, marker, sync::LazyLock};
 
 /// [`SH_COUNT_MAX * 3`](SH_COUNT_MAX)
 pub const COLORS_SH_COUNT_MAX: usize = SH_COUNT_MAX * 3;
 
+/// A polygon file header for 3D Gaussian splats.
+///
+/// <details>
+/// <summary>
+///     <strong>Click to expand</strong>
+/// </summary>
+/// <pre class=language-plaintext>
+#[doc = include_str!("header.3dgs.ply")]
+/// </pre>
+/// </details>
+pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
+    include_str!("header.3dgs.ply")
+        .parse::<polygon::Header>()
+        .unwrap()
+});
+
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)
+    /// <- [`[P, SH_COUNT_MAX, 3]`](SH_COUNT_MAX)
     pub colors_sh: Param<Tensor<B, 2>>,
     /// `[P, 1]`
     pub opacities: Param<Tensor<B, 2>>,
@@ -64,369 +75,10 @@ struct Gaussian3dRenderBackwardState<B: Backend> {
     pub positions_2d_grad_norm_ref_id: NodeID,
 }
 
-pub const SEED_INIT: u64 = 0x3D65;
-
-/// Scene importers
-impl<B: Backend> Gaussian3dScene<B> {
-    pub fn decode_polygon_3dgs(
-        reader: &mut impl Read,
-        device: &B::Device,
-    ) -> Result<Self, Error> {
-        let reader = &mut BufReader::new(reader);
-
-        let header = polygon::Header::decode(reader)?;
-        if !header.is_same_order(&POLYGON_HEADER_3DGS) {
-            return Err(Error::MismatchedPolygonHeader3DGS(header.into()));
-        }
-        let payload = polygon::Payload::decode_with(reader, &header)?;
-        let mut object = polygon::Object { header, payload };
-
-        // NOTE: The header is validated previously.
-        let point_count = object.elem("vertex").unwrap().meta.count;
-
-        let mut take_tensor = |names: &[String], device: &B::Device| {
-            let dtype = DType::F32;
-            let channel_count = names.len();
-            let bytes = names.iter().fold(
-                Vec::<u8>::with_capacity(channel_count * point_count * dtype.size()),
-                |mut bytes, name| {
-                    let data = object.elem_prop_mut("vertex", name).unwrap().data;
-                    bytes.extend(take(data));
-                    bytes
-                },
-            );
-            let data = TensorData {
-                bytes,
-                shape: [channel_count, point_count].into(),
-                dtype,
-            };
-            Tensor::<B, 2>::from_data(data, device)
-                .swap_dims(0, 1)
-                .set_require_grad(true)
-        };
-
-        // [P, 48] <- [P, 1, 3] + [P, 3, 15]
-        let colors_sh = take_tensor(
-            &(0..COLORS_SH_COUNT_MAX)
-                .map(|i| {
-                    if i < 3 {
-                        format!("f_dc_{i}")
-                    } else {
-                        let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
-                        format!("f_rest_{i}")
-                    }
-                    .into()
-                })
-                .collect::<Vec<_>>(),
-            device,
-        );
-
-        // [P, 1]
-        let opacities = take_tensor(&["opacity"].map(Into::into), device);
-
-        // [P, 3]
-        let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
-
-        // [P, 4] (x, y, z, w) <- (w, x, y, z)
-        let rotations =
-            take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}").into()), device);
-
-        // [P, 3]
-        let scalings = take_tensor(
-            &(0..3)
-                .map(|i| format!("scale_{i}").into())
-                .collect::<Vec<_>>(),
-            device,
-        );
-
-        let mut scene = Self::default();
-        scene
-            .set_inner_colors_sh(colors_sh)
-            .set_inner_opacities(opacities)
-            .set_inner_positions(positions)
-            .set_inner_rotations(rotations)
-            .set_inner_scalings(scalings);
-
-        #[cfg(all(debug_assertions, not(test)))]
-        log::debug!(
-            target: "gausplat::renderer::gaussian_3d::scene",
-            "decode_polygon_3dgs",
-        );
-
-        Ok(scene)
-    }
-
-    pub fn init_from_points(
-        points: Points,
-        device: &B::Device,
-    ) -> Self {
-        // P
-        let point_count = points.len();
-
-        // ([P, 3], [P, 3])
-        let (colors_rgb, positions) = points.iter().fold(
-            (
-                Vec::<f32>::with_capacity(point_count * 3),
-                Vec::<f64>::with_capacity(point_count * 3),
-            ),
-            |(mut colors_rgb, mut positions), point| {
-                colors_rgb.extend(point.color_rgb);
-                positions.extend(point.position);
-                (colors_rgb, positions)
-            },
-        );
-
-        // [P, 48] <- [P, 16, 3]
-        let colors_sh = Param::uninitialized(
-            Default::default(),
-            move |device, is_require_grad| {
-                let mut colors_sh =
-                    Tensor::zeros([point_count, COLORS_SH_COUNT_MAX], device);
-                let colors_rgb = Tensor::from_data(
-                    TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
-                    device,
-                );
-
-                colors_sh = colors_sh.slice_assign(
-                    [0..point_count, 0..3],
-                    (colors_rgb - 0.5) / SH_COEF.0[0],
-                );
-
-                colors_sh = Self::make_inner_colors_sh(colors_sh)
-                    .set_require_grad(is_require_grad);
-
-                #[cfg(all(debug_assertions, not(test)))]
-                log::debug!(
-                    target: "gausplat::renderer::gaussian_3d::scene",
-                    "init_from_points > colors_sh",
-                );
-
-                colors_sh
-            },
-            device.to_owned(),
-            true,
-        );
-
-        // [P, 1]
-        let opacities = Param::uninitialized(
-            Default::default(),
-            move |device, is_require_grad| {
-                let opacities = Self::make_inner_opacities(Tensor::full(
-                    [point_count, 1],
-                    0.1,
-                    device,
-                ))
-                .set_require_grad(is_require_grad);
-
-                #[cfg(all(debug_assertions, not(test)))]
-                log::debug!(
-                    target: "gausplat::renderer::gaussian_3d::scene",
-                    "init_from_points > opacities",
-                );
-
-                opacities
-            },
-            device.to_owned(),
-            true,
-        );
-
-        // [P, 3]
-        let positions = Param::uninitialized(
-            Default::default(),
-            move |device, is_require_grad| {
-                let positions = Self::make_inner_positions(Tensor::from_data(
-                    TensorData::new(positions.to_owned(), [point_count, 3]),
-                    device,
-                ))
-                .set_require_grad(is_require_grad);
-
-                #[cfg(all(debug_assertions, not(test)))]
-                log::debug!(
-                    target: "gausplat::renderer::gaussian_3d::scene",
-                    "init_from_points > positions",
-                );
-
-                positions
-            },
-            device.to_owned(),
-            true,
-        );
-
-        // [P, 4] (x, y, z, w)
-        let rotations = Param::uninitialized(
-            Default::default(),
-            move |device, is_require_grad| {
-                let rotations = Self::make_inner_rotations(Tensor::from_data(
-                    TensorData::new(
-                        [0.0, 0.0, 0.0, 1.0].repeat(point_count),
-                        [point_count, 4],
-                    ),
-                    device,
-                ))
-                .set_require_grad(is_require_grad);
-
-                #[cfg(all(debug_assertions, not(test)))]
-                log::debug!(
-                    target: "gausplat::renderer::gaussian_3d::scene",
-                    "init_from_points > rotations",
-                );
-
-                rotations
-            },
-            device.to_owned(),
-            true,
-        );
-
-        // [P, 3]
-        let scalings = Param::uninitialized(
-            Default::default(),
-            move |device, is_require_grad| {
-                let mut sample_max = f32::EPSILON;
-                let samples = StdRng::seed_from_u64(SEED_INIT)
-                    .sample_iter(
-                        rand_distr::LogNormal::new(0.0, std::f32::consts::E).unwrap(),
-                    )
-                    .take(point_count)
-                    .map(|mut sample| {
-                        sample = sample.max(f32::EPSILON);
-                        sample_max = sample_max.max(sample);
-                        sample
-                    })
-                    .collect();
-
-                let scalings = Self::make_inner_scalings(
-                    Tensor::from_data(TensorData::new(samples, [point_count, 1]), device)
-                        .div_scalar(sample_max)
-                        .sqrt()
-                        .clamp_min(f32::EPSILON)
-                        .repeat_dim(1, 3),
-                )
-                .set_require_grad(is_require_grad);
-
-                #[cfg(all(debug_assertions, not(test)))]
-                log::debug!(
-                    target: "gausplat::renderer::gaussian_3d::scene",
-                    "init_from_points > scalings",
-                );
-
-                scalings
-            },
-            device.to_owned(),
-            true,
-        );
-
-        Self {
-            colors_sh,
-            opacities,
-            positions,
-            rotations,
-            scalings,
-        }
-    }
-}
-
-/// Scene exporters
-impl<B: Backend> Gaussian3dScene<B> {
-    pub fn encode_polygon_3dgs(
-        &self,
-        writer: &mut impl Write,
-    ) -> Result<(), Error> {
-        let writer = &mut BufWriter::new(writer);
-
-        let point_count = self.point_count();
-
-        // [P, 1, 3] + [P, 3, 15] <- [P, 48]
-        let colors_sh_dc = self.colors_sh.val().slice([0..point_count, 0..3]);
-        let colors_sh_rest = self
-            .colors_sh
-            .val()
-            .slice([0..point_count, 3..COLORS_SH_COUNT_MAX])
-            .reshape([point_count, SH_COUNT_MAX - 1, 3])
-            .swap_dims(1, 2)
-            .flatten(1, 2);
-
-        // [P, 1]
-        let opacities = self.opacities.val();
-
-        // [P, 3]
-        let positions = self.positions.val();
-
-        // [P, 4] (w, x, y, z) <- (x, y, z, w)
-        let rotations_scalar = self.rotations.val().slice([0..point_count, 3..4]);
-        let rotations_vector = self.rotations.val().slice([0..point_count, 0..3]);
-
-        // [P, 3]
-        let scalings = self.scalings.val();
-
-        // [P, 3] (Unused)
-        let normals = Tensor::<B, 2>::zeros([point_count, 3], &self.device());
-
-        // [P, 62] <- [P, 3 + 3 + 3 + 45 + 1 + 3 + 1 + 3]
-        let data = Tensor::cat(
-            [
-                positions,
-                normals,
-                colors_sh_dc,
-                colors_sh_rest,
-                opacities,
-                scalings,
-                rotations_scalar,
-                rotations_vector,
-            ]
-            .into(),
-            1,
-        )
-        .into_data()
-        .bytes;
-
-        let mut header = POLYGON_HEADER_3DGS.to_owned();
-        // NOTE: The data format is set to binary native-endian.
-        header.format = polygon::Format::binary_native_endian();
-        header.get_mut("vertex").unwrap().count = point_count;
-        header.encode(writer)?;
-
-        writer.write_all(&data)?;
-
-        Ok(())
-    }
-
-    // TODO: It needs a point cloud viewer to validate the function.
-    pub fn to_points(&self) -> Points {
-        let point_count = self.point_count();
-
-        // NOTE: The data type is converted.
-        let colors_rgb = self
-            .get_colors_sh()
-            .slice([0..point_count, 0..3])
-            .mul_scalar(SH_COEF.0[0])
-            .add_scalar(0.5)
-            .into_data()
-            .convert::<f32>()
-            .into_vec()
-            .unwrap();
-
-        // NOTE: The data type is converted.
-        let positions = self
-            .get_positions()
-            .into_data()
-            .convert::<f64>()
-            .into_vec()
-            .unwrap();
-
-        colors_rgb
-            .chunks_exact(3)
-            .zip(positions.chunks_exact(3))
-            .map(|(color_rgb, position)| Point {
-                // NOTE: The slice size is guaranteed to fit.
-                color_rgb: color_rgb.try_into().unwrap(),
-                position: position.try_into().unwrap(),
-            })
-            .collect()
-    }
-}
 impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
     Gaussian3dRenderer<JitBackend<R, F, I>> for Gaussian3dScene<JitBackend<R, F, I>>
 {
+    #[inline]
     fn render_forward(
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &render::View,
@@ -435,6 +87,7 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
         render::jit::forward(input, view, options)
     }
 
+    #[inline]
     fn render_backward(
         state: render::backward::RenderInput<JitBackend<R, F, I>>,
         colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
@@ -447,6 +100,7 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
     Gaussian3dRenderer<JitBackend<R, F, I>>
     for Gaussian3dScene<Autodiff<JitBackend<R, F, I>>>
 {
+    #[inline]
     fn render_forward(
         input: render::forward::RenderInput<JitBackend<R, F, I>>,
         view: &render::View,
@@ -455,6 +109,7 @@ impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
         render::jit::forward(input, view, options)
     }
 
+    #[inline]
     fn render_backward(
         state: render::backward::RenderInput<JitBackend<R, F, I>>,
         colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
@@ -636,7 +291,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         f.debug_struct(&format!("Gaussian3dScene<{}>", B::name()))
-            .field("devices", &self.devices())
+            .field("device", &self.device())
             .field("point_count", &self.point_count())
             .field("size", &format_size(self.size(), BINARY))
             .field("colors_sh.dims()", &self.colors_sh.dims())
@@ -651,25 +306,9 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
 impl<B: Backend> Default for Gaussian3dScene<B> {
     #[inline]
     fn default() -> Self {
-        Self::init_from_points(vec![Default::default(); 16], &Default::default())
+        Self::from_points(vec![Default::default(); 16], &Default::default())
     }
 }
-
-/// A polygon file header for 3D Gaussian splats.
-///
-/// <details>
-/// <summary>
-///     <strong>Click to expand</strong>
-/// </summary>
-/// <pre class=language-plaintext>
-#[doc = include_str!("header.3dgs.ply")]
-/// </pre>
-/// </details>
-pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
-    include_str!("header.3dgs.ply")
-        .parse::<polygon::Header>()
-        .unwrap()
-});
 
 #[cfg(test)]
 mod tests {
@@ -689,43 +328,6 @@ mod tests {
             [1.47, -0.69, 3.08, 1.00],
         ],
     };
-
-    #[test]
-    fn init_from_points() {
-        use burn::backend::NdArray;
-
-        let device = Default::default();
-        let points = vec![
-            Point {
-                color_rgb: [1.0, 0.5, 0.0],
-                position: [0.0, -0.5, 0.2],
-            },
-            Point {
-                color_rgb: [0.5, 1.0, 0.2],
-                position: [1.0, 0.0, -0.3],
-            },
-        ];
-
-        let scene = Gaussian3dScene::<NdArray<f32>>::init_from_points(points, &device);
-
-        let colors_sh = scene.get_colors_sh();
-        assert_eq!(colors_sh.dims(), [2, 48]);
-
-        let opacities = scene.get_opacities();
-        assert_eq!(opacities.dims(), [2, 1]);
-
-        let positions = scene.get_positions();
-        assert_eq!(positions.dims(), [2, 3]);
-
-        let rotations = scene.get_rotations();
-        assert_eq!(rotations.dims(), [2, 4]);
-
-        let scalings = scene.get_scalings();
-        assert_eq!(scalings.dims(), [2, 3]);
-
-        assert_eq!(scene.point_count(), 2);
-        assert_eq!(scene.size(), (2 * 48 + 2 + 2 * 3 + 2 * 4 + 2 * 3) * 4);
-    }
 
     #[test]
     fn default_render_wgpu() {
