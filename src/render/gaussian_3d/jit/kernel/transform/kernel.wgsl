@@ -100,8 +100,8 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 );
 
 // The depth range is restricted by 16-bit depth order for sorting
-const DEPTH_MAX: f32 = f32(1u << (17 - 4));
-const DEPTH_MIN: f32 = 1.0 / f32(1u << (4 - 1));
+const DEPTH_MAX: f32 = f32(1u << (17 - 3));
+const DEPTH_MIN: f32 = 1.0 / f32(1u << (3 - 1));
 // The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
 const FACTOR_RADIUS: f32 = 2.9949278;
 // C_f
@@ -169,9 +169,6 @@ fn main(
     // S is diagonal
     // 
     // ** Advanced **
-    // 
-    // This is derived from inverse Principal Component Analysis
-    // of the 3D covariance matrix:
     // 
     // Defining covariance matrix using Singular Value Decomposition:
     // 
