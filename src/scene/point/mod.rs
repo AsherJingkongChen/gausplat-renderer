@@ -18,3 +18,16 @@ impl From<colmap::Point> for Point {
         }
     }
 }
+
+impl Into<colmap::Point> for Point {
+    fn into(self) -> colmap::Point {
+        colmap::Point {
+            color_rgb: [
+                self.color_rgb[0].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+                self.color_rgb[1].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+                self.color_rgb[2].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+            ],
+            position: self.position,
+        }
+    }
+}

@@ -79,7 +79,7 @@ pub const FILTER_LOW_PASS: f64 = 0.3;
 pub const GROUP_SIZE: u32 = 256;
 
 /// Transforming the points.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -94,15 +94,15 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // [P, 48] <- [P, 16, 3]
     let colors_sh_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 48].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 48].into(), device);
     let positions_2d_grad_norm =
-        JitBackend::<R, F, I>::float_zeros([point_count].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count].into(), device);
     let positions_3d_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 3].into(), device);
     let rotations_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 4].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 4].into(), device);
     let scalings_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 3].into(), device);
 
     client.execute(
         Box::new(SourceKernel::new(

@@ -57,7 +57,7 @@ pub struct Outputs<R: JitRuntime> {
 }
 
 /// Rasterizing the point to the image.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -71,12 +71,13 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let point_count = arguments.point_count as usize;
 
     let colors_rgb_3d_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
-    let conics_grad = JitBackend::<R, F, I>::float_zeros([point_count, 3].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 3].into(), device);
+    let conics_grad =
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 3].into(), device);
     let opacities_3d_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 1].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 1].into(), device);
     let positions_2d_grad =
-        JitBackend::<R, F, I>::float_zeros([point_count, 2].into(), device);
+        JitBackend::<R, F, I, B>::float_zeros([point_count, 2].into(), device);
 
     // Launching the kernel
 

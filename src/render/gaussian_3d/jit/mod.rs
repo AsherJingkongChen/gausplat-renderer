@@ -16,11 +16,11 @@ use kernel::*;
 /// Maximum of `I_y * I_x`
 pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 
-pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
-    mut input: forward::RenderInput<JitBackend<R, F, I>>,
+pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
+    mut input: forward::RenderInput<JitBackend<R, F, I, B>>,
     view: &View,
     options: &Gaussian3dRenderOptions,
-) -> Result<forward::RenderOutput<JitBackend<R, F, I>>, Error> {
+) -> Result<forward::RenderOutput<JitBackend<R, F, I, B>>, Error> {
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "start");
 
@@ -84,7 +84,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Launching the kernels
 
-    let outputs_transform = transform::main::<R, F, I>(
+    let outputs_transform = transform::main::<R, F, I, B>(
         transform::Arguments {
             colors_sh_degree_max,
             focal_length_x,
@@ -113,7 +113,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Scanning the counts of the touched tiles into offsets
 
-    let outputs_scan = scan::add::main::<R, F, I>(scan::add::Inputs {
+    let outputs_scan = scan::add::main::<R, F, I, B>(scan::add::Inputs {
         values: outputs_transform.tile_touched_counts,
     });
 
@@ -128,7 +128,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
         )
     );
 
-    let outputs_rank = rank::main::<R, F, I>(
+    let outputs_rank = rank::main::<R, F, I, B>(
         rank::Arguments {
             point_count,
             tile_count_x,
@@ -145,7 +145,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Sorting the points by its tile index and depth
 
-    let outputs_sort = sort::radix::main::<R, F, I>(sort::radix::Inputs {
+    let outputs_sort = sort::radix::main::<R, F, I, B>(sort::radix::Inputs {
         count: outputs_scan.total.to_owned(),
         keys: outputs_rank.point_orders,
         values: outputs_rank.point_indices,
@@ -153,7 +153,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "sort");
 
-    let outputs_segment = segment::main::<R, F, I>(
+    let outputs_segment = segment::main::<R, F, I, B>(
         segment::Arguments {
             tile_count_x,
             tile_count_y,
@@ -166,7 +166,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "segment");
 
-    let outputs_rasterize = rasterize::main::<R, F, I>(
+    let outputs_rasterize = rasterize::main::<R, F, I, B>(
         rasterize::Arguments {
             image_size_x,
             image_size_y,
@@ -226,10 +226,10 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement>(
 /// ## Arguments
 ///
 /// * `colors_rgb_2d_grad` - `[I_y, I_x, 3]`
-pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
-    state: backward::RenderInput<JitBackend<R, F, I>>,
+pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
+    state: backward::RenderInput<JitBackend<R, F, I, B>>,
     mut colors_rgb_2d_grad: JitTensor<R>,
-) -> backward::RenderOutput<JitBackend<R, F, I>> {
+) -> backward::RenderOutput<JitBackend<R, F, I, B>> {
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "start");
 
@@ -239,7 +239,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // Launching the kernels
 
-    let outputs_rasterize_backward = rasterize_backward::main::<R, F, I>(
+    let outputs_rasterize_backward = rasterize_backward::main::<R, F, I, B>(
         rasterize_backward::Arguments {
             image_size_x: state.image_size_x,
             image_size_y: state.image_size_y,
@@ -262,7 +262,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement>(
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "rasterize_backward");
 
-    let outputs_transform_backward = transform_backward::main::<R, F, I>(
+    let outputs_transform_backward = transform_backward::main::<R, F, I, B>(
         transform_backward::Arguments {
             colors_sh_degree_max: state.colors_sh_degree_max,
             focal_length_x: state.focal_length_x,

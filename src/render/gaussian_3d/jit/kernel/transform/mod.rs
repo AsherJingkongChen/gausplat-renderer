@@ -77,7 +77,7 @@ pub const FILTER_LOW_PASS: f64 = 0.3;
 pub const GROUP_SIZE: u32 = 256;
 
 /// Transforming the points.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -91,22 +91,22 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let point_count = arguments.point_count as usize;
 
     let colors_rgb_3d =
-        JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
-    let conics = JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
-    let depths = JitBackend::<R, F, I>::float_empty([point_count].into(), device);
+        JitBackend::<R, F, I, B>::float_empty([point_count, 3].into(), device);
+    let conics = JitBackend::<R, F, I, B>::float_empty([point_count, 3].into(), device);
+    let depths = JitBackend::<R, F, I, B>::float_empty([point_count].into(), device);
     let is_colors_rgb_3d_not_clamped =
-        JitBackend::<R, F, I>::float_empty([point_count, 3].into(), device);
+        JitBackend::<R, F, I, B>::float_empty([point_count, 3].into(), device);
     let point_tile_bounds =
-        JitBackend::<R, F, I>::int_empty([point_count, 4].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([point_count, 4].into(), device);
     let positions_2d =
-        JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
+        JitBackend::<R, F, I, B>::float_empty([point_count, 2].into(), device);
     let positions_3d_in_normalized =
-        JitBackend::<R, F, I>::float_empty([point_count, 2].into(), device);
-    let radii = JitBackend::<R, F, I>::int_empty([point_count].into(), device);
+        JitBackend::<R, F, I, B>::float_empty([point_count, 2].into(), device);
+    let radii = JitBackend::<R, F, I, B>::int_empty([point_count].into(), device);
     let rotations_matrix =
-        JitBackend::<R, F, I>::float_empty([point_count, 3, 3].into(), device);
+        JitBackend::<R, F, I, B>::float_empty([point_count, 3, 3].into(), device);
     let tile_touched_counts =
-        JitBackend::<R, F, I>::int_empty([point_count].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([point_count].into(), device);
 
     // Launching the kernel
 

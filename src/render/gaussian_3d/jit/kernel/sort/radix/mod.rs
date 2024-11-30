@@ -44,7 +44,7 @@ pub const RADIX_COUNT: usize = 1 << RADIX_COUNT_SHIFT;
 pub const RADIX_COUNT_SHIFT: u32 = 8;
 
 /// Sort the keys and values.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>
 ) -> Outputs<R> {
     // NOTE: The key size is fixed.
@@ -66,13 +66,13 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     let mut arguments = Arguments { radix_shift: 0 };
     // (N' / G, 1, 1)
-    let group_count = JitBackend::<R, F, I>::int_empty([3].into(), device);
+    let group_count = JitBackend::<R, F, I, B>::int_empty([3].into(), device);
     // [N]
-    let mut keys_output = JitBackend::<R, F, I>::int_empty([count].into(), device);
+    let mut keys_output = JitBackend::<R, F, I, B>::int_empty([count].into(), device);
     // [N]
-    let mut values_output = JitBackend::<R, F, I>::int_empty([count].into(), device);
+    let mut values_output = JitBackend::<R, F, I, B>::int_empty([count].into(), device);
     // [2 * N' / G, R]
-    let counts_radix_group = JitBackend::<R, F, I>::int_empty(
+    let counts_radix_group = JitBackend::<R, F, I, B>::int_empty(
         [GROUP_COUNT_MAX as usize, RADIX_COUNT].into(),
         device,
     );
@@ -188,7 +188,7 @@ mod tests {
         let keys = B::int_from_data(TensorData::new(keys_source, [count]), device);
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let count = B::int_from_data([count].into(), device);
-        let Outputs { keys, values } = main::<R, F, I>(Inputs {
+        let Outputs { keys, values } = main::<R, F, I, u32>(Inputs {
             count,
             keys,
             values,
@@ -259,7 +259,7 @@ mod tests {
         let keys = B::int_from_data(TensorData::new(keys_source, [count]), device);
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
         let count = B::int_from_data([count].into(), device);
-        let Outputs { keys, values } = main::<R, F, I>(Inputs {
+        let Outputs { keys, values } = main::<R, F, I, u32>(Inputs {
             count,
             keys,
             values,

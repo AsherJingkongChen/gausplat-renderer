@@ -75,45 +75,54 @@ struct Gaussian3dRenderBackwardState<B: Backend> {
     pub positions_2d_grad_norm_ref_id: NodeID,
 }
 
-impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
-    Gaussian3dRenderer<JitBackend<R, F, I>> for Gaussian3dScene<JitBackend<R, F, I>>
+impl<
+        R: jit::JitRuntime,
+        F: jit::FloatElement,
+        I: jit::IntElement,
+        B: jit::BoolElement,
+    > Gaussian3dRenderer<JitBackend<R, F, I, B>>
+    for Gaussian3dScene<JitBackend<R, F, I, B>>
 {
     #[inline]
     fn render_forward(
-        input: render::forward::RenderInput<JitBackend<R, F, I>>,
+        input: render::forward::RenderInput<JitBackend<R, F, I, B>>,
         view: &render::View,
         options: &render::Gaussian3dRenderOptions,
-    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I>>, Error> {
+    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I, B>>, Error> {
         render::jit::forward(input, view, options)
     }
 
     #[inline]
     fn render_backward(
-        state: render::backward::RenderInput<JitBackend<R, F, I>>,
-        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
+        state: render::backward::RenderInput<JitBackend<R, F, I, B>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I, B> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I, B>> {
         render::jit::backward(state, colors_rgb_2d_grad)
     }
 }
 
-impl<R: jit::JitRuntime, F: jit::FloatElement, I: jit::IntElement>
-    Gaussian3dRenderer<JitBackend<R, F, I>>
-    for Gaussian3dScene<Autodiff<JitBackend<R, F, I>>>
+impl<
+        R: jit::JitRuntime,
+        F: jit::FloatElement,
+        I: jit::IntElement,
+        B: jit::BoolElement,
+    > Gaussian3dRenderer<JitBackend<R, F, I, B>>
+    for Gaussian3dScene<Autodiff<JitBackend<R, F, I, B>>>
 {
     #[inline]
     fn render_forward(
-        input: render::forward::RenderInput<JitBackend<R, F, I>>,
+        input: render::forward::RenderInput<JitBackend<R, F, I, B>>,
         view: &render::View,
         options: &render::Gaussian3dRenderOptions,
-    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I>>, Error> {
+    ) -> Result<render::forward::RenderOutput<JitBackend<R, F, I, B>>, Error> {
         render::jit::forward(input, view, options)
     }
 
     #[inline]
     fn render_backward(
-        state: render::backward::RenderInput<JitBackend<R, F, I>>,
-        colors_rgb_2d_grad: <JitBackend<R, F, I> as Backend>::FloatTensorPrimitive,
-    ) -> render::backward::RenderOutput<JitBackend<R, F, I>> {
+        state: render::backward::RenderInput<JitBackend<R, F, I, B>>,
+        colors_rgb_2d_grad: <JitBackend<R, F, I, B> as Backend>::FloatTensorPrimitive,
+    ) -> render::backward::RenderOutput<JitBackend<R, F, I, B>> {
         render::jit::backward(state, colors_rgb_2d_grad)
     }
 }

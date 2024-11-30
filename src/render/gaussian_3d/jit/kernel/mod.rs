@@ -7,11 +7,13 @@ pub mod sort;
 pub mod transform;
 pub mod transform_backward;
 
+pub use crate::backend::jit::{
+    BoolElement, FloatElement, IntElement, JitBackend, JitRuntime,
+};
 pub use burn_jit::{
     cubecl::KernelId,
     template::{KernelSource, SourceTemplate},
     tensor::JitTensor,
-    FloatElement, IntElement, JitBackend, JitRuntime,
 };
 
 use burn_jit::{

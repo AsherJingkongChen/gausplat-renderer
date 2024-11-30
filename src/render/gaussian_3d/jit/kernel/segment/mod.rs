@@ -32,7 +32,7 @@ pub const GROUP_SIZE: u32 = 256;
 pub const GROUP_SIZE2: u32 = GROUP_SIZE * GROUP_SIZE;
 
 /// Segmenting the points into tiles.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -45,9 +45,9 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let device = &inputs.point_orders.device;
 
     // (T / G^2, G, 1)
-    let group_count = JitBackend::<R, F, I>::int_empty([3].into(), device);
+    let group_count = JitBackend::<R, F, I, B>::int_empty([3].into(), device);
     // [I_y / T_y, I_x / T_x, 2]
-    let tile_point_ranges = JitBackend::<R, F, I>::int_zeros(
+    let tile_point_ranges = JitBackend::<R, F, I, B>::int_zeros(
         [
             arguments.tile_count_y as usize,
             arguments.tile_count_x as usize,

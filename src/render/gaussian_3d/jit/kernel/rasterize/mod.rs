@@ -49,7 +49,7 @@ pub const TILE_SIZE_X: u32 = 16;
 pub const TILE_SIZE_Y: u32 = 16;
 
 /// Rasterizing the point to the image.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -65,16 +65,18 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
     let image_size_y = arguments.image_size_y as usize;
 
     // [I_x, I_y, 3]
-    let colors_rgb_2d = JitBackend::<R, F, I>::float_empty(
+    let colors_rgb_2d = JitBackend::<R, F, I, B>::float_empty(
         [image_size_y, image_size_x, 3].into(),
         device,
     );
     // [I_x, I_y]
     let point_rendered_counts =
-        JitBackend::<R, F, I>::int_empty([image_size_y, image_size_x].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([image_size_y, image_size_x].into(), device);
     // [I_x, I_y]
-    let transmittances =
-        JitBackend::<R, F, I>::float_empty([image_size_y, image_size_x].into(), device);
+    let transmittances = JitBackend::<R, F, I, B>::float_empty(
+        [image_size_y, image_size_x].into(),
+        device,
+    );
 
     // Launching the kernel
 

@@ -20,7 +20,7 @@ pub struct Outputs<R: JitRuntime> {
 pub const GROUP_SIZE: u32 = 256;
 
 /// Scanning the values exclusively.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>
 ) -> Outputs<R> {
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");
@@ -39,7 +39,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // [N']
     let values_next =
-        JitBackend::<R, F, I>::int_empty([count_next as usize].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([count_next as usize].into(), device);
 
     // Launching the kernel 1
 
@@ -65,7 +65,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
         let Outputs {
             total,
             values: values_next,
-        } = main::<R, F, I>(Inputs {
+        } = main::<R, F, I, B>(Inputs {
             values: values_next,
         });
 
@@ -119,7 +119,7 @@ mod tests {
         let total_target = 24;
 
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
-        let Outputs { total, values } = main::<R, F, I>(Inputs { values });
+        let Outputs { total, values } = main::<R, F, I, u32>(Inputs { values });
         let total_output = *from_bytes::<u32>(
             &total.client.read(vec![total.handle.to_owned().binding()])[0],
         );
@@ -167,7 +167,7 @@ mod tests {
         let total_target = values_target.last().unwrap() + values_source.last().unwrap();
 
         let values = B::int_from_data(TensorData::new(values_source, [count]), device);
-        let Outputs { total, values } = main::<R, F, I>(Inputs { values });
+        let Outputs { total, values } = main::<R, F, I, u32>(Inputs { values });
         let total_output = *from_bytes::<u32>(
             &total.client.read(vec![total.handle.to_owned().binding()])[0],
         );

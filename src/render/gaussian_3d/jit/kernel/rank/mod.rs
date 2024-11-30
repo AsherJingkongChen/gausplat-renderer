@@ -39,7 +39,7 @@ pub const TILE_COUNT_MAX: u32 = 1 << 16;
 pub const FACTOR_TILE_POINT_COUNT: u32 = 15;
 
 /// Ranking the points.
-pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
+pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
 ) -> Outputs<R> {
@@ -56,10 +56,10 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement>(
 
     // [T]
     let point_indices =
-        JitBackend::<R, F, I>::int_empty([tile_point_count_estimated].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([tile_point_count_estimated].into(), device);
     // [T]
     let point_orders =
-        JitBackend::<R, F, I>::int_empty([tile_point_count_estimated].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([tile_point_count_estimated].into(), device);
 
     // Launching the kernel
 

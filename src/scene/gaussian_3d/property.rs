@@ -127,31 +127,31 @@ impl<B: Backend> Gaussian3dScene<B> {
 
 /// Inner property value makers
 impl<B: Backend> Gaussian3dScene<B> {
-    /// Making inner values for [`Gaussian3dScene::colors_sh`]
+    /// Making values for [`Gaussian3dScene::colors_sh`]
     #[inline]
     pub fn make_inner_colors_sh(colors_sh: Tensor<B, 2>) -> Tensor<B, 2> {
         colors_sh
     }
 
-    /// Making inner values for [`Gaussian3dScene::opacities`]
+    /// Making values for [`Gaussian3dScene::opacities`]
     #[inline]
     pub fn make_inner_opacities(opacities: Tensor<B, 2>) -> Tensor<B, 2> {
         opacities.to_owned().div(-opacities + 1.0).log()
     }
 
-    /// Making inner values for [`Gaussian3dScene::positions`]
+    /// Making values for [`Gaussian3dScene::positions`]
     #[inline]
     pub fn make_inner_positions(positions: Tensor<B, 2>) -> Tensor<B, 2> {
         positions
     }
 
-    /// Making inner values for [`Gaussian3dScene::rotations`]
+    /// Making values for [`Gaussian3dScene::rotations`]
     #[inline]
     pub fn make_inner_rotations(rotations: Tensor<B, 2>) -> Tensor<B, 2> {
         rotations
     }
 
-    /// Making inner values for [`Gaussian3dScene::scalings`]
+    /// Making values for [`Gaussian3dScene::scalings`]
     #[inline]
     pub fn make_inner_scalings(scalings: Tensor<B, 2>) -> Tensor<B, 2> {
         scalings.log()

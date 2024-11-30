@@ -45,7 +45,7 @@ mod gpu {
         bencher
             .with_inputs(data::random_tensor_u32_tensor_u32())
             .bench_local_refs(|(k, v)| {
-                let output = main::<WgpuRuntime, f32, i32>(Inputs {
+                let output = main::<WgpuRuntime, f32, i32, u32>(Inputs {
                     count: Tensor::<Wgpu, 1, Int>::from_data(
                         [k.shape().num_elements()],
                         &k.device(),
@@ -66,7 +66,7 @@ mod gpu {
         bencher
             .with_inputs(data::random_tensor_u32())
             .bench_local_refs(|v| {
-                let output = main::<WgpuRuntime, f32, i32>(Inputs {
+                let output = main::<WgpuRuntime, f32, i32, u32>(Inputs {
                     values: v.to_owned().into_primitive(),
                 });
                 Wgpu::sync(&Default::default());
