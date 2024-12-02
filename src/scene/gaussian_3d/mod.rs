@@ -27,11 +27,13 @@ use autodiff::{
 };
 use burn::tensor::{DType, TensorPrimitive};
 use gausplat_loader::source::polygon;
-use humansize::{format_size, BINARY};
 use std::{fmt, marker, sync::LazyLock};
 
 /// [`SH_COUNT_MAX * 3`](SH_COUNT_MAX)
 pub const COLORS_SH_COUNT_MAX: usize = SH_COUNT_MAX * 3;
+
+/// `0x3D65`
+pub const SEED: u64 = 0x3D65;
 
 /// A polygon file header for 3D Gaussian splats.
 ///
@@ -302,7 +304,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dScene<B> {
         f.debug_struct(&format!("Gaussian3dScene<{}>", B::name()))
             .field("device", &self.device())
             .field("point_count", &self.point_count())
-            .field("size", &format_size(self.size(), BINARY))
+            .field("size", &self.size_readable())
             .field("colors_sh.dims()", &self.colors_sh.dims())
             .field("opacities.dims()", &self.opacities.dims())
             .field("positions.dims()", &self.positions.dims())

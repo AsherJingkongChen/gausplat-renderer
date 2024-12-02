@@ -1,6 +1,7 @@
 pub use super::*;
 
 use burn::tensor::activation;
+use humansize::{format_size, BINARY};
 
 /// Outer property value getters
 impl<B: Backend> Gaussian3dScene<B> {
@@ -222,52 +223,25 @@ impl<B: Backend> Gaussian3dScene<B> {
     pub fn point_count(&self) -> usize {
         let point_count_target = self.colors_sh.dims()[0];
         let point_count_other = self.opacities.dims()[0];
-        assert_eq!(
-            point_count_other,
-            point_count_target,
-            "{}",
-            Error::MismatchedPointCount(
-                point_count_target,
-                format!("{point_count_other} (opacities)"),
-            ),
-        );
+        debug_assert_eq!(point_count_other, point_count_target);
         let point_count_other = self.positions.dims()[0];
-        assert_eq!(
-            point_count_other,
-            point_count_target,
-            "{}",
-            Error::MismatchedPointCount(
-                point_count_target,
-                format!("{point_count_other} (positions)"),
-            ),
-        );
+        debug_assert_eq!(point_count_other, point_count_target);
         let point_count_other = self.rotations.dims()[0];
-        assert_eq!(
-            point_count_other,
-            point_count_target,
-            "{}",
-            Error::MismatchedPointCount(
-                point_count_target,
-                format!("{point_count_other} (rotations)"),
-            ),
-        );
+        debug_assert_eq!(point_count_other, point_count_target);
         let point_count_other = self.scalings.dims()[0];
-        assert_eq!(
-            point_count_other,
-            point_count_target,
-            "{}",
-            Error::MismatchedPointCount(
-                point_count_target,
-                format!("{point_count_other} (scalings)"),
-            ),
-        );
+        debug_assert_eq!(point_count_other, point_count_target);
 
-        self.positions.val().dims()[0]
+        point_count_target
     }
 
     #[inline]
     pub fn size(&self) -> usize {
         self.num_params() * size_of::<B::FloatElem>()
+    }
+
+    #[inline]
+    pub fn size_readable(&self) -> String {
+        format_size(self.size(), BINARY.decimal_places(1))
     }
 }
 

@@ -253,7 +253,7 @@ mod tests {
                 .map(|(&key, &value)| (key, value))
                 .collect::<Vec<_>>();
             items_source.par_sort_by_key(|p| p.0);
-            items_source.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+            items_source.into_iter().collect::<(Vec<_>, Vec<_>)>()
         };
 
         let keys = B::int_from_data(TensorData::new(keys_source, [count]), device);

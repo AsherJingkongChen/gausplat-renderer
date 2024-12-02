@@ -1,14 +1,14 @@
 ply
 format binary_little_endian 1.0
 comment This polygon file header uses 3DGS PLY format.
-comment Each vertex represents a Gaussian ellipsoid with view-dependent color
-comment x y z      := Position, as a 3D vector
-comment nx ny nz   := Normal, not unused
-comment f_dc_{i}   := Color, SH features 0 to 2
-comment f_rest_{i} := Color, SH features 3 to 47
-comment opacity    := Opacity, 0 to 1
-comment scale_{i}  := Scale
-comment rot_{i}    := Rotation, a Hamiltonian quaternion in scalar-first order
+comment Each vertex represents a Gaussian ellipsoid with view-dependent color.
+comment x y z      := Position as a 3D vector.
+comment nx ny nz   := Normal that is unused.
+comment f_dc_{i}   := Color SH features of index 0 to 2.
+comment f_rest_{i} := Color SH features of index 3 to 47.
+comment opacity    := Opacity with inverse sigmoid function applied.
+comment scale_{i}  := Scale with natural logarithm function applied.
+comment rot_{i}    := Rotation that is a Hamiltonian quaternion in scalar-first order.
 element vertex 0
 property float x
 property float y

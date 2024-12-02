@@ -9,8 +9,6 @@ use std::{
 
 /// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
-    pub const SEED: u64 = 0x3D65;
-
     pub fn decode_polygon_3dgs(
         reader: &mut impl Read,
         device: &B::Device,
@@ -225,7 +223,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             Default::default(),
             move |device, is_require_grad| {
                 let mut sample_max = f32::EPSILON;
-                let samples = StdRng::seed_from_u64(Self::SEED)
+                let samples = StdRng::seed_from_u64(SEED)
                     .sample_iter(
                         rand_distr::LogNormal::new(0.0, std::f32::consts::E).unwrap(),
                     )
