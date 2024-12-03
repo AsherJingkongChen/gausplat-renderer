@@ -9,7 +9,7 @@ use std::{
 
 /// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
-    pub fn decode_polygon_3dgs(
+    pub fn decode_polygon(
         reader: &mut impl Read,
         device: &B::Device,
     ) -> Result<Self, Error> {
@@ -56,7 +56,6 @@ impl<B: Backend> Gaussian3dScene<B> {
                         let i = i / 3 + (i % 3) * (SH_COUNT_MAX - 1) - 1;
                         format!("f_rest_{i}")
                     }
-                    .into()
                 })
                 .collect::<Vec<_>>(),
             device,
@@ -69,14 +68,11 @@ impl<B: Backend> Gaussian3dScene<B> {
         let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
 
         // [P, 4] (x, y, z, w) <- (w, x, y, z)
-        let rotations =
-            take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}").into()), device);
+        let rotations = take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}")), device);
 
         // [P, 3]
         let scalings = take_tensor(
-            &(0..3)
-                .map(|i| format!("scale_{i}").into())
-                .collect::<Vec<_>>(),
+            &(0..3).map(|i| format!("scale_{i}")).collect::<Vec<_>>(),
             device,
         );
 
@@ -91,7 +87,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         #[cfg(all(debug_assertions, not(test)))]
         log::debug!(
             target: "gausplat::renderer::gaussian_3d::scene",
-            "decode_polygon_3dgs",
+            "decode_polygon",
         );
 
         Ok(scene)
@@ -312,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_and_encode_polygon_3dgs() {
+    fn decode_and_encode_polygon() {
         use super::super::*;
         use burn::backend::NdArray;
         use std::io::Cursor;
@@ -324,8 +320,7 @@ mod tests {
             include_bytes!("../../../examples/data/3dgs-ply/sixstars.3dgs.ply").to_vec();
         let mut reader = Cursor::new(source.to_owned());
 
-        let scene =
-            Gaussian3dScene::<B>::decode_polygon_3dgs(&mut reader, &device).unwrap();
+        let scene = Gaussian3dScene::<B>::decode_polygon(&mut reader, &device).unwrap();
 
         let target = 18;
         let output = scene.point_count();
@@ -409,7 +404,7 @@ mod tests {
 
         let target = source;
         let mut output = vec![];
-        scene.encode_polygon_3dgs(&mut output).unwrap();
+        scene.encode_polygon(&mut output).unwrap();
         assert_eq!(output, target);
     }
 }

@@ -11,6 +11,7 @@ pub struct Point {
 }
 
 impl From<colmap::Point> for Point {
+    #[inline]
     fn from(point: colmap::Point) -> Self {
         Self {
             color_rgb: point.color_rgb_normalized(),
@@ -19,15 +20,19 @@ impl From<colmap::Point> for Point {
     }
 }
 
-impl Into<colmap::Point> for Point {
-    fn into(self) -> colmap::Point {
-        colmap::Point {
+impl From<Point> for colmap::Point {
+    #[inline]
+    fn from(point: Point) -> Self {
+        let color_rgb = point.color_rgb;
+        let position = point.position;
+        Self {
             color_rgb: [
-                self.color_rgb[0].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
-                self.color_rgb[1].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
-                self.color_rgb[2].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+                color_rgb[0].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+                color_rgb[1].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
+                color_rgb[2].mul_add(255.0, 0.5).clamp(0.0, 255.0) as u8,
             ],
-            position: self.position,
+            position,
         }
     }
+    // fn into(self) ->  {
 }

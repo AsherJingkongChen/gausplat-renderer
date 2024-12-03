@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write};
 
 /// Scene exporters
 impl<B: Backend> Gaussian3dScene<B> {
-    pub fn encode_polygon_3dgs(
+    pub fn encode_polygon(
         &self,
         writer: &mut impl Write,
     ) -> Result<(), Error> {
