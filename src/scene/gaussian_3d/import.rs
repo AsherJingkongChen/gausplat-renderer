@@ -1,4 +1,4 @@
-//! 3D-GS scene import implementation.
+//! 3DGS scene import implementation.
 
 pub use super::*;
 
@@ -11,7 +11,7 @@ use std::{
 
 /// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
-    /// Import the scene in the 3D-GS PLY format.
+    /// Import the scene in the 3DGS PLY format.
     pub fn decode_polygon(
         reader: &mut impl Read,
         device: &B::Device,

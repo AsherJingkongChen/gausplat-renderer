@@ -1,4 +1,4 @@
-//! 3D-GS implementation.
+//! 3DGS rendering implementation.
 //!
 //! For more information, see the [survey](https://arxiv.org/abs/2401.03890).
 
@@ -20,7 +20,7 @@ pub use burn::{
 
 use std::fmt;
 
-/// Renderer for 3D Gaussian splats.
+/// Renderer for 3DGS.
 pub trait Gaussian3dRenderer<B: Backend>: 'static + Send + Sized + fmt::Debug {
     /// Rendering (forward).
     fn render_forward(
@@ -36,7 +36,7 @@ pub trait Gaussian3dRenderer<B: Backend>: 'static + Send + Sized + fmt::Debug {
     ) -> backward::RenderOutput<B>;
 }
 
-/// Options for rendering 3D Gaussian splats.
+/// Options for rendering 3DGS.
 #[derive(Config, Copy, Debug, PartialEq, Record)]
 pub struct Gaussian3dRenderOptions {
     #[config(default = "SH_DEGREE_MAX")]
@@ -44,7 +44,7 @@ pub struct Gaussian3dRenderOptions {
     pub colors_sh_degree_max: u32,
 }
 
-/// Outputs for rendering 3D Gaussian splats.
+/// Outputs for rendering 3DGS.
 #[derive(Clone)]
 pub struct Gaussian3dRenderOutput<B: Backend> {
     /// `[I_y, I_x, 3]`
@@ -52,7 +52,7 @@ pub struct Gaussian3dRenderOutput<B: Backend> {
     // TODO: THM
 }
 
-/// Outputs for rendering 3D Gaussian splats (autodiff enabled).
+/// Outputs for rendering 3DGS (autodiff enabled).
 #[derive(Clone)]
 pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
     /// `[I_y, I_x, 3]`

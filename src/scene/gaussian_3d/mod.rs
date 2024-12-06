@@ -1,4 +1,4 @@
-//! 3D-GS scene representation.
+//! 3DGS scene representation.
 
 pub mod export;
 pub mod import;
@@ -37,7 +37,7 @@ pub const COLORS_SH_COUNT_MAX: usize = SH_COUNT_MAX * 3;
 /// `0x3D65`
 pub const SEED: u64 = 0x3D65;
 
-/// A polygon file header for 3D Gaussian splats.
+/// A polygon file header for 3DGS.
 ///
 /// <details>
 /// <summary>
@@ -53,7 +53,7 @@ pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
         .unwrap()
 });
 
-/// 3D Gaussian splat representation.
+/// 3DGS representation.
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
     /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)

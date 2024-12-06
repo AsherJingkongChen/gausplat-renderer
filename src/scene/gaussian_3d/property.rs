@@ -1,4 +1,4 @@
-//! 3D-GS property access implementation.
+//! 3DGS property access implementation.
 
 pub use super::*;
 

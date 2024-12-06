@@ -1,4 +1,4 @@
-//! 3D-GS scene export implementation.
+//! 3DGS scene export implementation.
 
 pub use super::*;
 
@@ -7,7 +7,7 @@ use std::io::{BufWriter, Write};
 
 /// Scene exporters
 impl<B: Backend> Gaussian3dScene<B> {
-    /// Export the scene in the 3D-GS PLY format.
+    /// Export the scene in the 3DGS PLY format.
     pub fn encode_polygon(
         &self,
         writer: &mut impl Write,
