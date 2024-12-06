@@ -1,3 +1,5 @@
+//! 3D-GS scene export implementation.
+
 pub use super::*;
 
 use gausplat_loader::function::Encoder;
@@ -5,6 +7,7 @@ use std::io::{BufWriter, Write};
 
 /// Scene exporters
 impl<B: Backend> Gaussian3dScene<B> {
+    /// Export the scene in the 3D-GS PLY format.
     pub fn encode_polygon(
         &self,
         writer: &mut impl Write,
@@ -68,6 +71,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         Ok(())
     }
 
+    /// Export the scene as a point cloud.
     // TODO: It needs a point cloud viewer to validate the function.
     pub fn to_points(&self) -> Points {
         let point_count = self.point_count();

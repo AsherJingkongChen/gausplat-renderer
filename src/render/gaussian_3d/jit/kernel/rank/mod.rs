@@ -1,8 +1,11 @@
+//! Ranking the points.
+
 pub use super::*;
 
 use burn::tensor::ops::IntTensorOps;
 use bytemuck::{bytes_of, Pod, Zeroable};
 
+/// Arguments.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -12,6 +15,7 @@ pub struct Arguments {
     pub tile_count_x: u32,
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// `[P]`
@@ -24,6 +28,7 @@ pub struct Inputs<R: JitRuntime> {
     pub tile_touched_offsets: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// `[T]`
@@ -32,6 +37,7 @@ pub struct Outputs<R: JitRuntime> {
     pub point_orders: JitTensor<R>,
 }
 
+/// Group size.
 pub const GROUP_SIZE: u32 = 256;
 /// Maximum of `(I_y / T_y) * (I_x / T_x)`
 pub const TILE_COUNT_MAX: u32 = 1 << 16;

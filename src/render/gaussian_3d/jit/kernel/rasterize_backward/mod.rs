@@ -1,3 +1,5 @@
+//! Rasterizing the point to the image (backward).
+
 pub use super::*;
 
 use bytemuck::{Pod, Zeroable};
@@ -6,6 +8,7 @@ pub use rasterize::{TILE_SIZE_X, TILE_SIZE_Y};
 use burn::tensor::ops::FloatTensorOps;
 use bytemuck::bytes_of;
 
+/// Arguments.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -22,6 +25,7 @@ pub struct Arguments {
     pub tile_count_y: u32,
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// `[I_y, I_x, 3]`
@@ -44,6 +48,7 @@ pub struct Inputs<R: JitRuntime> {
     pub transmittances: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// `[P, 3]`

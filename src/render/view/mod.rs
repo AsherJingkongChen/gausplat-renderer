@@ -1,3 +1,5 @@
+//! View module.
+
 pub mod views;
 
 pub use views::*;
@@ -33,7 +35,7 @@ pub struct View {
 
 /// Linear transformations.
 impl View {
-    /// Returns the affine transformation matrix.
+    /// Return the affine transformation matrix.
     ///
     /// It is in **column-major order**, i.e., `M[col][row]`.
     #[inline]
@@ -54,7 +56,7 @@ impl View {
 
 /// Dimension operations
 impl View {
-    /// Returns the aspect ratio (`width / height`).
+    /// Return the aspect ratio (`width / height`).
     #[inline]
     pub const fn aspect_ratio(&self) -> f32 {
         self.image_width as f32 / self.image_height as f32

@@ -1,3 +1,5 @@
+//! JIT kernels.
+
 pub mod rank;
 pub mod rasterize;
 pub mod rasterize_backward;

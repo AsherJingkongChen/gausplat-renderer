@@ -1,9 +1,12 @@
+//! Radix sort.
+
 pub use super::*;
 
 use burn::tensor::ops::IntTensorOps;
 use bytemuck::{bytes_of, Pod, Zeroable};
 use std::mem::swap;
 
+/// Arguments.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -11,6 +14,7 @@ pub struct Arguments {
     pub radix_shift: u32,
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// The count of items to sort.
@@ -21,6 +25,7 @@ pub struct Inputs<R: JitRuntime> {
     pub values: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// The keys of sorted items.

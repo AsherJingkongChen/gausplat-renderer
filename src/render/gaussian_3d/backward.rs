@@ -1,5 +1,8 @@
+//! Types for rendering (backward).
+
 pub use super::*;
 
+/// Inputs for rendering (backward).
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
     /// `[P, 3]`
@@ -66,6 +69,7 @@ pub struct RenderInput<B: Backend> {
     pub view_transform: [[f32; 4]; 4],
 }
 
+/// Outputs for rendering (backward).
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
     /// `[P, 48]` <- `[P, 16, 3]`

@@ -1,8 +1,11 @@
+//! Transforming the points (backward).
+
 pub use super::*;
 
 use burn::tensor::ops::FloatTensorOps;
 use bytemuck::{bytes_of, Pod, Zeroable};
 
+/// Arguments.
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -30,6 +33,7 @@ pub struct Arguments {
     pub view_transform: [[f32; 4]; 4],
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
@@ -60,6 +64,7 @@ pub struct Inputs<R: JitRuntime> {
     pub scalings: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// `[P, 48]` <- `[P, 16, 3]`
@@ -76,6 +81,7 @@ pub struct Outputs<R: JitRuntime> {
 
 /// `C_f`
 pub const FILTER_LOW_PASS: f64 = 0.3;
+/// Group size.
 pub const GROUP_SIZE: u32 = 256;
 
 /// Transforming the points.

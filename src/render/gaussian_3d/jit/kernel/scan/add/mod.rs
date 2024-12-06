@@ -1,13 +1,17 @@
+//! Scanning and adding the values exclusively.
+
 pub use super::*;
 
 use burn::tensor::ops::IntTensorOps;
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// The values to scan.
     pub values: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// The exclusively scanned values.

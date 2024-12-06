@@ -1,3 +1,5 @@
+//! JIT implementation of the 3D Gaussian splats renderer.
+
 pub mod kernel;
 
 pub use super::{backward, forward, Gaussian3dRenderOptions, View};
@@ -16,6 +18,7 @@ use kernel::*;
 /// Maximum of `I_y * I_x`
 pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 
+/// Forward pass for rendering the 3D Gaussian splats.
 pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     mut input: forward::RenderInput<JitBackend<R, F, I, B>>,
     view: &View,
@@ -222,9 +225,9 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     })
 }
 
-/// ## Arguments
+/// Backward pass for rendering the 3D Gaussian splats.
 ///
-/// * `colors_rgb_2d_grad` - `[I_y, I_x, 3]`
+/// It takes the outputs of the forward pass.
 pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     state: backward::RenderInput<JitBackend<R, F, I, B>>,
     mut colors_rgb_2d_grad: JitTensor<R>,

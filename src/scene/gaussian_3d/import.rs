@@ -1,3 +1,5 @@
+//! 3D-GS scene import implementation.
+
 pub use super::*;
 
 use gausplat_loader::function::{Decoder, DecoderWith};
@@ -9,6 +11,7 @@ use std::{
 
 /// Scene importers
 impl<B: Backend> Gaussian3dScene<B> {
+    /// Import the scene in the 3D-GS PLY format.
     pub fn decode_polygon(
         reader: &mut impl Read,
         device: &B::Device,
@@ -93,6 +96,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         Ok(scene)
     }
 
+    /// Import the scene from the point cloud.
     pub fn from_points(
         points: Points,
         device: &B::Device,

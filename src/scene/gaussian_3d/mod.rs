@@ -1,3 +1,5 @@
+//! 3D-GS scene representation.
+
 pub mod export;
 pub mod import;
 pub mod property;
@@ -51,6 +53,7 @@ pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
         .unwrap()
 });
 
+/// 3D Gaussian splat representation.
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
     /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)
@@ -133,6 +136,9 @@ impl<B: Backend> Gaussian3dScene<B>
 where
     Self: Gaussian3dRenderer<B>,
 {
+    /// Render the 3D scene.
+    ///
+    /// It takes the [`View`](render::View) and [`Gaussian3dRenderOptions`] as input.
     pub fn render(
         &self,
         view: &render::View,
@@ -166,6 +172,7 @@ impl<B: Backend> Gaussian3dScene<Autodiff<B>>
 where
     Self: Gaussian3dRenderer<B>,
 {
+    /// Render the 3D scene with autodiff enabled.
     #[must_use = "The gradients should be used"]
     pub fn render(
         &self,

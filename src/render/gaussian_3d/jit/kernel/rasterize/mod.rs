@@ -1,8 +1,11 @@
+//! Rasterizing the point to the image.
+
 pub use super::*;
 
 use burn::tensor::ops::{FloatTensorOps, IntTensorOps};
 use bytemuck::{bytes_of, Pod, Zeroable};
 
+/// Arguments.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -17,6 +20,7 @@ pub struct Arguments {
     pub tile_count_y: u32,
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
@@ -33,6 +37,7 @@ pub struct Inputs<R: JitRuntime> {
     pub tile_point_ranges: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// `[I_y, I_x, 3]`

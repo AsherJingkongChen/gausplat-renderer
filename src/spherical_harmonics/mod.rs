@@ -1,3 +1,5 @@
+//! Spherical harmonics (SH) module.
+
 use std::{f64::consts::PI, sync::LazyLock};
 
 /// The count of spherical harmonics coefficients

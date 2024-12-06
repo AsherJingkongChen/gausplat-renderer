@@ -1,12 +1,16 @@
+//! Point cloud scene representation.
+
 pub mod points;
 
 pub use gausplat_loader::source::colmap;
 pub use points::*;
 
+/// 3D point.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {
     /// Normalized RGB color.
     pub color_rgb: [f32; 3],
+    /// Position in world space.
     pub position: [f64; 3],
 }
 

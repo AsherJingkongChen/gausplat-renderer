@@ -1,8 +1,11 @@
+//! Segmenting the points into tiles.
+
 pub use super::*;
 
 use burn::tensor::ops::IntTensorOps;
 use bytemuck::{Pod, Zeroable};
 
+/// Arguments.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
@@ -12,6 +15,7 @@ pub struct Arguments {
     pub tile_count_y: u32,
 }
 
+/// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
     /// `[T]`
@@ -20,6 +24,7 @@ pub struct Inputs<R: JitRuntime> {
     pub tile_point_count: JitTensor<R>,
 }
 
+/// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
     /// `[I_y / T_y, I_x / T_x, 2]`

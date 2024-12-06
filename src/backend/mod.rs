@@ -1,3 +1,5 @@
+//! Backend module.
+
 /// Types and traits of JIT backend.
 pub mod jit {
     pub use burn_jit::{BoolElement, FloatElement, IntElement, JitBackend, JitRuntime};

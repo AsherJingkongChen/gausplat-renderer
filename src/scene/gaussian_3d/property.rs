@@ -1,3 +1,5 @@
+//! 3D-GS property access implementation.
+
 pub use super::*;
 
 use burn::tensor::activation;
@@ -214,11 +216,13 @@ impl<B: Backend> Gaussian3dScene<B> {
 
 /// Attribute getters
 impl<B: Backend> Gaussian3dScene<B> {
+    /// The device.
     #[inline]
     pub fn device(&self) -> B::Device {
         self.devices().first().expect("A device").to_owned()
     }
 
+    /// Number of points.
     #[inline]
     pub fn point_count(&self) -> usize {
         let point_count_target = self.colors_sh.dims()[0];
@@ -234,11 +238,13 @@ impl<B: Backend> Gaussian3dScene<B> {
         point_count_target
     }
 
+    /// Size of the parameters in bytes.
     #[inline]
     pub fn size(&self) -> usize {
         self.num_params() * size_of::<B::FloatElem>()
     }
 
+    /// Readable size of the parameters.
     #[inline]
     pub fn size_readable(&self) -> String {
         format_size(self.size(), BINARY.decimal_places(1))
