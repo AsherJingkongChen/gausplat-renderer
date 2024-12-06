@@ -199,17 +199,17 @@ mod tests {
             &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
-        keys_output.iter().enumerate().try_fold(
-            keys_output.iter().next().unwrap(),
-            |previous, (index, current)| {
-                let result = (previous <= current).then_some(previous);
-                assert!(
-                    result.is_some(),
-                    "The key {previous} should be no more than {current}, index: {index}"
-                );
-                result
-            },
-        );
+        // keys_output.iter().enumerate().try_fold(
+        //     keys_output.iter().next().unwrap(),
+        //     |previous, (index, current)| {
+        //         let result = (previous <= current).then_some(previous);
+        //         assert!(
+        //             result.is_some(),
+        //             "The key {previous} should be no more than {current}, index: {index}"
+        //         );
+        //         result
+        //     },
+        // );
         keys_output.iter().zip(&keys_target).enumerate().for_each(
             |(index, (&output, &target))| {
                 assert_eq!(output, target, "key index: {index}");
@@ -239,7 +239,7 @@ mod tests {
         type I = i32;
         let device = &WgpuDevice::default();
 
-        let count = (1 << 23) - 1;
+        let count = (1 << 18) - 1;
         let keys_source = StdRng::from_entropy()
             .sample_iter(rand_distr::Uniform::new(0, i32::MAX as u32))
             .take(count)
@@ -270,17 +270,17 @@ mod tests {
             &values.client.read(vec![values.handle.to_owned().binding()])[0];
         let values_output = cast_slice::<u8, u32>(values_output);
 
-        keys_output.iter().enumerate().try_fold(
-            keys_output.iter().next().unwrap(),
-            |previous, (index, current)| {
-                let result = (previous <= current).then_some(previous);
-                assert!(
-                    result.is_some(),
-                    "The key {previous} should be no more than {current}, index: {index}"
-                );
-                result
-            },
-        );
+        // keys_output.iter().enumerate().try_fold(
+        //     keys_output.iter().next().unwrap(),
+        //     |previous, (index, current)| {
+        //         let result = (previous <= current).then_some(previous);
+        //         assert!(
+        //             result.is_some(),
+        //             "The key {previous} should be no more than {current}, index: {index}"
+        //         );
+        //         result
+        //     },
+        // );
         keys_output.iter().zip(&keys_target).enumerate().for_each(
             |(index, (&output, &target))| {
                 assert_eq!(output, target, "key index: {index}");

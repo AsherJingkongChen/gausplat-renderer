@@ -25,6 +25,7 @@ pub struct View {
     pub view_transform: [[f64; 4]; 4],
 }
 
+/// Linear transformations for 3D views.
 impl View {
     /// ## Arguments
     ///
@@ -119,6 +120,30 @@ impl View {
             [r[2][0], r[2][1], r[2][2], 0.0],
             [t[0], t[1], t[2], 1.0],
         ]
+    }
+}
+
+/// Dimension operations
+impl View {
+    #[inline]
+    pub fn aspect_ratio(&self) -> f32 {
+        self.image_width as f32 / self.image_height as f32
+    }
+
+    /// Resizing the view to the maximum side length of `to`.
+    pub fn resize_max(
+        &mut self,
+        to: u32,
+    ) -> &mut Self {
+        let ratio = self.aspect_ratio();
+        if ratio > 1.0 {
+            self.image_width = to;
+            self.image_height = (to as f32 / ratio).ceil() as u32;
+        } else {
+            self.image_width = (to as f32 * ratio).ceil() as u32;
+            self.image_height = to;
+        }
+        self
     }
 }
 
@@ -226,5 +251,28 @@ mod tests {
                 ],
             ]
         );
+    }
+
+    #[test]
+    fn resize_max() {
+        use super::*;
+
+        let mut view = View {
+            image_width: 1920,
+            image_height: 1080,
+            ..Default::default()
+        };
+        view.resize_max(1080);
+        assert_eq!(view.image_width, 1080);
+        assert_eq!(view.image_height, 608);
+
+        let mut view = View {
+            image_width: 720,
+            image_height: 1080,
+            ..Default::default()
+        };
+        view.resize_max(1080);
+        assert_eq!(view.image_width, 720);
+        assert_eq!(view.image_height, 1080);
     }
 }

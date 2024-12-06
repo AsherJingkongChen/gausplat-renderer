@@ -73,6 +73,7 @@ impl Default for Gaussian3dRenderOptions {
     }
 }
 
+#[cfg(not(test))]
 impl<B: Backend> fmt::Debug for Gaussian3dRenderOutput<B> {
     fn fmt(
         &self,
@@ -84,6 +85,7 @@ impl<B: Backend> fmt::Debug for Gaussian3dRenderOutput<B> {
     }
 }
 
+#[cfg(not(test))]
 impl<AB: AutodiffBackend> fmt::Debug for Gaussian3dRenderOutputAutodiff<AB> {
     fn fmt(
         &self,

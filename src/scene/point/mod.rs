@@ -5,7 +5,7 @@ pub use points::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {
-    /// Normalized
+    /// Normalized RGB color.
     pub color_rgb: [f32; 3],
     pub position: [f64; 3],
 }
@@ -34,5 +34,24 @@ impl From<Point> for colmap::Point {
             position,
         }
     }
-    // fn into(self) ->  {
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn from_and_into_colmap_point() {
+        use super::*;
+
+        let point = Point {
+            color_rgb: [0.2509804, 0.5019608, 0.7529412],
+            position: [1.0, 2.0, 3.0],
+        };
+        let colmap_point = colmap::Point {
+            color_rgb: [64, 128, 192],
+            position: [1.0, 2.0, 3.0],
+        };
+
+        assert_eq!(Point::from(colmap_point), point);
+        assert_eq!(colmap::Point::from(point), colmap_point);
+    }
 }
