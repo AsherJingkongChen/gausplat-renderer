@@ -150,7 +150,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             move |device, is_require_grad| {
                 let opacities = Self::make_inner_opacities(Tensor::full(
                     [point_count, 1],
-                    0.1,
+                    25.5 / 255.0,
                     device,
                 ))
                 .set_require_grad(is_require_grad);

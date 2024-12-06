@@ -40,6 +40,7 @@ pub struct Gaussian3dRenderOptions {
 pub struct Gaussian3dRenderOutput<B: Backend> {
     /// `[I_y, I_x, 3]`
     pub colors_rgb_2d: Tensor<B, 3>,
+    // TODO: THM
 }
 
 #[derive(Clone)]

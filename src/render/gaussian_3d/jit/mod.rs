@@ -117,7 +117,6 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
         values: outputs_transform.tile_touched_counts,
     });
 
-    // FIXME
     #[cfg(all(debug_assertions, not(test)))]
     log::info!(
         target: "gausplat::renderer::gaussian_3d::forward",
