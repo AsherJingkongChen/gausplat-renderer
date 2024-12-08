@@ -126,8 +126,8 @@ fn main(
 
     // Initializing the results
 
-    radii[index] = u32();
-    tile_touched_counts[index] = u32();
+    radii[index] = 0u;
+    tile_touched_counts[index] = 0u;
 
     // Transforming the 3D position from world space to view space
     // Pv[3, 1] = Rv[3, 3] * Pw[3, 1] + Tv[3, 1]
@@ -150,7 +150,11 @@ fn main(
     //            [ x * z - w * y,        y * z + w * x,       -x * x - y * y + 0.5]] * 2
 
     // (Outer)
-    let rotation = normalize(rotations[index]);
+    var rotation = rotations[index];
+    if all(rotation == vec4<f32>()) {
+        return;
+    }
+    rotation = normalize(rotation);
     let q_c2_w = rotation.xyz * rotation.w;
     let q_c2_x = rotation.xyz * rotation.x;
     let q_yy = rotation.y * rotation.y;
@@ -310,7 +314,11 @@ fn main(
     // Dv[3] = Ov[3] / |Ov|
 
     let view_offset = position_3d - arguments.view_position;
-    let view_direction = normalize(view_offset);
+    var view_direction = view_offset;
+    if all(view_direction == vec3<f32>()) {
+        return;
+    }
+    view_direction = normalize(view_direction);
     var vd = vec3<f32>();
     var vd_x = vec3<f32>();
     var vd_yy = f32();
