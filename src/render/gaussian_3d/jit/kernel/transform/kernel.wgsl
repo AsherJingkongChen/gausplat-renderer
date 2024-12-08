@@ -103,7 +103,7 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
 const DEPTH_MAX: f32 = f32(1u << (17 - 3));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (3 - 1));
 // The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const FACTOR_RADIUS: f32 = 2.8844028;
+const FACTOR_RADIUS: f32 = 2.6587491;
 // C_f
 const FILTER_LOW_PASS: f32 = 0.3;
 // T_x

@@ -47,7 +47,7 @@ var<workgroup> positions_2d_in_batch: array<vec2<f32>, BATCH_SIZE>;
 // (0 ~ T_x * T_y)
 var<workgroup> pixel_done_count: atomic<u32>;
 
-const OPACITY_2D_MAX: f32 = 1.0 - OPACITY_2D_MIN;
+const OPACITY_2D_MAX: f32 = 253.0 / 255.0;
 const OPACITY_2D_MIN: f32 = 1.0 / 255.0;
 const TRANSMITTANCE_MIN: f32 = pow(1.0 - OPACITY_2D_MAX, 2.0);
 // T_x * T_y
