@@ -8,7 +8,7 @@ pub use points::*;
 /// 3D point.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {
-    /// Normalized RGB color.
+    /// Normalized color in RGB space.
     pub color_rgb: [f32; 3],
     /// Position in world space.
     pub position: [f64; 3],

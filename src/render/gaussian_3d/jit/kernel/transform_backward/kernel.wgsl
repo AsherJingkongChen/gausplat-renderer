@@ -594,7 +594,7 @@ fn normalize_grad_vec_f32_3(x: vec3<f32>) -> mat3x3<f32> {
         x_dot - x_p2.x, x_n_c2.x, x_n_c2.z,
         x_n_c2.x, x_dot - x_p2.y, x_n_c2.y,
         x_n_c2.z, x_n_c2.y, x_dot - x_p2.z,
-    ) * (inverseSqrt(x_dot) / x_dot);
+    ) * pow(x_dot, -1.5);
 }
 
 // Y[4] = X[4] / |X|
@@ -614,7 +614,7 @@ fn normalize_grad_vec_f32_4(x: vec4<f32>) -> mat4x4<f32> {
         x_n_c2.x, x_dot - x_p2.y, x_n_c2.y, x_n_c2_w.y,
         x_n_c2.z, x_n_c2.y, x_dot - x_p2.z, x_n_c2_w.z,
         x_n_c2_w.x, x_n_c2_w.y, x_n_c2_w.z, x_dot - x_p2.w,
-    ) * (inverseSqrt(x_dot) / x_dot);
+    ) * pow(x_dot, -1.5);
 }
 
 fn vec_from_array_f32_3(a: array<f32, 3>) -> vec3<f32> {
