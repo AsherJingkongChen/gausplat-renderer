@@ -16,7 +16,7 @@ impl<B: Backend> Gaussian3dScene<B> {
 
         let point_count = self.point_count();
 
-        // [P, 1, 3] + [P, 3, 15] <- [P, 48]
+        // [P, 1, 3] + [P, 3, M - 3] <- [P, M * 3]
         let colors_sh_dc = self.colors_sh.val().slice([0..point_count, 0..3]);
         let colors_sh_rest = self
             .colors_sh

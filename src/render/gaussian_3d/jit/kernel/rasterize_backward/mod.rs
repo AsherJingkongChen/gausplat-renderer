@@ -34,7 +34,7 @@ pub struct Inputs<R: JitRuntime> {
     pub colors_rgb_3d: JitTensor<R>,
     /// `[P, 3]`
     pub conics: JitTensor<R>,
-    /// `[P]`
+    /// `[P, 1]`
     pub opacities_3d: JitTensor<R>,
     /// `[T]`
     pub point_indices: JitTensor<R>,
@@ -55,13 +55,13 @@ pub struct Outputs<R: JitRuntime> {
     pub colors_rgb_3d_grad: JitTensor<R>,
     /// `[P, 3]`
     pub conics_grad: JitTensor<R>,
-    /// `[P]`
+    /// `[P, 1]`
     pub opacities_3d_grad: JitTensor<R>,
     /// `[P, 2]`
     pub positions_2d_grad: JitTensor<R>,
 }
 
-/// Rasterizing the point to the image.
+/// Compute the gradient of the rasterization.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,

@@ -1,31 +1,33 @@
-//! Types for rendering (forward).
+//! 3DGS rendering context (forward).
 
 pub use super::*;
 
-/// Inputs for rendering (forward).
+/// Rendering inputs (forward).
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
     /// Device for rendering.
     pub device: B::Device,
-    /// `P`
+    /// Point count.
+    ///
+    /// It is `P`.
     pub point_count: u64,
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// The shape is `[P, M * 3]`.
     pub colors_sh: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P, 1]`.
     pub opacities: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`.
     pub positions: B::FloatTensorPrimitive,
-    /// `[P, 4]`
+    /// The shape is `[P, 4]`.
     pub rotations: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`.
     pub scalings: B::FloatTensorPrimitive,
 }
 
-/// Outputs for rendering (forward).
+/// Rendering outputs (forward).
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
-    /// `[I_y, I_x, 3]`
+    /// The shape is `[I_y, I_x, 3]`
     pub colors_rgb_2d: B::FloatTensorPrimitive,
-    /// Inputs for rendering (backward).
+    /// Rendering inputs (backward).
     pub state: backward::RenderInput<B>,
 }

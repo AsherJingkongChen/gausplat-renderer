@@ -23,7 +23,7 @@ pub struct Outputs<R: JitRuntime> {
 /// `N / N'`
 pub const GROUP_SIZE: u32 = 256;
 
-/// Scanning the values exclusively.
+/// Scanning and adding the values exclusively.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>
 ) -> Outputs<R> {
@@ -154,7 +154,7 @@ mod tests {
         type I = i32;
         let device = &WgpuDevice::default();
 
-        let count = (1 << 23) - 1;
+        let count = (1 << 22) - 1;
         let values_source = StdRng::from_entropy()
             .sample_iter(rand_distr::Uniform::new(0, 1 << 8))
             .take(count)

@@ -38,7 +38,7 @@ pub struct Arguments {
 pub struct Inputs<R: JitRuntime> {
     /// `[P, 3]`
     pub colors_rgb_3d_grad: JitTensor<R>,
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// `[P, M * 3]` <- `[P, M, 3]`
     pub colors_sh: JitTensor<R>,
     /// `[P, 3]`
     pub conics: JitTensor<R>,
@@ -67,7 +67,7 @@ pub struct Inputs<R: JitRuntime> {
 /// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// `[P, M * 3]` <- `[P, M, 3]`
     pub colors_sh_grad: JitTensor<R>,
     /// `[P]`
     pub positions_2d_grad_norm: JitTensor<R>,
@@ -98,7 +98,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     // P
     let point_count = arguments.point_count as usize;
 
-    // [P, 48] <- [P, 16, 3]
+    // [P, M * 3] <- [P, M, 3]
     let colors_sh_grad =
         JitBackend::<R, F, I, B>::float_zeros([point_count, 48].into(), device);
     let positions_2d_grad_norm =

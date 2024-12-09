@@ -42,7 +42,7 @@ pub struct Arguments {
 /// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// `[P, M * 3]` <- `[P, M, 3]`
     pub colors_sh: JitTensor<R>,
     /// `[P, 3]`
     pub positions_3d: JitTensor<R>,

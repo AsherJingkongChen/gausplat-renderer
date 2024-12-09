@@ -1,19 +1,19 @@
-//! Types for rendering (backward).
+//! 3DGS rendering context (backward).
 
 pub use super::*;
 
-/// Inputs for rendering (backward).
+/// Rendering inputs (backward).
 #[derive(Clone, Debug)]
 pub struct RenderInput<B: Backend> {
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
     pub colors_rgb_3d: B::FloatTensorPrimitive,
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// The shape is `[P, M * 3]` <- `[P, M, 3]`
     pub colors_sh: B::FloatTensorPrimitive,
     /// `(0 ~ 3)`
     pub colors_sh_degree_max: u32,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
     pub conics: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P]`
     pub depths: B::FloatTensorPrimitive,
     /// `f_x <- I_x / tan(Fov_x / 2) / 2`
     pub focal_length_x: f32,
@@ -27,37 +27,37 @@ pub struct RenderInput<B: Backend> {
     pub image_size_x: u32,
     /// `I_y`
     pub image_size_y: u32,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
     pub is_colors_rgb_3d_not_clamped: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P, 1]`
     pub opacities_3d: B::FloatTensorPrimitive,
     /// `P`
     pub point_count: u32,
-    /// `[T]`
+    /// The shape is `[T]`
     pub point_indices: B::IntTensorPrimitive,
-    /// `[I_y, I_x]`
+    /// The shape is `[I_y, I_x]`
     pub point_rendered_counts: B::IntTensorPrimitive,
-    /// `[P, 2]`
+    /// The shape is `[P, 2]`
     pub positions_2d: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
     pub positions_3d: B::FloatTensorPrimitive,
-    /// `[P, 2]`
+    /// The shape is `[P, 2]`
     pub positions_3d_in_normalized: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P]`
     pub radii: B::IntTensorPrimitive,
-    /// `[P, 4]`
+    /// The shape is `[P, 4]`
     pub rotations: B::FloatTensorPrimitive,
-    /// `[P, 3, 3]`
+    /// The shape is `[P, 3, 3]`
     pub rotations_matrix: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
     pub scalings: B::FloatTensorPrimitive,
     /// `I_x / T_x`
     pub tile_count_x: u32,
     /// `I_y / T_y`
     pub tile_count_y: u32,
-    /// `[I_y / T_y, I_x / T_x, 2]`
+    /// The shape is `[I_y / T_y, I_x / T_x, 2]`
     pub tile_point_ranges: B::IntTensorPrimitive,
-    /// `[I_y, I_x]`
+    /// The shape is `[I_y, I_x]`
     pub transmittances: B::FloatTensorPrimitive,
     /// `tan(Fov_x / 2) * (C_f + 1)`
     pub view_bound_x: f32,
@@ -72,16 +72,28 @@ pub struct RenderInput<B: Backend> {
 /// Outputs for rendering (backward).
 #[derive(Clone, Debug)]
 pub struct RenderOutput<B: Backend> {
-    /// `[P, 48]` <- `[P, 16, 3]`
+    /// The shape is `[P, M * 3]` <- `[P, M, 3]`
+    ///
+    /// It is the gradient of `colors_rgb_2d` with respect to `colors_sh`.
     pub colors_sh_grad: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P, 1]`
+    ///
+    /// It is the gradient of `colors_rgb_2d` with respect to `colors_sh_degree_max`.
     pub opacities_grad: B::FloatTensorPrimitive,
-    /// `[P]`
+    /// The shape is `[P]`
+    ///
+    /// It is the gradient norm of the 2D positions.
     pub positions_2d_grad_norm: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
+    ///
+    /// It is the gradient of `colors_rgb_2d` with respect to `positions_3d`.
     pub positions_grad: B::FloatTensorPrimitive,
-    /// `[P, 4]`
+    /// The shape is `[P, 4]`
+    ///
+    /// It is the gradient of `colors_rgb_2d` with respect to `rotations`.
     pub rotations_grad: B::FloatTensorPrimitive,
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`
+    ///
+    /// It is the gradient of `colors_rgb_2d` with respect to `scalings`.
     pub scalings_grad: B::FloatTensorPrimitive,
 }

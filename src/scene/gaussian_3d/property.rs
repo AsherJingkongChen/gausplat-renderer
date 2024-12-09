@@ -50,7 +50,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     }
 
     /// 3D scalings. (Outer value)
-    /// 
+    ///
     /// The shape is `[P, 3]`.
     #[inline]
     pub fn get_scalings(&self) -> Tensor<B, 2> {

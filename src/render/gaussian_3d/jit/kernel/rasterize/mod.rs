@@ -27,7 +27,7 @@ pub struct Inputs<R: JitRuntime> {
     pub colors_rgb_3d: JitTensor<R>,
     /// `[P, 3]`
     pub conics: JitTensor<R>,
-    /// `[P]`
+    /// `[P, 1]`
     pub opacities_3d: JitTensor<R>,
     /// `[T]`
     pub point_indices: JitTensor<R>,
@@ -53,7 +53,7 @@ pub const TILE_SIZE_X: u32 = 16;
 /// `T_y`
 pub const TILE_SIZE_Y: u32 = 16;
 
-/// Rasterizing the point to the image.
+/// Rasterize the point to the image.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,

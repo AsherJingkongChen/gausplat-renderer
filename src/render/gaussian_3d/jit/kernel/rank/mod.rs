@@ -44,7 +44,7 @@ pub const TILE_COUNT_MAX: u32 = 1 << 16;
 /// `E[T / P]`
 pub const FACTOR_TILE_POINT_COUNT: u32 = 65;
 
-/// Ranking the points.
+/// Rank the points by its tile index and depth.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,

@@ -63,16 +63,12 @@ impl<B: Backend> Gaussian3dScene<B> {
                 .collect::<Vec<_>>(),
             device,
         );
-
         // [P, 1]
         let opacities = take_tensor(&["opacity"].map(Into::into), device);
-
         // [P, 3]
         let positions = take_tensor(&["x", "y", "z"].map(Into::into), device);
-
         // [P, 4] (x, y, z, w) <- (w, x, y, z)
         let rotations = take_tensor(&[1, 2, 3, 0].map(|i| format!("rot_{i}")), device);
-
         // [P, 3]
         let scalings = take_tensor(
             &(0..3).map(|i| format!("scale_{i}")).collect::<Vec<_>>(),

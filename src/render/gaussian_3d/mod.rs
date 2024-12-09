@@ -20,31 +20,36 @@ pub use burn::{
 
 use std::fmt;
 
-/// Renderer for 3DGS.
+/// 3DGS scene renderer.
 pub trait Gaussian3dRenderer<B: Backend>: 'static + Send + Sized + fmt::Debug {
-    /// Rendering (forward).
+    /// Render the 3DGS scene (forward).
     fn render_forward(
         input: forward::RenderInput<B>,
         view: &View,
         options: &Gaussian3dRenderOptions,
     ) -> Result<forward::RenderOutput<B>, Error>;
 
-    /// Rendering (backward).
+    /// Render the 3DGS scene (backward).
+    ///
+    /// It computes the gradients from
+    /// the [output in forward pass](forward::RenderOutput).
     fn render_backward(
         state: backward::RenderInput<B>,
         colors_rgb_2d_grad: B::FloatTensorPrimitive,
     ) -> backward::RenderOutput<B>;
 }
 
-/// Options for rendering 3DGS.
+/// 3DGS rendering options.
 #[derive(Config, Copy, Debug, PartialEq, Record)]
 pub struct Gaussian3dRenderOptions {
     #[config(default = "SH_DEGREE_MAX")]
+    /// The maximum degree of color in SH space.
+    ///
     /// It should be no more than [`SH_DEGREE_MAX`].
     pub colors_sh_degree_max: u32,
 }
 
-/// Outputs for rendering 3DGS.
+/// 3DGS rendering output.
 #[derive(Clone)]
 pub struct Gaussian3dRenderOutput<B: Backend> {
     /// `[I_y, I_x, 3]`
@@ -52,17 +57,25 @@ pub struct Gaussian3dRenderOutput<B: Backend> {
     // TODO: THM
 }
 
-/// Outputs for rendering 3DGS (autodiff enabled).
+/// 3DGS rendering output (autodiff enabled).
 #[derive(Clone)]
 pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
-    /// `[I_y, I_x, 3]`
+    /// 2D Colors in RGB space.
+    ///
+    /// The shape is `[I_y, I_x, 3]`.
+    /// - `I_y`: Image height.
+    /// - `I_x`: Image width.
+    ///
+    /// It is the rendered image.
     pub colors_rgb_2d: Tensor<AB, 3>,
-
-    /// The shape of gradient is `[P]`
+    /// Its gradient is the gradient norm of the 2D positions.
+    ///
+    /// The gradient shape is `[P]`.
+    /// - `P`: Point count.
     ///
     /// ## Usage
     ///
-    /// ```plaintext
+    /// ```ignore
     /// use burn::backend::autodiff::grads::Gradients;
     ///
     /// let mut grads: Gradients = todo!();
@@ -71,8 +84,10 @@ pub struct Gaussian3dRenderOutputAutodiff<AB: AutodiffBackend> {
     ///     positions_2d_grad_norm_ref.grad_remove(&mut grads);
     /// ```
     pub positions_2d_grad_norm_ref: Tensor<AB, 1>,
-
-    /// `[P]`
+    /// Visible radii of 3D Gaussians.
+    ///
+    /// The shape is `[P]`.
+    /// - `P`: Point count.
     pub radii: Tensor<AB::InnerBackend, 1, Int>,
 }
 

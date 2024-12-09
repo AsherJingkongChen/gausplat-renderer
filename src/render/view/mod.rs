@@ -62,7 +62,7 @@ impl View {
         self.image_width as f32 / self.image_height as f32
     }
 
-    /// Resizing the view to the maximum side length of `to`.
+    /// Resize the view to the maximum side length of `to`.
     pub fn resize_max(
         &mut self,
         to: u32,

@@ -54,31 +54,31 @@ pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
     /// Colors in SH space. (Inner value)
-    /// 
+    ///
     /// The shape is `[P, M * 3]`, which derives from `[P, M, 3]`.
     /// - `P` is [`Self::point_count`].
     /// - `M` is [`SH_COUNT_MAX`].
-    /// 
+    ///
     /// It is represented as orthonormalized spherical harmonic
     /// coefficients with RGB channels.
     pub colors_sh: Param<Tensor<B, 2>>,
     /// Opacities. (Inner value)
-    /// 
+    ///
     /// The shape is `[P, 1]`.
     pub opacities: Param<Tensor<B, 2>>,
     /// 3D Positions. (Inner value)
-    /// 
+    ///
     /// The shape is `[P, 3]`.
     pub positions: Param<Tensor<B, 2>>,
     /// Rotations. (Inner value)
-    /// 
+    ///
     /// The shape is `[P, 4]`.
-    /// 
+    ///
     /// They are represented as Hamilton quaternions in scalar-last order,
     /// i.e., `[x, y, z, w]`.
     pub rotations: Param<Tensor<B, 2>>,
     /// 3D scalings. (Inner value)
-    /// 
+    ///
     /// The shape is `[P, 3]`.
     pub scalings: Param<Tensor<B, 2>>,
 }

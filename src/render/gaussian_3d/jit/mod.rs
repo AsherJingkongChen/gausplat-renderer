@@ -15,10 +15,20 @@ pub use transform::FILTER_LOW_PASS;
 use burn_jit::kernel::into_contiguous;
 use kernel::*;
 
-/// Maximum of `I_y * I_x`
+/// Maximum of the pixel count in an image (Largest `I_y * I_x`).
 pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 
-/// Forward pass for rendering the 3DGS.
+/// Render the 3DGS scene (forward).
+///
+/// It computes the colors in RGB space from the 3DGS scene.
+///
+/// The kernels are launched in the following order:
+/// 1. Transform the scene parameters.
+/// 2. Scan the counts of the touched tiles into offsets.
+/// 3. Rank the points by its tile index and depth.
+/// 4. Sort the points by its tile index and depth.
+/// 5. Segment the points by its tile index.
+/// 6. Rasterize the points into the image.
 pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     mut input: forward::RenderInput<JitBackend<R, F, I, B>>,
     view: &View,
@@ -85,7 +95,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     input.rotations = into_contiguous(input.rotations);
     input.scalings = into_contiguous(input.scalings);
 
-    // Launching the kernels
+    // Transforming the parameters
 
     let outputs_transform = transform::main::<R, F, I, B>(
         transform::Arguments {
@@ -155,6 +165,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "sort");
 
+    // Segmenting the points by its tile index
+
     let outputs_segment = segment::main::<R, F, I, B>(
         segment::Arguments {
             tile_count_x,
@@ -167,6 +179,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     );
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::forward", "segment");
+
+    // Rasterizing the points into the image
 
     let outputs_rasterize = rasterize::main::<R, F, I, B>(
         rasterize::Arguments {
@@ -225,9 +239,13 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     })
 }
 
-/// Backward pass for rendering the 3DGS.
+/// Render the 3DGS scene (backward).
 ///
-/// It takes the outputs of the forward pass.
+/// It computes the gradients of `colors_rgb_2d` with respect to scene parameters.
+///
+/// The kernels are launched in the following order:
+/// 1. Compute the gradients for rasterization.
+/// 2. Compute the gradients for transformation.
 pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     state: backward::RenderInput<JitBackend<R, F, I, B>>,
     mut colors_rgb_2d_grad: JitTensor<R>,
@@ -239,7 +257,7 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
 
     colors_rgb_2d_grad = into_contiguous(colors_rgb_2d_grad);
 
-    // Launching the kernels
+    // Computing the gradients for rasterization
 
     let outputs_rasterize_backward = rasterize_backward::main::<R, F, I, B>(
         rasterize_backward::Arguments {
@@ -263,6 +281,8 @@ pub fn backward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     );
     #[cfg(all(debug_assertions, not(test)))]
     log::debug!(target: "gausplat::renderer::gaussian_3d::backward", "rasterize_backward");
+
+    // Computing the gradients for transformation
 
     let outputs_transform_backward = transform_backward::main::<R, F, I, B>(
         transform_backward::Arguments {

@@ -36,7 +36,7 @@ pub const GROUP_SIZE: u32 = 256;
 /// `G ^ 2`
 pub const GROUP_SIZE2: u32 = GROUP_SIZE * GROUP_SIZE;
 
-/// Segmenting the points into tiles.
+/// Segment the points into tiles.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,
