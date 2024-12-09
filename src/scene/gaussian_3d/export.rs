@@ -21,7 +21,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         let colors_sh_rest = self
             .colors_sh
             .val()
-            .slice([0..point_count, 3..COLORS_SH_COUNT_MAX])
+            .slice([0..point_count, 3..SH_COUNT_MAX * 3])
             .reshape([point_count, SH_COUNT_MAX - 1, 3])
             .swap_dims(1, 2)
             .flatten(1, 2);

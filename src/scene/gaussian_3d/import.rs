@@ -49,9 +49,9 @@ impl<B: Backend> Gaussian3dScene<B> {
                 .set_require_grad(true)
         };
 
-        // [P, 48] <- [P, 1, 3] + [P, 3, 15]
+        // [P, M * 3] <- [P, 1, 3] + [P, 3, M - 1]
         let colors_sh = take_tensor(
-            &(0..COLORS_SH_COUNT_MAX)
+            &(0..SH_COUNT_MAX * 3)
                 .map(|i| {
                     if i < 3 {
                         format!("f_dc_{i}")
@@ -117,12 +117,12 @@ impl<B: Backend> Gaussian3dScene<B> {
             },
         );
 
-        // [P, 48] <- [P, 16, 3]
+        // [P, M * 3] <- [P, M, 3]
         let colors_sh = Param::uninitialized(
             Default::default(),
             move |device, is_require_grad| {
                 let mut colors_sh =
-                    Tensor::zeros([point_count, COLORS_SH_COUNT_MAX], device);
+                    Tensor::zeros([point_count, SH_COUNT_MAX * 3], device);
                 let colors_rgb = Tensor::from_data(
                     TensorData::new(colors_rgb.to_owned(), [point_count, 3]),
                     device,

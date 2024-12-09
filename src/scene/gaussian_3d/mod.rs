@@ -31,10 +31,7 @@ use burn::tensor::{DType, TensorPrimitive};
 use gausplat_loader::source::polygon;
 use std::{fmt, marker, sync::LazyLock};
 
-/// [`SH_COUNT_MAX * 3`](SH_COUNT_MAX)
-pub const COLORS_SH_COUNT_MAX: usize = SH_COUNT_MAX * 3;
-
-/// `0x3D65`
+/// 3DGS default seed.
 pub const SEED: u64 = 0x3D65;
 
 /// A polygon file header for 3DGS.
@@ -56,27 +53,48 @@ pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
 /// 3DGS representation.
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
-    /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)
-    /// <- [`[P, SH_COUNT_MAX, 3]`](SH_COUNT_MAX)
+    /// Colors in SH space. (Inner value)
+    /// 
+    /// The shape is `[P, M * 3]`, which derives from `[P, M, 3]`.
+    /// - `P` is [`Self::point_count`].
+    /// - `M` is [`SH_COUNT_MAX`].
+    /// 
+    /// It is represented as orthonormalized spherical harmonic
+    /// coefficients with RGB channels.
     pub colors_sh: Param<Tensor<B, 2>>,
-    /// `[P, 1]`
+    /// Opacities. (Inner value)
+    /// 
+    /// The shape is `[P, 1]`.
     pub opacities: Param<Tensor<B, 2>>,
-    /// `[P, 3]`
+    /// 3D Positions. (Inner value)
+    /// 
+    /// The shape is `[P, 3]`.
     pub positions: Param<Tensor<B, 2>>,
-    /// `[P, 4]`. **(in scalar-last order, i.e., `[x, y, z, w]`)**
+    /// Rotations. (Inner value)
+    /// 
+    /// The shape is `[P, 4]`.
+    /// 
+    /// They are represented as Hamilton quaternions in scalar-last order,
+    /// i.e., `[x, y, z, w]`.
     pub rotations: Param<Tensor<B, 2>>,
-    /// `[P, 3]`
+    /// 3D scalings. (Inner value)
+    /// 
+    /// The shape is `[P, 3]`.
     pub scalings: Param<Tensor<B, 2>>,
 }
 
+/// 3DGS render backward operator.
 #[derive(Clone, Copy, Debug, Default)]
-struct Gaussian3dRenderBackward<B: Backend, R: Gaussian3dRenderer<B>> {
+struct Gaussian3dRenderBackwardOp<B: Backend, R: Gaussian3dRenderer<B>> {
     __: marker::PhantomData<(B, R)>,
 }
 
+/// 3DGS render backward state.
 #[derive(Clone, Debug)]
-struct Gaussian3dRenderBackwardState<B: Backend> {
+pub struct Gaussian3dRenderBackwardState<B: Backend> {
+    /// Inner state.
     pub inner: render::backward::RenderInput<B>,
+    /// The gradient norm of the 2D positions.
     pub positions_2d_grad_norm_ref_id: NodeID,
 }
 
@@ -106,6 +124,7 @@ impl<
     }
 }
 
+// TODO: Move render implementation to here.
 impl<
         R: jit::JitRuntime,
         F: jit::FloatElement,
@@ -136,9 +155,9 @@ impl<B: Backend> Gaussian3dScene<B>
 where
     Self: Gaussian3dRenderer<B>,
 {
-    /// Render the 3D scene.
+    /// Render the 3DGS scene.
     ///
-    /// It takes the [`View`](render::View) and [`Gaussian3dRenderOptions`] as input.
+    /// It renders an image with the given [`view`](render::View).
     pub fn render(
         &self,
         view: &render::View,
@@ -172,31 +191,24 @@ impl<B: Backend> Gaussian3dScene<Autodiff<B>>
 where
     Self: Gaussian3dRenderer<B>,
 {
-    /// Render the 3D scene with autodiff enabled.
+    /// Render the 3DGS scene with autodiff enabled.
+    ///
+    /// It renders a learnable image with the given [`view`](render::View).
     #[must_use = "The gradients should be used"]
     pub fn render(
         &self,
         view: &render::View,
         options: &Gaussian3dRenderOptions,
     ) -> Result<Gaussian3dRenderOutputAutodiff<Autodiff<B>>, Error> {
-        let device = self.device();
+        let device = &self.device();
         let colors_sh = self.colors_sh.val().into_primitive().tensor();
         let opacities = self.opacities.val().into_primitive().tensor();
         let positions = self.positions.val().into_primitive().tensor();
         let rotations = self.rotations.val().into_primitive().tensor();
         let scalings = self.scalings.val().into_primitive().tensor();
 
-        let positions_2d_grad_norm_ref =
-            Tensor::<Autodiff<B>, 1>::empty([1], &device).set_require_grad(true);
-        let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
-            .to_owned()
-            .into_primitive()
-            .tensor()
-            .node
-            .id;
-
         let input = render::forward::RenderInput {
-            device,
+            device: device.to_owned(),
             point_count: self.point_count() as u64,
             colors_sh: colors_sh.primitive,
             opacities: opacities.primitive,
@@ -207,9 +219,18 @@ where
 
         let output = Self::render_forward(input, view, options)?;
 
+        // It refers to the gradient norm of the 2D positions.
+        let positions_2d_grad_norm_ref =
+            Tensor::<Autodiff<B>, 1>::empty([1], device).set_require_grad(true);
+        let positions_2d_grad_norm_ref_id = positions_2d_grad_norm_ref
+            .to_owned()
+            .into_primitive()
+            .tensor()
+            .node
+            .id;
         let radii = Tensor::new(output.state.radii.to_owned());
         let colors_rgb_2d = Tensor::new(TensorPrimitive::Float(
-            match Gaussian3dRenderBackward::<B, Self>::default()
+            match Gaussian3dRenderBackwardOp::<B, Self>::default()
                 .prepare::<NoCheckpointing>([
                     colors_sh.node,
                     opacities.node,
@@ -256,7 +277,7 @@ where
 }
 
 impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
-    for Gaussian3dRenderBackward<B, R>
+    for Gaussian3dRenderBackwardOp<B, R>
 {
     type State = Gaussian3dRenderBackwardState<B>;
 
@@ -279,7 +300,6 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
         }
 
         let output = R::render_backward(ops.state.inner, colors_rgb_2d_grad);
-
         if let Some(node) = &ops.parents[0] {
             grads.register::<B>(node.id, output.colors_sh_grad);
         }
@@ -296,6 +316,7 @@ impl<B: Backend, R: Gaussian3dRenderer<B>> Backward<B, 5>
             grads.register::<B>(node.id, output.scalings_grad);
         }
 
+        // The gradient norm of the 2D positions will be obtained later.
         grads.register::<B>(
             ops.state.positions_2d_grad_norm_ref_id,
             output.positions_2d_grad_norm,

@@ -7,42 +7,51 @@ use humansize::{format_size, BINARY};
 
 /// Outer property value getters
 impl<B: Backend> Gaussian3dScene<B> {
-    /// The colors represented as orthonormalized spherical harmonics
+    /// Colors in SH space. (Outer value)
     ///
-    /// [`[P, COLORS_SH_COUNT_MAX]`](COLORS_SH_COUNT_MAX)
-    /// <- [`[P, SH_COUNT_MAX, 3]`](SH_COUNT_MAX)
+    /// The shape is `[P, M * 3]`, which derives from `[P, M, 3]`.
+    /// - `P` is [`Self::point_count`].
+    /// - `M` is [`SH_COUNT_MAX`].
+    ///
+    /// It is represented as orthonormalized spherical harmonic
+    /// coefficients with RGB channels.
     #[inline]
     pub fn get_colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())
     }
 
-    /// The opacities which range from `0.0` to `1.0`
+    /// Opacities. (Outer value)
     ///
-    /// `[P, 1]`
+    /// The shape is `[P, 1]`.
+    ///
+    /// They range from `0.0` to `1.0`.
     #[inline]
     pub fn get_opacities(&self) -> Tensor<B, 2> {
         Self::make_opacities(self.opacities.val())
     }
 
-    /// The 3D positions in world space
+    /// 3D Positions. (Outer value)
     ///
-    /// `[P, 3]`
+    /// The shape is `[P, 3]`.
     #[inline]
     pub fn get_positions(&self) -> Tensor<B, 2> {
         Self::make_positions(self.positions.val())
     }
 
-    /// The rotations represented as normalized quaternions
+    /// Rotations. (Outer value)
     ///
-    /// `[P, 4]`
+    /// The shape is `[P, 4]`.
+    ///
+    /// They are represented as normalized Hamilton quaternions in scalar-last order,
+    /// i.e., `[x, y, z, w]`.
     #[inline]
     pub fn get_rotations(&self) -> Tensor<B, 2> {
         Self::make_rotations(self.rotations.val())
     }
 
-    /// The scalings
-    ///
-    /// `[P, 3]`
+    /// 3D scalings. (Outer value)
+    /// 
+    /// The shape is `[P, 3]`.
     #[inline]
     pub fn get_scalings(&self) -> Tensor<B, 2> {
         Self::make_scalings(self.scalings.val())
