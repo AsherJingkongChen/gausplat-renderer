@@ -1,6 +1,8 @@
 //! 3DGS rendering implementation.
 //!
-//! For more information, see the [survey](https://arxiv.org/abs/2401.03890).
+//! For more information, see:
+//! 1. [3DGS survey](https://arxiv.org/abs/2401.03890).
+//! 2. [JIT kernel API](jit::kernel).
 
 pub mod backward;
 pub mod forward;

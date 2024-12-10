@@ -29,9 +29,9 @@ struct Arguments {
 
 @group(0) @binding(0)
 var<storage, read_write> arguments: Arguments;
-// [P, 16, 3]
+// [P, M, 3]
 @group(0) @binding(1)
-var<storage, read_write> colors_sh: array<array<array<f32, 3>, 16>>;
+var<storage, read_write> colors_sh: array<array<array<f32, 3>, SH_COUNT_MAX>>;
 // [P, 3]
 @group(0) @binding(2)
 var<storage, read_write> positions_3d: array<array<f32, 3>>;
@@ -98,12 +98,14 @@ const SH_C_3: array<f32, 7> = array<f32, 7>(
     1.4453057,
     -0.5900436,
 );
+// M
+const SH_COUNT_MAX: u32 = 16;
 
 // The depth range is restricted by 16-bit depth order for sorting
 const DEPTH_MAX: f32 = f32(1u << (17 - 3));
 const DEPTH_MIN: f32 = 1.0 / f32(1u << (3 - 1));
-// The `r` for `OPACITY_2D_MAX = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
-const FACTOR_RADIUS: f32 = 2.6587491;
+// The r for `0.9973 = ∫[-r, r] e^(-0.5 * x^2) dx / √2π`
+const FACTOR_RADIUS: f32 = 2.9999771;
 // C_f
 const FILTER_LOW_PASS: f32 = 0.3;
 // T_x
@@ -211,11 +213,11 @@ fn main(
 
     // Projecting the 3D covariance matrix into 2D covariance matrix
     // T[2, 3] = J[2, 3] * Rv[3, 3]
-    // Σ'[2, 2] (Symmetric) = T[2, 3] * Σ[3, 3] * T^t[3, 2] + F[2, 2]
+    // Σ'[2, 2] (Symmetric) = T[2, 3] * Σ[3, 3] * T^t[3, 2] + C[2, 2]
     //
     // J = [[f.x / Pv.z, 0,          -f.x * Pv.x / Pv.z^2]
     //      [0,          f.y / Pv.z, -f.y * Pv.y / Pv.z^2]]
-    // F = [[C_f, 0  ]
+    // C = [[C_f, 0  ]
     //      [0,   C_f]]
     //
     // Pv.x and Pv.y are the clamped
@@ -263,9 +265,9 @@ fn main(
     // 
     // Deriving eigenvalues:
     // 
-    // det(Σ - λ * I) = 0
+    // det(Σ' - λ * I) = 0
     // λ = ((a + c) ± √((a + c)^2 - 4 * (a * c - b^2))) / 2
-    //   = (a + c) / 2 ± √(((a + c) / 2)^2 - det(Σ))
+    //   = (a + c) / 2 ± √( ((a + c) / 2)^2 - det(Σ') )
     // 
     // Defining radius as the square root of the maximum eigenvalue:
     // 
@@ -326,12 +328,12 @@ fn main(
     var vd_zz_5_1 = f32();
 
     // Computing the 3D color in RGB space from SH space
-    // D[16] <- Dv[3]
-    // C_rgb[3] = D[1, 16] * C_sh[16, 3] + 0.5
+    // D[M] <- Dv[3]
+    // C_rgb[3] = D[1, M] * C_sh[M, 3] + 0.5
     //
     // C_rgb is clamped
 
-    let color_sh = array<vec3<f32>, 16>(
+    let color_sh = array<vec3<f32>, SH_COUNT_MAX>(
         vec_from_array_f32_3(colors_sh[index][0u]),
         vec_from_array_f32_3(colors_sh[index][1u]),
         vec_from_array_f32_3(colors_sh[index][2u]),

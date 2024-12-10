@@ -49,7 +49,7 @@ pub const RADIX_COUNT: usize = 1 << RADIX_COUNT_SHIFT;
 pub const RADIX_COUNT_SHIFT: u32 = 8;
 
 /// Sort the items by the keys.
-/// 
+///
 /// Radix-Sort-256 is a stable sort.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>

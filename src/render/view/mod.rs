@@ -17,7 +17,7 @@ pub struct View {
     pub image_width: u32,
     /// View ID.
     pub view_id: u32,
-    /// Position in world space.
+    /// View position in world space.
     pub view_position: [f64; 3],
     /// Affine transformation from world space to view space.
     ///
