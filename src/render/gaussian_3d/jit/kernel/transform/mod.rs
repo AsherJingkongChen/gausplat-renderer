@@ -23,11 +23,11 @@ pub struct Arguments {
     pub point_count: u32,
     /// $ \frac{\text{im}_x}{t_x} $
     ///
-    /// $ t_x $ is the tile width.
+    /// $ \text{t}_x $ is the tile width.
     pub tile_count_x: i32,
     /// $ \frac{\text{im}_y}{t_y} $
     ///
-    /// $ t_y $ is the tile height.
+    /// $ \text{t}_y $ is the tile height.
     pub tile_count_y: i32,
     /// $ \tan\left(\frac{\text{fov}_x}{2}\right) \cdot (c_f + 1) $
     ///
@@ -74,6 +74,8 @@ pub struct Outputs<R: JitRuntime> {
     /// $ C_{rgb} \in \mathbb{R}^3 $ of $ p $ points.
     pub colors_rgb_3d: JitTensor<R>,
     /// $ \Sigma^{'-1} \in \mathbb{R}^{2 \times 2} $ of $ p $ points.
+    ///
+    /// Inverse of the 2D covariance.
     ///
     /// It can be $ \mathbb{R}^{3} $ since it is symmetric.
     pub conics: JitTensor<R>,
@@ -149,8 +151,8 @@ pub const GROUP_SIZE: u32 = 256;
 /// \\\ 0 & \frac{\text{fl}_y}{P_v.z} & - \frac{P_v.y}{P_v.z^2} \cdot \text{fl}_y
 /// \end{bmatrix} $$
 /// $$ C = \begin{bmatrix}
-///     C_f & 0
-/// \\\ 0 & C_f
+///     c_f & 0
+/// \\\ 0 & c_f
 /// \end{bmatrix} $$
 /// $$ \Sigma^' = J R_v \Sigma (J R_v)^T + C \in \mathbb{R}^{2 \times 2} $$
 ///

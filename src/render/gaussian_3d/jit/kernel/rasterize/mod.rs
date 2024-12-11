@@ -9,51 +9,84 @@ use bytemuck::{bytes_of, Pod, Zeroable};
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Arguments {
-    /// `I_x`
+    /// $ \text{im}_x $
     pub image_size_x: u32,
-    /// `I_y`
+    /// $ \text{im}_y $
     pub image_size_y: u32,
 
-    /// `I_x / T_x`
+    /// $ \frac{\text{im}_x}{\text{t}_x} $
+    /// 
+    /// $ \text{t}_x $ is the tile width.
     pub tile_count_x: u32,
-    /// `I_y / T_y`
+    /// $ \frac{\text{im}_y}{\text{t}_y} $
+    /// 
+    /// $ \text{t}_y $ is the tile height.
     pub tile_count_y: u32,
 }
 
 /// Inputs.
 #[derive(Clone, Debug)]
 pub struct Inputs<R: JitRuntime> {
-    /// `[P, 3]`
+    /// $ C_{rgb} \in \mathbb{R}^{3} $ of $ p $ points.
     pub colors_rgb_3d: JitTensor<R>,
-    /// `[P, 3]`
+    /// $ \Sigma^{'-1} \in \mathbb{R}^{2 \times 2} $ of $ p $ points.
+    ///
+    /// Inverse of the 2D covariance.
+    /// 
+    /// It can be $ \mathbb{R}^{3} $ since it is symmetric.
     pub conics: JitTensor<R>,
-    /// `[P, 1]`
+    /// $ \alpha \in \mathbb{R} $ of $ p $ points.
     pub opacities_3d: JitTensor<R>,
-    /// `[T]`
+    /// $ i \in [0, p) $.
+    /// 
+    /// It is point index per tile.
     pub point_indices: JitTensor<R>,
-    /// `[P, 2]`
+    /// $ P^' \in \mathbb{R}^{2} $ of $ p $ points.
+    /// 
+    /// 2D position in screen space.
     pub positions_2d: JitTensor<R>,
-    /// `[I_y / T_y, I_x / T_x, 2]`
+    /// $ [i_{start}, i_{end}) $ of each tile.
     pub tile_point_ranges: JitTensor<R>,
 }
 
 /// Outputs.
 #[derive(Clone, Debug)]
 pub struct Outputs<R: JitRuntime> {
-    /// `[I_y, I_x, 3]`
+    /// $ C_{rgb}^' \in \mathbb{R}^{3} $ of each image pixel.
     pub colors_rgb_2d: JitTensor<R>,
-    /// `[I_y, I_x]`
+    /// Rendered point count of each image pixel.
     pub point_rendered_counts: JitTensor<R>,
-    /// `[I_y, I_x]`
+    /// $ T_{last} $
+    /// 
+    /// Last transmittance of each image pixel.
     pub transmittances: JitTensor<R>,
 }
 
-/// `T_x`
+/// $ \text{t}_x $
 pub const TILE_SIZE_X: u32 = 16;
-/// `T_y`
+/// $ \text{t}_y $
 pub const TILE_SIZE_Y: u32 = 16;
 
 /// Rasterize the point to the image.
+/// 
+/// For each pixel in each tile, do the following steps:
+/// 
+/// 1. Collect the points in the tile onto the shared memory.
+/// 
+/// 2. Compute the Gaussian density centered at the pixel position $ P_x $
+///    using the parameters of each point $ n $ touched the tile 
+///    ([$ \Sigma^{'-1} $](Inputs::conics) and [$ P_v^' $](Inputs::positions_2d)):
+/// $$ D = P_v^' - P_x \in \mathbb{R}^2 $$
+/// $$ \sigma_n = e^{-\frac{1}{2} D^T \Sigma^{'-1} D} $$
+/// 
+/// 3. Accumulate the transmittance [$ T_n $](Outputs::transmittances)
+///    and [$ C_{rgb}^' $](Outputs::colors_rgb_2d) of each pixel
+///    using [$ \alpha_n $](Inputs::opacities_3d)
+///    and [$ C_{rgb,n} $](Inputs::colors_rgb_3d) of each point $ n $
+///    (Order-dependent transparency blending):
+/// $$ \alpha_n^' \leftarrow \alpha_n \sigma_n $$
+/// $$ T_{n + 1} \leftarrow T_n (1 - \alpha_n^') $$
+/// $$ C_{rgb}^' \leftarrow C_{rgb,n}^' + (C_{rgb} \cdot \alpha_n^' \cdot T_n) $$
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     arguments: Arguments,
     inputs: Inputs<R>,

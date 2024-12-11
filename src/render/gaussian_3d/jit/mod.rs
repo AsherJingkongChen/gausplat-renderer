@@ -1,4 +1,4 @@
-//! JIT implementation of the 3DGS renderer.
+//! 3DGS renderer with JIT backend.
 
 pub mod kernel;
 
@@ -23,12 +23,12 @@ pub const PIXEL_COUNT_MAX: u32 = TILE_SIZE_X * TILE_SIZE_Y * TILE_COUNT_MAX;
 /// It computes the colors in RGB space from the 3DGS scene.
 ///
 /// The kernels are launched in the following order:
-/// 1. Transform the scene parameters.
+/// 1. [Transform](transform::main) the scene parameters.
 /// 2. Scan the counts of the touched tiles into offsets.
 /// 3. Rank the points by its tile index and depth.
 /// 4. Sort the points by its tile index and depth.
 /// 5. Segment the points by its tile index.
-/// 6. Rasterize the points into the image.
+/// 6. [Rasterize](rasterize::main) the points into the image.
 pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     mut input: forward::RenderInput<JitBackend<R, F, I, B>>,
     view: &View,
