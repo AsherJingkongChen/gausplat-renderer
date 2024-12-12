@@ -15,11 +15,11 @@ pub struct Arguments {
     pub image_size_y: u32,
 
     /// $ \frac{\text{im}_x}{\text{t}_x} $
-    /// 
+    ///
     /// $ \text{t}_x $ is the tile width.
     pub tile_count_x: u32,
     /// $ \frac{\text{im}_y}{\text{t}_y} $
-    /// 
+    ///
     /// $ \text{t}_y $ is the tile height.
     pub tile_count_y: u32,
 }
@@ -32,17 +32,17 @@ pub struct Inputs<R: JitRuntime> {
     /// $ \Sigma^{'-1} \in \mathbb{R}^{2 \times 2} $ of $ p $ points.
     ///
     /// Inverse of the 2D covariance.
-    /// 
+    ///
     /// It can be $ \mathbb{R}^{3} $ since it is symmetric.
     pub conics: JitTensor<R>,
     /// $ \alpha \in \mathbb{R} $ of $ p $ points.
     pub opacities_3d: JitTensor<R>,
     /// $ i \in [0, p) $.
-    /// 
+    ///
     /// It is point index per tile.
     pub point_indices: JitTensor<R>,
     /// $ P^' \in \mathbb{R}^{2} $ of $ p $ points.
-    /// 
+    ///
     /// 2D position in screen space.
     pub positions_2d: JitTensor<R>,
     /// $ [i_{start}, i_{end}) $ of each tile.
@@ -57,7 +57,7 @@ pub struct Outputs<R: JitRuntime> {
     /// Rendered point count of each image pixel.
     pub point_rendered_counts: JitTensor<R>,
     /// $ T_{last} $
-    /// 
+    ///
     /// Last transmittance of each image pixel.
     pub transmittances: JitTensor<R>,
 }
@@ -68,17 +68,17 @@ pub const TILE_SIZE_X: u32 = 16;
 pub const TILE_SIZE_Y: u32 = 16;
 
 /// Rasterize the point to the image.
-/// 
+///
 /// For each pixel in each tile, do the following steps:
-/// 
+///
 /// 1. Collect the points in the tile onto the shared memory.
-/// 
+///
 /// 2. Compute the Gaussian density centered at the pixel position $ P_x $
-///    using the parameters of each point $ n $ touched the tile 
+///    using the parameters of each point $ n $ touched the tile
 ///    ([$ \Sigma^{'-1} $](Inputs::conics) and [$ P_v^' $](Inputs::positions_2d)):
 /// $$ D = P_v^' - P_x \in \mathbb{R}^2 $$
 /// $$ \sigma_n = e^{-\frac{1}{2} D^T \Sigma^{'-1} D} $$
-/// 
+///
 /// 3. Accumulate the transmittance [$ T_n $](Outputs::transmittances)
 ///    and [$ C_{rgb}^' $](Outputs::colors_rgb_2d) of each pixel
 ///    using [$ \alpha_n $](Inputs::opacities_3d)
