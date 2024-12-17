@@ -149,6 +149,7 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
             depths: outputs_transform.depths.to_owned(),
             point_tile_bounds: outputs_transform.point_tile_bounds,
             radii: outputs_transform.radii.to_owned(),
+            tile_point_count: outputs_scan.total.to_owned(),
             tile_touched_offsets: outputs_scan.values,
         },
     );

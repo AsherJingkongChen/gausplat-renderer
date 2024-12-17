@@ -3,7 +3,7 @@
 pub use super::*;
 
 use burn::tensor::ops::IntTensorOps;
-use bytemuck::{bytes_of, Pod, Zeroable};
+use bytemuck::{bytes_of, from_bytes, Pod, Zeroable};
 
 /// Arguments.
 #[repr(C)]
@@ -24,6 +24,8 @@ pub struct Inputs<R: JitRuntime> {
     pub point_tile_bounds: JitTensor<R>,
     /// `[P]`
     pub radii: JitTensor<R>,
+    /// `T`
+    pub tile_point_count: JitTensor<R>,
     /// `[P]`
     pub tile_touched_offsets: JitTensor<R>,
 }
@@ -55,17 +57,17 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
 
     let client = &inputs.depths.client;
     let device = &inputs.depths.device;
-    // E[T]
-    // HACK: The actual tile point count should be less than the estimated value.
-    let tile_point_count_estimated =
-        (arguments.point_count * FACTOR_TILE_POINT_COUNT) as usize;
+
+    let tile_point_count = *from_bytes::<u32>(
+        &client.read([inputs.tile_point_count.handle.to_owned().binding()].into())[0],
+    ) as usize;
 
     // [T]
     let point_indices =
-        JitBackend::<R, F, I, B>::int_empty([tile_point_count_estimated].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([tile_point_count].into(), device);
     // [T]
     let point_orders =
-        JitBackend::<R, F, I, B>::int_empty([tile_point_count_estimated].into(), device);
+        JitBackend::<R, F, I, B>::int_empty([tile_point_count].into(), device);
 
     // Launching the kernel
 
