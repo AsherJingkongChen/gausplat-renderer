@@ -57,8 +57,7 @@ impl<B: Backend> Gaussian3dScene<B> {
             .into(),
             1,
         )
-        .into_data()
-        .bytes;
+        .into_data();
 
         let mut header = POLYGON_HEADER_3DGS.to_owned();
         // NOTE: The data format is set to binary native-endian.
@@ -66,7 +65,7 @@ impl<B: Backend> Gaussian3dScene<B> {
         header.get_mut("vertex").unwrap().count = point_count;
         header.encode(writer)?;
 
-        writer.write_all(&data)?;
+        writer.write_all(data.as_bytes())?;
 
         Ok(())
     }

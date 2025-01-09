@@ -59,8 +59,7 @@ pub struct Gaussian3dScene<B: Backend> {
     /// - `P` is [`Self::point_count`].
     /// - `M` is [`SH_COUNT_MAX`].
     ///
-    /// It is represented as orthonormalized spherical harmonic
-    /// coefficients with RGB channels.
+    /// It is represented as orthonormalized spherical harmonic with RGB channels.
     pub colors_sh: Param<Tensor<B, 2>>,
     /// Opacities. (Inner value)
     ///

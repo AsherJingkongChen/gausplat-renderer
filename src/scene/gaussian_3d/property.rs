@@ -13,8 +13,7 @@ impl<B: Backend> Gaussian3dScene<B> {
     /// - `P` is [`Self::point_count`].
     /// - `M` is [`SH_COUNT_MAX`].
     ///
-    /// It is represented as orthonormalized spherical harmonic
-    /// coefficients with RGB channels.
+    /// It is represented as orthonormalized spherical harmonic with RGB channels.
     #[inline]
     pub fn get_colors_sh(&self) -> Tensor<B, 2> {
         Self::make_colors_sh(self.colors_sh.val())

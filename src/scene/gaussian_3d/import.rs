@@ -39,11 +39,7 @@ impl<B: Backend> Gaussian3dScene<B> {
                     bytes
                 },
             );
-            let data = TensorData {
-                bytes,
-                shape: [channel_count, point_count].into(),
-                dtype,
-            };
+            let data = TensorData::from_bytes(bytes, [channel_count, point_count], dtype);
             Tensor::<B, 2>::from_data(data, device)
                 .swap_dims(0, 1)
                 .set_require_grad(true)

@@ -21,11 +21,11 @@ pub struct Arguments {
     pub image_size_half_y: f32,
     /// $ p $
     pub point_count: u32,
-    /// $ \frac{\text{im}_x}{t_x} $
+    /// $ \frac{\text{im}_x}{\text{t}_x} $
     ///
     /// $ \text{t}_x $ is the tile width.
     pub tile_count_x: i32,
-    /// $ \frac{\text{im}_y}{t_y} $
+    /// $ \frac{\text{im}_y}{\text{t}_y} $
     ///
     /// $ \text{t}_y $ is the tile height.
     pub tile_count_y: i32,
@@ -173,11 +173,11 @@ pub const GROUP_SIZE: u32 = 256;
 /// \text{clamp}(\frac{[(P_v^'.y - r)\ (P_v^'.y + r)]}{t_y}) $$
 /// $$ T = (x_{\max} - x_{\min}) \cdot (y_{\max} - y_{\min}) $$
 ///
-/// 9. Compute viewing direction in world space
+/// 9. Compute the viewing direction in world space
 ///    using view position [$ V_p $](Arguments::view_position):
 /// $$ D_v = \frac{P - V_p}{| P - V_p |} \in \mathbb{R}^3 $$
 ///
-/// 10. Transform color from [SH](Inputs::colors_sh)
+/// 10. Transform the color from [SH](Inputs::colors_sh)
 ///     to [RGB](Outputs::colors_rgb_3d) space:
 /// $$ D = f(D_v) \in \mathbb{R}^m $$
 /// $$ C_{rgb} = D \cdot C_{sh} \in \mathbb{R}^3 $$

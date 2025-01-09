@@ -140,6 +140,8 @@ pub fn forward<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
         )
     );
 
+    // Ranking the points by its tile index and depth
+
     let outputs_rank = rank::main::<R, F, I, B>(
         rank::Arguments {
             point_count,
