@@ -1,8 +1,8 @@
 //! LAQ, or Learned Attribute Quantization,
 //! is a limited representation of high precision attributes.
 
-pub mod dequantize;
 pub mod normalize;
+pub mod quantize;
 pub mod round;
 pub mod tinynet;
 
@@ -14,3 +14,5 @@ pub use burn::{
         Tensor,
     },
 };
+
+pub use quantize::{Dequantizer, DequantizerConfig};

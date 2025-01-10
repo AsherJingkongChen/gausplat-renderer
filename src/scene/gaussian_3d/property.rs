@@ -1,4 +1,4 @@
-//! 3DGS property access implementation.
+//! 3DGS scene property implementation.
 
 pub use super::*;
 

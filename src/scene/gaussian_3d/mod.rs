@@ -50,7 +50,7 @@ pub static POLYGON_HEADER_3DGS: LazyLock<polygon::Header> = LazyLock::new(|| {
         .unwrap()
 });
 
-/// 3DGS representation.
+/// 3DGS scene representation.
 #[derive(Module)]
 pub struct Gaussian3dScene<B: Backend> {
     /// Colors in SH space. (Inner value)

@@ -7,6 +7,9 @@ use crate::spherical_harmonics::SH_DEGREE_MAX;
 /// Error variants.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Error from Miniz decompression.
+    #[error("Miniz decompression: {0}")]
+    Decompress(miniz_oxide::inflate::DecompressError),
     /// Error from invalid pixel count.
     #[error("Invalid pixel count: {0}. It should not be zero or excessively large.")]
     InvalidPixelCount(usize),
@@ -31,6 +34,9 @@ pub enum Error {
     /// Error from mismatched tensor shape.
     #[error("Mismatched tensor shape: {0:?}. It should be {1:?}.")]
     MismatchedTensorShape(Vec<usize>, Vec<usize>),
+    /// Error from Burn recorder.
+    #[error("Recorder error: {0}")]
+    Recorder(#[from] burn::record::RecorderError),
     /// Error from unsupported spherical harmonics degree.
     #[error(
         "Unsupported spherical harmonics degree: {0}. \

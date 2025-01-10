@@ -108,9 +108,9 @@ impl<AB: AutodiffBackend> Dequantizer<AB> {
     pub fn fit<const D: usize>(
         attributes: Tensor<AB, D>,
         learning_rate: f64,
-        loss_threshold: f32,
+        loss_threshold: f64,
     ) -> Self {
-        const ITERATION_COUNT: usize = 1000;
+        const ITERATION_COUNT_MAX: usize = 1000;
 
         let attributes = attributes.to_owned().set_require_grad(false);
         let quants_h = attributes.to_owned().set_require_grad(false);
@@ -124,9 +124,9 @@ impl<AB: AutodiffBackend> Dequantizer<AB> {
 
         let metric_reconstruction = HuberLossConfig::new(1.0).init();
         let mut optimizer_dequantizer = AdamConfig::new().init::<AB, Dequantizer<AB>>();
-        let mut bar = tqdm!(total = ITERATION_COUNT); //
+        let mut bar = tqdm!(total = ITERATION_COUNT_MAX); //
 
-        for iteration in 0..ITERATION_COUNT {
+        for iteration in 0..ITERATION_COUNT_MAX {
             let attributes_h = dequantizer.dequantize(quants_h.to_owned());
             let loss = metric_reconstruction.forward(
                 attributes_h,
@@ -139,7 +139,7 @@ impl<AB: AutodiffBackend> Dequantizer<AB> {
             bar.update(1).unwrap(); //
 
             if (iteration + 1) % 10 == 0 {
-                let loss = loss.into_scalar().elem::<f32>();
+                let loss = loss.into_scalar().elem::<f64>();
                 bar.set_postfix(format!("loss: {:?}", loss)); //
                 bar.refresh().unwrap(); //
                 if loss < loss_threshold {
@@ -158,5 +158,13 @@ impl Default for DequantizerConfig {
     fn default() -> Self {
         let net = TinyNetConfig::default();
         Self { net }
+    }
+}
+
+impl<B: Backend> Default for Dequantizer<B> {
+    #[inline]
+    fn default() -> Self {
+        let device = &Default::default();
+        DequantizerConfig::default().init(device)
     }
 }

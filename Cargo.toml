@@ -19,6 +19,7 @@ bytemuck = {workspace = true, features = ["derive"]}
 humansize = {workspace = true}
 kdam = {workspace = true}
 log = {workspace = true}
+miniz_oxide = {workspace = true, features = ["default"]}
 rand = {workspace = true}
 rand_distr = {workspace = true}
 rayon = {workspace = true}
