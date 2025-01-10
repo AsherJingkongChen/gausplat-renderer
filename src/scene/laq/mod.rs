@@ -9,5 +9,8 @@ pub mod tinynet;
 pub use burn::{
     config::Config,
     module::Module,
-    tensor::{backend::Backend, Tensor},
+    tensor::{
+        backend::{AutodiffBackend, Backend},
+        Tensor,
+    },
 };

@@ -17,6 +17,7 @@ burn = {workspace = true, features = ["autodiff", "default", "template", "wgpu"]
 burn-jit = {workspace = true}
 bytemuck = {workspace = true, features = ["derive"]}
 humansize = {workspace = true}
+kdam = {workspace = true}
 log = {workspace = true}
 rand = {workspace = true}
 rand_distr = {workspace = true}
