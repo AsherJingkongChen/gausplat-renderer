@@ -63,6 +63,8 @@ pub const ROW_COUNT: u32 = 15;
 /// 2. Scan the counts into the offsets of each block, in chunks of `C` blocks.
 /// 3. Put each block in the radix order in the workgroup memory,
 ///    and write it to the offsets, so that the threads write next to each other.
+///
+/// If the items are in one chunk, the kernel of the step 3 also does the step 2.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>
 ) -> Outputs<R> {
@@ -74,6 +76,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     impl_kernel_source!(Kernel3, "kernel.3.wgsl");
     impl_kernel_source!(Kernel4, "kernel.4.wgsl");
     impl_kernel_source!(Kernel5, "kernel.5.wgsl");
+    impl_kernel_source!(Kernel6, "kernel.6.wgsl");
 
     // Specifying the parameters
 
@@ -88,6 +91,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     let group_count_max = count.div_ceil(BLOCK_SIZE as usize).max(1);
     // N / B / C
     let chunk_count_max = group_count_max.div_ceil(CHUNK_SIZE as usize);
+    let is_chunk_single = chunk_count_max == 1;
 
     let mut arguments = Arguments { radix_shift: 0 };
     // (N / B, 1, 1)
@@ -121,7 +125,7 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
         ],
     );
 
-    // Launching the kernel 2 to 5 iteratively
+    // Launching the kernel 2 to 6 iteratively
 
     for radix_shift in (0..KEY_BIT_COUNT as u32).step_by(RADIX_COUNT_SHIFT as usize) {
         // Specifying the parameters for the pass
@@ -149,45 +153,64 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
             ],
         );
 
-        // Launching the kernel 3
+        // Launching the kernel 6 if the items are in one chunk
 
-        client.execute(
-            Box::new(SourceKernel::new(Kernel3, group_size)),
-            CubeCount::Dynamic(chunk_count.handle.to_owned().binding()),
-            vec![
-                group_count.handle.to_owned().binding(),
-                counts_radix_group.handle.to_owned().binding(),
-                counts_radix_chunk.handle.to_owned().binding(),
-            ],
-        );
+        if is_chunk_single {
+            client.execute(
+                Box::new(SourceKernel::new(Kernel6, group_size)),
+                CubeCount::Dynamic(group_count.handle.to_owned().binding()),
+                vec![
+                    arguments.binding(),
+                    inputs.count.handle.to_owned().binding(),
+                    group_count.handle.to_owned().binding(),
+                    counts_radix_group.handle.to_owned().binding(),
+                    keys_input.handle.to_owned().binding(),
+                    values_input.handle.to_owned().binding(),
+                    keys_output.handle.to_owned().binding(),
+                    values_output.handle.to_owned().binding(),
+                ],
+            );
+        } else {
+            // Launching the kernel 3
 
-        // Launching the kernel 4
+            client.execute(
+                Box::new(SourceKernel::new(Kernel3, group_size)),
+                CubeCount::Dynamic(chunk_count.handle.to_owned().binding()),
+                vec![
+                    group_count.handle.to_owned().binding(),
+                    counts_radix_group.handle.to_owned().binding(),
+                    counts_radix_chunk.handle.to_owned().binding(),
+                ],
+            );
 
-        client.execute(
-            Box::new(SourceKernel::new(Kernel4, group_size)),
-            CubeCount::Static(1, 1, 1),
-            vec![
-                chunk_count.handle.to_owned().binding(),
-                counts_radix_chunk.handle.to_owned().binding(),
-            ],
-        );
+            // Launching the kernel 4
 
-        // Launching the kernel 5
+            client.execute(
+                Box::new(SourceKernel::new(Kernel4, group_size)),
+                CubeCount::Static(1, 1, 1),
+                vec![
+                    chunk_count.handle.to_owned().binding(),
+                    counts_radix_chunk.handle.to_owned().binding(),
+                ],
+            );
 
-        client.execute(
-            Box::new(SourceKernel::new(Kernel5, group_size)),
-            CubeCount::Dynamic(group_count.handle.to_owned().binding()),
-            vec![
-                arguments.binding(),
-                inputs.count.handle.to_owned().binding(),
-                counts_radix_group.handle.to_owned().binding(),
-                counts_radix_chunk.handle.to_owned().binding(),
-                keys_input.handle.to_owned().binding(),
-                values_input.handle.to_owned().binding(),
-                keys_output.handle.to_owned().binding(),
-                values_output.handle.to_owned().binding(),
-            ],
-        );
+            // Launching the kernel 5
+
+            client.execute(
+                Box::new(SourceKernel::new(Kernel5, group_size)),
+                CubeCount::Dynamic(group_count.handle.to_owned().binding()),
+                vec![
+                    arguments.binding(),
+                    inputs.count.handle.to_owned().binding(),
+                    counts_radix_group.handle.to_owned().binding(),
+                    counts_radix_chunk.handle.to_owned().binding(),
+                    keys_input.handle.to_owned().binding(),
+                    values_input.handle.to_owned().binding(),
+                    keys_output.handle.to_owned().binding(),
+                    values_output.handle.to_owned().binding(),
+                ],
+            );
+        }
 
         // Swapping the input and output
 
