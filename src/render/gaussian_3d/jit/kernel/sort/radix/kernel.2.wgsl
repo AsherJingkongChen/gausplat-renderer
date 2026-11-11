@@ -8,11 +8,11 @@ arguments: Arguments;
 // N
 @group(0) @binding(1) var<storage, read_write>
 count: u32;
-// [N] = [N' / G, N / N', G]
+// [N] = [N / B, W, G]
 @group(0) @binding(2) var<storage, read_write>
 keys_input: array<u32>;
 
-// [N' / G, R]
+// [N / B, R]
 @group(0) @binding(3) var<storage, read_write>
 counts_radix_group: array<u32>;
 
@@ -20,16 +20,18 @@ counts_radix_group: array<u32>;
 var<workgroup>
 counts_radix_in_group: array<atomic<u32>, RADIX_COUNT>;
 
-// log2(N')
-const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
+// B <- G * W
+const BLOCK_SIZE: u32 = GROUP_SIZE * ROW_COUNT;
+// G
+const GROUP_SIZE: u32 = 256;
 // R
 const RADIX_COUNT: u32 = 1u << RADIX_COUNT_SHIFT;
 // log2(R)
 const RADIX_COUNT_SHIFT: u32 = 8;
 // R - 1
 const RADIX_MASK: u32 = RADIX_COUNT - 1;
-// G <- R
-const GROUP_SIZE: u32 = RADIX_COUNT;
+// W
+const ROW_COUNT: u32 = 15;
 
 @compute @workgroup_size(GROUP_SIZE, 1, 1)
 fn main(
@@ -39,23 +41,21 @@ fn main(
 ) {
     // Specifying the index
 
-    // (0 ~ N' / G)
+    // (0 ~ N / B)
     let group_index = group_id.x;
 
     // Specifying the parameters
 
-    // N / N'
-    let block_count_group = max(count >> BLOCK_COUNT_GROUP_SHIFT, 1u);
-    counts_radix_in_group[local_index] = 0u;
+    let block_offset = group_index * BLOCK_SIZE;
+    atomicStore(&counts_radix_in_group[local_index], 0u);
     workgroupBarrier();
 
     // Counting radix in the block of the group
 
-    // (0 ~ N / N')
-    for (var block_index = 0u; block_index < block_count_group; block_index++) {
-        // (0 ~ N' / G, 0 ~ N / N', 0 ~ G)
-        let input_index =
-            (group_index * block_count_group + block_index) * GROUP_SIZE + local_index;
+    // (0 ~ W)
+    for (var row_index = 0u; row_index < ROW_COUNT; row_index++) {
+        // (0 ~ N / B, 0 ~ W, 0 ~ G)
+        let input_index = block_offset + row_index * GROUP_SIZE + local_index;
         if input_index < count {
             // (0 ~ R)
             let radix = keys_input[input_index] >> arguments.radix_shift & RADIX_MASK;
@@ -66,7 +66,7 @@ fn main(
 
     // Specifying the result of radix count in the group
 
-    // [N' / G, R] <- [R]
+    // [N / B, R] <- [R]
     counts_radix_group[group_index * RADIX_COUNT + local_index] =
-        counts_radix_in_group[local_index];
+        atomicLoad(&counts_radix_in_group[local_index]);
 }

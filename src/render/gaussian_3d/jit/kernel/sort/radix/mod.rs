@@ -34,23 +34,35 @@ pub struct Outputs<R: JitRuntime> {
     pub values: JitTensor<R>,
 }
 
-/// `log2(N')`
-// HACK: Empirically determined
-pub const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
-/// `2 * N' / G >= N / (N / N' * G)`
-pub const GROUP_COUNT_MAX: u32 = (2 << BLOCK_COUNT_GROUP_SHIFT) / GROUP_SIZE;
-/// `G <- R`
-pub const GROUP_SIZE: u32 = RADIX_COUNT as u32;
+/// `B <- G * W`
+pub const BLOCK_SIZE: u32 = GROUP_SIZE * ROW_COUNT;
+/// `C`
+pub const CHUNK_SIZE: u32 = 64;
+/// `G`
+pub const GROUP_SIZE: u32 = 256;
 /// `|Key|`
 pub const KEY_BIT_COUNT: usize = size_of::<u32>() << 3;
 /// `R`
 pub const RADIX_COUNT: usize = 1 << RADIX_COUNT_SHIFT;
 /// `log2(R)`
 pub const RADIX_COUNT_SHIFT: u32 = 8;
+/// `W`
+// NOTE: The workgroup memory of the kernel 5 is `(B + R) * 4 = 16384` bytes.
+pub const ROW_COUNT: u32 = 15;
 
 /// Sort the items by the keys.
 ///
 /// Radix-Sort-256 is a stable sort.
+///
+/// ## Details
+///
+/// The items are split into blocks of `B` items, one block for each group.
+/// For each radix of the key:
+///
+/// 1. Count the radix in each block.
+/// 2. Scan the counts into the offsets of each block, in chunks of `C` blocks.
+/// 3. Put each block in the radix order in the workgroup memory,
+///    and write it to the offsets, so that the threads write next to each other.
 pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     inputs: Inputs<R>
 ) -> Outputs<R> {
@@ -60,6 +72,8 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     impl_kernel_source!(Kernel1, "kernel.1.wgsl");
     impl_kernel_source!(Kernel2, "kernel.2.wgsl");
     impl_kernel_source!(Kernel3, "kernel.3.wgsl");
+    impl_kernel_source!(Kernel4, "kernel.4.wgsl");
+    impl_kernel_source!(Kernel5, "kernel.5.wgsl");
 
     // Specifying the parameters
 
@@ -70,17 +84,28 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
     // N
     let count = keys_input.shape.dims[0];
     let device = &keys_input.device.to_owned();
+    // N / B
+    let group_count_max = count.div_ceil(BLOCK_SIZE as usize).max(1);
+    // N / B / C
+    let chunk_count_max = group_count_max.div_ceil(CHUNK_SIZE as usize);
 
     let mut arguments = Arguments { radix_shift: 0 };
-    // (N' / G, 1, 1)
+    // (N / B, 1, 1)
     let group_count = JitBackend::<R, F, I, B>::int_empty([3].into(), device);
+    // (N / B / C, 1, 1)
+    let chunk_count = JitBackend::<R, F, I, B>::int_empty([3].into(), device);
     // [N]
     let mut keys_output = JitBackend::<R, F, I, B>::int_empty([count].into(), device);
     // [N]
     let mut values_output = JitBackend::<R, F, I, B>::int_empty([count].into(), device);
-    // [2 * N' / G, R]
+    // [N / B, R]
     let counts_radix_group = JitBackend::<R, F, I, B>::int_empty(
-        [GROUP_COUNT_MAX as usize, RADIX_COUNT].into(),
+        [group_count_max, RADIX_COUNT].into(),
+        device,
+    );
+    // [N / B / C, R]
+    let counts_radix_chunk = JitBackend::<R, F, I, B>::int_empty(
+        [chunk_count_max, RADIX_COUNT].into(),
         device,
     );
 
@@ -92,10 +117,11 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
         vec![
             inputs.count.handle.to_owned().binding(),
             group_count.handle.to_owned().binding(),
+            chunk_count.handle.to_owned().binding(),
         ],
     );
 
-    // Launching the kernel 2 and 3 iteratively
+    // Launching the kernel 2 to 5 iteratively
 
     for radix_shift in (0..KEY_BIT_COUNT as u32).step_by(RADIX_COUNT_SHIFT as usize) {
         // Specifying the parameters for the pass
@@ -104,18 +130,16 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
 
         let client = &keys_input.client;
         let arguments = client.create(bytes_of(&arguments));
+        let group_size = CubeDim {
+            x: GROUP_SIZE,
+            y: 1,
+            z: 1,
+        };
 
         // Launching the kernel 2
 
         client.execute(
-            Box::new(SourceKernel::new(
-                Kernel2,
-                CubeDim {
-                    x: GROUP_SIZE,
-                    y: 1,
-                    z: 1,
-                },
-            )),
+            Box::new(SourceKernel::new(Kernel2, group_size)),
             CubeCount::Dynamic(group_count.handle.to_owned().binding()),
             vec![
                 arguments.to_owned().binding(),
@@ -128,19 +152,36 @@ pub fn main<R: JitRuntime, F: FloatElement, I: IntElement, B: BoolElement>(
         // Launching the kernel 3
 
         client.execute(
-            Box::new(SourceKernel::new(
-                Kernel3,
-                CubeDim {
-                    x: GROUP_SIZE,
-                    y: 1,
-                    z: 1,
-                },
-            )),
+            Box::new(SourceKernel::new(Kernel3, group_size)),
+            CubeCount::Dynamic(chunk_count.handle.to_owned().binding()),
+            vec![
+                group_count.handle.to_owned().binding(),
+                counts_radix_group.handle.to_owned().binding(),
+                counts_radix_chunk.handle.to_owned().binding(),
+            ],
+        );
+
+        // Launching the kernel 4
+
+        client.execute(
+            Box::new(SourceKernel::new(Kernel4, group_size)),
+            CubeCount::Static(1, 1, 1),
+            vec![
+                chunk_count.handle.to_owned().binding(),
+                counts_radix_chunk.handle.to_owned().binding(),
+            ],
+        );
+
+        // Launching the kernel 5
+
+        client.execute(
+            Box::new(SourceKernel::new(Kernel5, group_size)),
             CubeCount::Dynamic(group_count.handle.to_owned().binding()),
             vec![
                 arguments.binding(),
                 inputs.count.handle.to_owned().binding(),
                 counts_radix_group.handle.to_owned().binding(),
+                counts_radix_chunk.handle.to_owned().binding(),
                 keys_input.handle.to_owned().binding(),
                 values_input.handle.to_owned().binding(),
                 keys_output.handle.to_owned().binding(),

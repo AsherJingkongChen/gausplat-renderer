@@ -2,30 +2,27 @@
 @group(0) @binding(0) var<storage, read_write>
 count: u32;
 
-// (N' / G, 1, 1) <- N / (N / N' * G)
+// (N / B, 1, 1)
 @group(0) @binding(1) var<storage, read_write>
 group_count: vec3<u32>;
+// (N / B / C, 1, 1)
+@group(0) @binding(2) var<storage, read_write>
+chunk_count: vec3<u32>;
 
-// log2(N')
-const BLOCK_COUNT_GROUP_SHIFT: u32 = 14;
-// R
-const RADIX_COUNT: u32 = 1u << RADIX_COUNT_SHIFT;
-// log2(R)
-const RADIX_COUNT_SHIFT: u32 = 8;
-// R - 1
-const RADIX_MASK: u32 = RADIX_COUNT - 1;
-// G <- R
-const GROUP_SIZE: u32 = RADIX_COUNT;
+// B <- G * W
+const BLOCK_SIZE: u32 = GROUP_SIZE * ROW_COUNT;
+// C
+const CHUNK_SIZE: u32 = 64;
+// G
+const GROUP_SIZE: u32 = 256;
+// W
+const ROW_COUNT: u32 = 15;
 
 @compute @workgroup_size(1, 1, 1)
 fn main() {
-    // Specifying the parameters
-
-    // N / N'
-    let block_count_group = max(count >> BLOCK_COUNT_GROUP_SHIFT, 1u);
-    let block_size = block_count_group * GROUP_SIZE;
-
     // Specifying the results
 
-    group_count = vec3<u32>((count + block_size - 1u) / block_size, 1, 1);
+    let group_count_x = (count + BLOCK_SIZE - 1u) / BLOCK_SIZE;
+    group_count = vec3<u32>(group_count_x, 1, 1);
+    chunk_count = vec3<u32>((group_count_x + CHUNK_SIZE - 1u) / CHUNK_SIZE, 1, 1);
 }
